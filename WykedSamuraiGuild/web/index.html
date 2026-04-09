@@ -4,7 +4,20 @@
     <title>Wyked Samurai Guild</title>
 </head>
 <body>
-    <h1>WSG Frontend Online</h1>
-    <p>If you see this page, the frontend is working.</p>
+
+<h1>WSG Frontend Online</h1>
+
+<button id="check">Check Backend</button>
+
+<p id="result"></p>
+
+<script>
+document.getElementById("check").addEventListener("click", async () => {
+    const res = await fetch("https://wykedsamuraiguild.onrender.com/api/health");
+    const data = await res.json();
+    document.getElementById("result").innerText = JSON.stringify(data);
+});
+</script>
+
 </body>
 </html>
