@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: wyked-samurai-backend
+    env: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: node server.js
+
+  - type: static
+    name: wyked-samurai-frontend
+    rootDir: web
