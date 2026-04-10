@@ -104,7 +104,14 @@ function resolveApiBaseUrl() {
 }
 
 function apiUrl(path) {
-  return `${resolveApiBaseUrl()}/api${path}`;
+  const baseUrl = resolveApiBaseUrl();
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+
+  if (baseUrl.endsWith('/api')) {
+    return `${baseUrl}${normalizedPath}`;
+  }
+
+  return `${baseUrl}/api${normalizedPath}`;
 }
 
 async function apiRequest(path, options = {}) {
