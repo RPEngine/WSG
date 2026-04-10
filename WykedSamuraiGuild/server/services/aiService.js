@@ -1,7 +1,7 @@
-const DEFAULT_HF_HEALTH_MODEL = "gpt2";
-const HF_MODEL = process.env.HUGGING_FACE_MODEL || "mistralai/Mistral-7B-Instruct-v0.3";
+const DEFAULT_AI_MODEL = "HuggingFaceH4/zephyr-7b-beta";
+const HF_MODEL = process.env.HUGGING_FACE_MODEL || DEFAULT_AI_MODEL;
 const HF_ROUTER_ENDPOINT = "https://router.huggingface.co/v1/chat/completions";
-const HF_ROUTER_MODEL = "meta-llama/Llama-3.1-8B-Instruct:novita";
+const HF_ROUTER_MODEL = process.env.HUGGING_FACE_ROUTER_MODEL || HF_MODEL;
 const HF_ROUTER_TOKEN_ENV = "HUGGINGFACE_API_TOKEN";
 
 const HF_TOKEN_ENV_NAMES = [
@@ -163,7 +163,7 @@ const callHuggingFace = async ({
 };
 
 export const testHuggingFaceConnection = async () => {
-  const healthModel = process.env.HUGGING_FACE_HEALTH_MODEL || DEFAULT_HF_HEALTH_MODEL;
+  const healthModel = process.env.HUGGING_FACE_HEALTH_MODEL || HF_MODEL;
   const { payload, model, endpoint, method, tokenEnvName, requestBody } = await callHuggingFace({
     model: healthModel,
     inputs: "Hugging Face health check:",

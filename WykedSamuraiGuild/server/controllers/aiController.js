@@ -2,19 +2,26 @@ import { checkHuggingFaceHealth } from "../services/aiService.js";
 import { generateAndSaveScenario, getAllowedScenarioStatuses } from "../services/scenarioService.js";
 
 export const testAiConnection = async (req, res) => {
-  const huggingFace = await checkHuggingFaceHealth();
-  const providerStatus = huggingFace?.status === "ok" ? "ok" : "degraded";
+  try {
+    const huggingFace = await checkHuggingFaceHealth();
 
-  return res.status(200).json({
-    backend: "ok",
-    provider: providerStatus,
-    providerName: huggingFace?.provider || "huggingface",
-    model: huggingFace?.model || null,
-    reason: providerStatus === "ok"
-      ? null
-      : (huggingFace?.failureReason || "Provider test failed."),
-    timestamp: huggingFace?.timestamp || new Date().toISOString(),
-  });
+    return res.status(200).json({
+      ok: true,
+      backend: "ok",
+      provider: huggingFace?.provider || "huggingface",
+      model: huggingFace?.model || "HuggingFaceH4/zephyr-7b-beta",
+      timestamp: huggingFace?.timestamp || new Date().toISOString(),
+    });
+  } catch (error) {
+    return res.status(503).json({
+      ok: false,
+      backend: "error",
+      provider: "huggingface",
+      model: "HuggingFaceH4/zephyr-7b-beta",
+      timestamp: new Date().toISOString(),
+      error: error instanceof Error ? error.message : "Provider test failed.",
+    });
+  }
 };
 
 export const generateAiScenario = async (req, res) => {

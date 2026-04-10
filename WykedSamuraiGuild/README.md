@@ -35,11 +35,14 @@ Backend (`/server`):
 - `HUGGING_FACE_API_TOKEN` (legacy-compatible Hugging Face token variable).
 - `WSG_HF_API_TOKEN` (legacy-compatible Hugging Face token variable).
 - `HF_TOKEN` (also accepted).
-- `HUGGING_FACE_MODEL` (optional override; defaults to `mistralai/Mistral-7B-Instruct-v0.3`).
-- `HUGGING_FACE_HEALTH_MODEL` (optional provider-test model override; defaults to `distilbert/distilbert-base-uncased-finetuned-sst-2-english`).
+- `HUGGING_FACE_MODEL` (optional override; defaults to `HuggingFaceH4/zephyr-7b-beta`).
+- `HUGGING_FACE_HEALTH_MODEL` (optional provider-test model override; defaults to the active model).
 - `WSG_FRONTEND_ORIGIN` (optional explicit frontend origin(s) for CORS allowlist; supports comma-separated values).
 
 Frontend (`/web`):
+- `window.WSG_BACKEND_BASE_URL` (preferred runtime global override for backend API host).
+- `localStorage['wsg-backend-base-url']` (preferred browser override for backend API host).
+- `<meta name="wsg-backend-base-url" content="">` (preferred static override in `web/index.html`).
 - `window.WSG_API_BASE_URL` (optional runtime global override).
   - Leave unset to use same-origin API calls.
 - `<meta name="wsg-api-base-url" content="">` (optional static override in `web/index.html`).
