@@ -1,4 +1,11 @@
+const DEFAULT_HF_HEALTH_MODEL = "distilbert/distilbert-base-uncased-finetuned-sst-2-english";
 const HF_MODEL = process.env.HUGGING_FACE_MODEL || "mistralai/Mistral-7B-Instruct-v0.3";
+
+const HF_TOKEN_ENV_NAMES = [
+  "HUGGING_FACE_API_TOKEN",
+  "WSG_HF_API_TOKEN",
+  "HF_TOKEN",
+];
 
 const scenarioOutputSchema = {
   title: "string",
@@ -57,13 +64,21 @@ const validateGeneratedScenario = (payload) => {
   };
 };
 
-const getHuggingFaceToken = () => {
-  const token = process.env.WSG_HF_API_TOKEN;
-  if (!token) {
-    throw new Error("Missing Hugging Face token. Set WSG_HF_API_TOKEN in environment.");
+const resolveHuggingFaceToken = () => {
+  for (const envName of HF_TOKEN_ENV_NAMES) {
+    const value = process.env[envName];
+    if (typeof value === "string" && value.trim()) {
+      return {
+        token: value.trim(),
+        envName,
+      };
+    }
   }
 
-  return token;
+  return {
+    token: "",
+    envName: null,
+  };
 };
 
 const huggingFaceEndpoint = (model) => `https://api-inference.huggingface.co/models/${encodeURIComponent(model)}`;
@@ -74,7 +89,12 @@ const callHuggingFace = async ({
   parameters = {},
   options = { wait_for_model: true },
 }) => {
-  const token = getHuggingFaceToken();
+  const { token, envName } = resolveHuggingFaceToken();
+  if (!token) {
+    throw new Error(
+      `Missing Hugging Face token. Set one of: ${HF_TOKEN_ENV_NAMES.join(", ")}.`,
+    );
+  }
   const endpoint = huggingFaceEndpoint(model);
 
   const response = await fetch(endpoint, {
@@ -113,17 +133,22 @@ const callHuggingFace = async ({
     payload,
     model,
     endpoint,
+    method: "POST",
+    tokenEnvName: envName,
+    requestBody: {
+      inputs,
+      parameters,
+      options,
+    },
   };
 };
 
 export const testHuggingFaceConnection = async () => {
-  const { payload, model, endpoint } = await callHuggingFace({
-    model: HF_MODEL,
-    inputs: "Connection test. Reply with one short sentence.",
-    parameters: {
-      max_new_tokens: 24,
-      return_full_text: false,
-    },
+  const healthModel = process.env.HUGGING_FACE_HEALTH_MODEL || DEFAULT_HF_HEALTH_MODEL;
+  const { payload, model, endpoint, method, tokenEnvName, requestBody } = await callHuggingFace({
+    model: healthModel,
+    inputs: "health check",
+    parameters: {},
   });
 
   return {
@@ -131,22 +156,105 @@ export const testHuggingFaceConnection = async () => {
     provider: "huggingface",
     model,
     endpoint,
+    method,
+    tokenEnvName,
+    tokenPresent: true,
+    request: {
+      headers: {
+        Authorization: "Bearer [REDACTED]",
+        "Content-Type": "application/json",
+      },
+      body: requestBody,
+    },
     timestamp: new Date().toISOString(),
     response: payload,
   };
 };
 
 export const checkHuggingFaceHealth = async () => {
+  const { token, envName } = resolveHuggingFaceToken();
+  const model = process.env.HUGGING_FACE_HEALTH_MODEL || DEFAULT_HF_HEALTH_MODEL;
+  const endpoint = huggingFaceEndpoint(model);
+  const method = "POST";
+  const requestPreview = {
+    headers: {
+      Authorization: "Bearer [REDACTED]",
+      "Content-Type": "application/json",
+    },
+    body: {
+      inputs: "health check",
+      parameters: {},
+      options: {
+        wait_for_model: true,
+      },
+    },
+  };
+
+  if (!token) {
+    const failureReason = `Missing token. Configure one of: ${HF_TOKEN_ENV_NAMES.join(", ")}.`;
+    console.error("[ai:test] Hugging Face provider test failed:", {
+      reason: failureReason,
+      model,
+      endpoint,
+      tokenEnvNamesChecked: HF_TOKEN_ENV_NAMES,
+    });
+    return {
+      provider: "huggingface",
+      status: "degraded",
+      token: {
+        present: false,
+        envName: null,
+      },
+      reachable: false,
+      model,
+      endpoint,
+      method,
+      requestPreview,
+      failureReason,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
   try {
     const result = await testHuggingFaceConnection();
     return {
+      provider: "huggingface",
       status: "ok",
+      token: {
+        present: true,
+        envName,
+      },
+      reachable: true,
+      model: result.model,
+      endpoint: result.endpoint,
+      method: result.method,
+      requestPreview,
+      failureReason: null,
       details: result,
+      timestamp: new Date().toISOString(),
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown Hugging Face error.";
+    console.error("[ai:test] Hugging Face provider test failed:", {
+      reason: message,
+      model,
+      endpoint,
+      tokenPresent: true,
+      tokenEnvName: envName,
+    });
     return {
+      provider: "huggingface",
       status: "degraded",
+      token: {
+        present: true,
+        envName,
+      },
+      reachable: false,
+      model,
+      endpoint,
+      method,
+      requestPreview,
+      failureReason: message,
       error: message,
       timestamp: new Date().toISOString(),
     };

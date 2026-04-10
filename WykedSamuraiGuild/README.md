@@ -29,8 +29,11 @@ The backend health route is:
 
 Backend (`/server`):
 - `PORT` (Render supplies this automatically).
-- `WSG_HF_API_TOKEN` (required for Hugging Face calls).
+- `HUGGING_FACE_API_TOKEN` (primary Hugging Face token variable).
+- `WSG_HF_API_TOKEN` (legacy-compatible Hugging Face token variable).
+- `HF_TOKEN` (also accepted).
 - `HUGGING_FACE_MODEL` (optional override; defaults to `mistralai/Mistral-7B-Instruct-v0.3`).
+- `HUGGING_FACE_HEALTH_MODEL` (optional provider-test model override; defaults to `distilbert/distilbert-base-uncased-finetuned-sst-2-english`).
 - `WSG_FRONTEND_ORIGIN` (optional explicit frontend origin(s) for CORS allowlist; supports comma-separated values).
 
 Frontend (`/web`):
