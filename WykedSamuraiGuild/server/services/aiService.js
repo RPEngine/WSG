@@ -4,13 +4,6 @@ const HF_ROUTER_ENDPOINT = "https://router.huggingface.co/v1/chat/completions";
 const HF_ROUTER_MODEL = process.env.HUGGING_FACE_ROUTER_MODEL || HF_MODEL;
 const HF_ROUTER_TOKEN_ENV = "HUGGINGFACE_API_TOKEN";
 
-const HF_TOKEN_ENV_NAMES = [
-  "HUGGINGFACE_API_TOKEN",
-  "HUGGING_FACE_API_TOKEN",
-  "WSG_HF_API_TOKEN",
-  "HF_TOKEN",
-];
-
 const scenarioOutputSchema = {
   title: "string",
   premise: "string",
@@ -69,16 +62,13 @@ const validateGeneratedScenario = (payload) => {
 };
 
 const resolveHuggingFaceToken = () => {
-  for (const envName of HF_TOKEN_ENV_NAMES) {
-    const value = process.env[envName];
-    if (typeof value === "string" && value.trim()) {
-      return {
-        token: value.trim(),
-        envName,
-      };
-    }
+  const value = process.env.HUGGINGFACE_API_TOKEN;
+  if (typeof value === "string" && value.trim()) {
+    return {
+      token: value.trim(),
+      envName: HF_ROUTER_TOKEN_ENV,
+    };
   }
-
   return {
     token: "",
     envName: null,
@@ -104,23 +94,34 @@ const callHuggingFace = async ({
   const { token, envName } = resolveHuggingFaceToken();
   if (!token) {
     throw new Error(
-      `Missing Hugging Face token. Set one of: ${HF_TOKEN_ENV_NAMES.join(", ")}.`,
+      `Missing Hugging Face token. Set ${HF_ROUTER_TOKEN_ENV}.`,
     );
   }
   const endpoint = huggingFaceEndpoint(model);
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      inputs,
-      parameters,
-      options,
-    }),
-  });
+  let response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        inputs,
+        parameters,
+        options,
+      }),
+    });
+  } catch (error) {
+    console.error("[ai:generate] Hugging Face inference network failure", {
+      endpoint,
+      model,
+      tokenEnvName: envName,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
 
   const bodyText = await response.text();
 
