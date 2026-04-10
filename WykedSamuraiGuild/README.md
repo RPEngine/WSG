@@ -40,13 +40,13 @@ Backend (`/server`):
 - `WSG_FRONTEND_ORIGIN` (optional explicit frontend origin(s) for CORS allowlist; supports comma-separated values).
 
 Frontend (`/web`):
-- Render deployments default to `https://wyked-samurai-backend.onrender.com` unless overridden.
+- Render deployments default to `https://wsg-7hmk.onrender.com` unless overridden.
 - Production-safe override order on Render:
   1. `<meta name="wsg-backend-base-url" content="">`
   2. `window.WSG_BACKEND_BASE_URL`
   3. `window.WSG_API_BASE_URL`
   4. `<meta name="wsg-api-base-url" content="">`
-  5. hardcoded Render fallback (`https://wyked-samurai-backend.onrender.com`)
+  5. hardcoded Render fallback (`https://wsg-7hmk.onrender.com`)
 - Local development override order:
   1. `<meta name="wsg-backend-base-url" content="">`
   2. `window.WSG_BACKEND_BASE_URL`

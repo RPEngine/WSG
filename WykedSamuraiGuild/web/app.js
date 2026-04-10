@@ -86,7 +86,7 @@ const state = {
   },
 };
 
-const RENDER_BACKEND_BASE_URL = 'https://wsg-7hmk.onrender.com';
+const CANONICAL_BACKEND_BASE_URL = 'https://wsg-7hmk.onrender.com';
 const BACKEND_BASE_URL_CONFIG_KEY = 'wsg-backend-base-url';
 const AI_ENDPOINTS = Object.freeze({
   test: '/ai/test',
@@ -114,7 +114,7 @@ function resolveApiBaseUrl() {
       || window.WSG_API_BASE_URL
       || configuredMetaBase
       || '';
-    return (renderConfiguredBase || RENDER_BACKEND_BASE_URL).replace(/\/$/, '');
+    return (renderConfiguredBase || CANONICAL_BACKEND_BASE_URL).replace(/\/$/, '');
   }
 
   const configuredBase = configuredBackendBase
@@ -989,6 +989,8 @@ async function render() {
 
 window.addEventListener('hashchange', render);
 window.addEventListener('DOMContentLoaded', async () => {
+  const resolvedApiBaseUrl = resolveApiBaseUrl();
+  console.log('[wsg] Resolved API base URL:', resolvedApiBaseUrl || '(same-origin)');
   await bootstrapAuth();
   render();
 });
