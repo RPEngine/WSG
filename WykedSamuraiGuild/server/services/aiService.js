@@ -75,21 +75,23 @@ const resolveHuggingFaceToken = () => {
   };
 };
 
-const huggingFaceEndpoint = (model) => {
-  const normalizedModel = String(model || "").trim().replace(/^\/+|\/+$/g, "");
-  const safeModelPath = normalizedModel
-    .split("/")
-    .filter(Boolean)
-    .map((segment) => encodeURIComponent(segment))
-    .join("/");
-  return `https://api-inference.huggingface.co/models/${safeModelPath}`;
+const extractProviderErrorMessage = (payload, fallbackText = "") => {
+  if (!payload || typeof payload !== "object") {
+    return fallbackText || "Unknown Hugging Face error.";
+  }
+
+  const nestedError = payload.error;
+  if (nestedError && typeof nestedError === "object") {
+    return nestedError.message || nestedError.error || fallbackText || "Unknown Hugging Face error.";
+  }
+
+  return payload.error || payload.message || payload.raw || fallbackText || "Unknown Hugging Face error.";
 };
 
 const callHuggingFace = async ({
   model,
   inputs,
   parameters = {},
-  options = { wait_for_model: true },
 }) => {
   const { token, envName } = resolveHuggingFaceToken();
   if (!token) {
@@ -97,7 +99,20 @@ const callHuggingFace = async ({
       `Missing Hugging Face token. Set ${HF_ROUTER_TOKEN_ENV}.`,
     );
   }
-  const endpoint = huggingFaceEndpoint(model);
+  const endpoint = HF_ROUTER_ENDPOINT;
+  const requestModel = model || HF_ROUTER_MODEL;
+  const userContent = typeof inputs === "string" ? inputs : JSON.stringify(inputs);
+  const requestBody = {
+    model: requestModel,
+    messages: [
+      {
+        role: "user",
+        content: userContent,
+      },
+    ],
+    max_tokens: parameters?.max_new_tokens ?? 300,
+    temperature: parameters?.temperature ?? 0.7,
+  };
 
   let response;
   try {
@@ -107,16 +122,12 @@ const callHuggingFace = async ({
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        inputs,
-        parameters,
-        options,
-      }),
+      body: JSON.stringify(requestBody),
     });
   } catch (error) {
-    console.error("[ai:generate] Hugging Face inference network failure", {
+    console.error("[ai:generate] Hugging Face router network failure", {
       endpoint,
-      model,
+      model: requestModel,
       tokenEnvName: envName,
       error: error instanceof Error ? error.message : String(error),
     });
@@ -135,13 +146,12 @@ const callHuggingFace = async ({
   }
 
   if (!response.ok) {
-    const message =
-      (payload && typeof payload === "object" && (payload.error || payload.message || payload.raw))
-      || response.statusText
-      || "Unknown Hugging Face error.";
-    console.error("[ai:generate] Hugging Face inference request failed", {
+    const reason = extractProviderErrorMessage(payload, response.statusText);
+    const routerHint = response.status === 410 ? " Verify requests are sent to https://router.huggingface.co." : "";
+    const message = `Provider rejected request: ${reason}.${routerHint}`.trim();
+    console.error("[ai:generate] Hugging Face router request failed", {
       endpoint,
-      model,
+      model: requestModel,
       tokenEnvName: envName,
       status: response.status,
       reason: message,
@@ -151,15 +161,11 @@ const callHuggingFace = async ({
 
   return {
     payload,
-    model,
+    model: requestModel,
     endpoint,
     method: "POST",
     tokenEnvName: envName,
-    requestBody: {
-      inputs,
-      parameters,
-      options,
-    },
+    requestBody,
   };
 };
 
@@ -313,7 +319,7 @@ export const generateScenarioFromAI = async ({ prompt, genre, tone, constraints 
 
     const textOutput = Array.isArray(result)
       ? result[0]?.generated_text || result[0]?.summary_text || ""
-      : result?.generated_text || "";
+      : result?.choices?.[0]?.message?.content || result?.generated_text || "";
 
     const parsed = parseGeneratedJson(textOutput);
     return validateGeneratedScenario(parsed);
