@@ -86,6 +86,8 @@ const state = {
   },
 };
 
+const HEALTH_ENDPOINT = '/health';
+
 function linkFor(path) {
   return `#${path}`;
 }
@@ -154,7 +156,7 @@ async function apiRequest(path, options = {}) {
 }
 
 async function checkBackendHealth() {
-  const response = await fetch(apiUrl('/health'));
+  const response = await fetch(apiUrl(HEALTH_ENDPOINT));
   const contentType = response.headers.get('content-type') || '';
   const bodyText = await response.text();
   const isJson = contentType.includes('application/json');
@@ -179,6 +181,17 @@ async function checkBackendHealth() {
 
   if (!data || typeof data !== 'object') {
     throw new Error('Backend returned an empty health payload.');
+  }
+
+  const requiredFields = ['status', 'service', 'timestamp'];
+  for (const field of requiredFields) {
+    if (!(field in data)) {
+      throw new Error(`Backend health payload is missing required field: ${field}`);
+    }
+  }
+
+  if (Number.isNaN(Date.parse(data.timestamp))) {
+    throw new Error(`Backend health payload has invalid timestamp: ${data.timestamp}`);
   }
 
   return data;
