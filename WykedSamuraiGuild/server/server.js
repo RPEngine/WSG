@@ -6,7 +6,22 @@ import { PORT } from "./config/env.js";
 
 const app = express();
 
-app.use(cors());
+const allowedOrigins = [
+  process.env.WSG_FRONTEND_ORIGIN,
+  "https://wyked-samurai-frontend.onrender.com",
+  "http://localhost:5173",
+  "http://localhost:3000",
+].filter(Boolean);
+
+app.use(cors({
+  origin(origin, callback) {
+    const isRenderFrontend = Boolean(origin && /^https:\/\/.*wyked-samurai-frontend.*\.onrender\.com$/i.test(origin));
+    if (!origin || allowedOrigins.includes(origin) || isRenderFrontend) {
+      return callback(null, true);
+    }
+    return callback(new Error(`CORS blocked for origin: ${origin}`));
+  },
+}));
 app.use(express.json());
 
 app.get("/health", healthCheck);

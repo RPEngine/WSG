@@ -127,8 +127,8 @@ export const testHuggingFaceConnection = async () => {
   });
 
   return {
-    status: "connected",
-    service: "huggingface",
+    status: "ok",
+    provider: "huggingface",
     model,
     endpoint,
     timestamp: new Date().toISOString(),

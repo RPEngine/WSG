@@ -10,7 +10,7 @@ export const testAiConnection = async (req, res) => {
 
     return res.status(missingToken ? 500 : 502).json({
       status: "error",
-      service: "huggingface",
+      provider: "huggingface",
       error: message,
       timestamp: new Date().toISOString(),
     });
