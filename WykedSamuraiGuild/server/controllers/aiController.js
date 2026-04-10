@@ -4,20 +4,14 @@ export const testAiConnection = async (req, res) => {
   const huggingFace = await checkHuggingFaceHealth();
   const providerStatus = huggingFace?.status === "ok" ? "ok" : "degraded";
 
-  if (providerStatus === "ok") {
-    return res.status(200).json({
-      backend: "ok",
-      provider: "ok",
-      providerName: huggingFace?.provider || "huggingface",
-      model: huggingFace?.model || null,
-    });
-  }
-
   return res.status(200).json({
     backend: "ok",
-    provider: "degraded",
+    provider: providerStatus,
     providerName: huggingFace?.provider || "huggingface",
-    reason: huggingFace?.failureReason || "Provider test failed.",
     model: huggingFace?.model || null,
+    reason: providerStatus === "ok"
+      ? null
+      : (huggingFace?.failureReason || "Provider test failed."),
+    timestamp: huggingFace?.timestamp || new Date().toISOString(),
   });
 };

@@ -701,9 +701,19 @@ function attachHeaderActions() {
       result.textContent = 'Checking...';
       try {
         const data = await connectionChecks.ai.run();
-        const providerStatus = data?.huggingFace?.status || 'unknown';
-        const model = data?.huggingFace?.details?.model || 'n/a';
-        result.textContent = `${connectionChecks.ai.label}: backend ${data.status} · provider ${providerStatus} · ${model} via ${apiUrl('/ai/test')} @ ${new Date(data.timestamp).toLocaleString()}`;
+        const backendStatus = typeof data?.backend === 'string' ? data.backend : 'unknown';
+        const providerStatus = typeof data?.provider === 'string' ? data.provider : 'unknown';
+        const providerName = typeof data?.providerName === 'string' && data.providerName.trim()
+          ? data.providerName.trim()
+          : 'provider';
+        const model = typeof data?.model === 'string' && data.model.trim() ? data.model.trim() : 'n/a';
+        const reason = typeof data?.reason === 'string' && data.reason.trim() ? data.reason.trim() : null;
+        const timestamp = typeof data?.timestamp === 'string' && !Number.isNaN(Date.parse(data.timestamp))
+          ? new Date(data.timestamp).toLocaleString()
+          : 'unknown time';
+
+        const reasonSuffix = reason ? ` · reason ${reason}` : '';
+        result.textContent = `${connectionChecks.ai.label}: backend ${backendStatus} · provider ${providerStatus} (${providerName}) · model ${model}${reasonSuffix} via ${apiUrl('/ai/test')} @ ${timestamp}`;
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown health check error.';
         result.textContent = `${connectionChecks.ai.label} error: ${message}`;
