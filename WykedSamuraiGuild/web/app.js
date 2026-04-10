@@ -86,8 +86,13 @@ const state = {
   },
 };
 
-const RENDER_BACKEND_BASE_URL = 'https://wyked-samurai-backend.onrender.com';
+const RENDER_BACKEND_BASE_URL = 'https://wsg-7hmk.onrender.com';
 const BACKEND_BASE_URL_CONFIG_KEY = 'wsg-backend-base-url';
+const AI_ENDPOINTS = Object.freeze({
+  test: '/ai/test',
+  chat: '/ai/chat',
+  scenario: '/ai/scenario',
+});
 
 function linkFor(path) {
   return `#${path}`;
@@ -274,7 +279,7 @@ async function checkBackendHealth() {
 }
 
 async function checkHuggingFaceConnection() {
-  return apiRequest('/ai/test', {
+  return apiRequest(AI_ENDPOINTS.test, {
     method: 'GET',
   });
 }
@@ -292,10 +297,23 @@ async function requestArenaAssistantReply({ userMessage, activeTrial }) {
     constraints: 'Keep it concise and actionable.',
   };
 
-  const data = await apiRequest('/ai/chat', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
+  let data;
+  try {
+    data = await apiRequest(AI_ENDPOINTS.chat, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  } catch (error) {
+    const shouldFallbackToScenarioEndpoint = /404|405/.test(error?.message || '');
+    if (!shouldFallbackToScenarioEndpoint) {
+      throw error;
+    }
+
+    data = await apiRequest(AI_ENDPOINTS.scenario, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
 
   const generated = data?.scenario;
   if (!generated) {
@@ -790,7 +808,7 @@ function attachHeaderActions() {
           : 'unknown time';
 
         const reasonSuffix = reason ? ` · reason ${reason}` : '';
-        result.textContent = `${connectionChecks.ai.label}: backend ${backendStatus} · provider ${provider} · model ${model}${reasonSuffix} via ${apiUrl('/ai/test')} @ ${timestamp}`;
+        result.textContent = `${connectionChecks.ai.label}: backend ${backendStatus} · provider ${provider} · model ${model}${reasonSuffix} via ${apiUrl(AI_ENDPOINTS.test)} @ ${timestamp}`;
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown health check error.';
         result.textContent = `${connectionChecks.ai.label} error: ${message}`;
