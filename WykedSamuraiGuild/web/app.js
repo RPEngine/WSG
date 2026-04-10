@@ -1,6 +1,6 @@
 const routes = {
   '/': { key: 'home' },
-  '/arena': { key: 'arena', requiresAuth: true },
+  '/arena': { key: 'arena' },
   '/guild-world': { key: 'guild' },
   '/members': { key: 'members' },
   '/profile': { key: 'profile', requiresAuth: true },
@@ -82,6 +82,11 @@ const state = {
   loading: false,
   arena: {
     activeTrialId: '',
+    messages: [],
+    pending: false,
+    error: '',
+  },
+  homeChat: {
     messages: [],
     pending: false,
     error: '',
@@ -305,12 +310,12 @@ async function requestArenaAssistantReply({ userMessage, activeTrial }) {
     body: JSON.stringify(payload),
   });
 
-  const generated = data?.scenario;
-  if (!generated) {
-    throw new Error('AI scenario response is missing scenario data.');
+  const content = parseAiChatResponse(data);
+  if (!content) {
+    throw new Error('AI scenario response did not include usable message text.');
   }
 
-  return generated.openingSituation || generated.premise || generated.title;
+  return content;
 }
 
 const connectionChecks = {
@@ -383,6 +388,37 @@ function getActiveTrial() {
   return STARTER_TRIALS.find((trial) => trial.id === state.arena.activeTrialId) || null;
 }
 
+
+function parseAiChatResponse(data) {
+  const scenario = data?.scenario;
+  if (!scenario || typeof scenario !== 'object') {
+    throw new Error('AI response is missing scenario content.');
+  }
+
+  return scenario.openingSituation || scenario.premise || scenario.title || '';
+}
+
+async function requestHomeAssistantReply(userMessage) {
+  const payload = {
+    prompt: userMessage,
+    genre: 'General Coaching',
+    tone: state.mode === 'roleplay' ? 'Roleplay' : 'Professional',
+    constraints: 'Reply with concise, practical guidance.',
+  };
+
+  const data = await apiRequest(AI_ENDPOINTS.chat, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+  const content = parseAiChatResponse(data);
+  if (!content) {
+    throw new Error('AI response did not include usable message text.');
+  }
+
+  return content;
+}
+
 function rightSidebar() {
   return `
     ${card('Friends Online', list(mock.friends.map((f) => `<span>${f}</span><span class="muted">Available</span>`)))}
@@ -394,11 +430,35 @@ function rightSidebar() {
 }
 
 function homePage() {
+  const chatMessages = state.homeChat.messages
+    .map(
+      (message) => `
+        <article class="message ${message.type}">
+          <div class="message-label">${message.type === 'user' ? 'You' : 'WSG AI'}</div>
+          <p>${escapeHtml(message.content)}</p>
+        </article>
+      `
+    )
+    .join('');
+
   return `
     <div class="grid two">
       ${card('Recommended Scenarios', list(['Shadow Market Negotiation', 'Supply Chain Siege', 'Cross-Guild Accord'].map((s) => `<span>${s}</span><span class="muted">Match 92%</span>`)))}
       ${card('Recent Roleplay', list(['Moonlit reconnaissance thread', 'Dojo council session', 'Nexus summit debrief'].map((s) => `<span>${s}</span><span class="muted">12m ago</span>`)))}
     </div>
+
+    <section class="card home-chat-panel" style="margin-top:14px;">
+      <h3>AI Chat</h3>
+      <p class="muted">Ask for coaching, roleplay prompts, or tactical recommendations.</p>
+      <div id="home-chat-log" class="conversation-log home-chat-log">
+        ${chatMessages || '<p class="muted">No messages yet. Send one to begin.</p>'}
+      </div>
+      <form id="home-chat-form" class="arena-input" style="margin-top:10px;">
+        <input id="home-chat-input" name="message" placeholder="Type your message..." ${state.homeChat.pending ? 'disabled' : ''} />
+        <button class="pill-btn" type="submit" ${state.homeChat.pending ? 'disabled' : ''}>${state.homeChat.pending ? 'Sending...' : 'Send'}</button>
+      </form>
+      ${state.homeChat.error ? `<p class="muted" style="color:#ff7b7b;margin-top:8px;" role="alert">${escapeHtml(state.homeChat.error)}</p>` : ''}
+    </section>
   `;
 }
 
@@ -887,6 +947,53 @@ function attachArenaHandlers() {
   }
 }
 
+
+function attachHomeChatHandlers() {
+  const chatForm = document.getElementById('home-chat-form');
+  if (!chatForm) {
+    return;
+  }
+
+  chatForm.onsubmit = async (event) => {
+    event.preventDefault();
+    const input = document.getElementById('home-chat-input');
+    const value = String(input?.value || '').trim();
+    if (!value || state.homeChat.pending) {
+      return;
+    }
+
+    state.homeChat.error = '';
+    state.homeChat.messages.push({ id: crypto.randomUUID(), type: 'user', content: value });
+    input.value = '';
+    state.homeChat.pending = true;
+    render();
+
+    try {
+      const aiReply = await requestHomeAssistantReply(value);
+      state.homeChat.messages.push({
+        id: crypto.randomUUID(),
+        type: 'system',
+        content: aiReply,
+      });
+    } catch (error) {
+      state.homeChat.error = error instanceof Error ? error.message : 'AI chat request failed.';
+      state.homeChat.messages.push({
+        id: crypto.randomUUID(),
+        type: 'system',
+        content: 'AI response unavailable right now.',
+      });
+    }
+
+    state.homeChat.pending = false;
+    render();
+  };
+
+  const chatLog = document.getElementById('home-chat-log');
+  if (chatLog) {
+    chatLog.scrollTop = chatLog.scrollHeight;
+  }
+}
+
 function setMode(nextMode) {
   state.mode = nextMode;
   localStorage.setItem('wsg-mode', state.mode);
@@ -984,6 +1091,7 @@ async function render() {
 
   attachProfileEditHandler();
   attachArenaHandlers();
+  attachHomeChatHandlers();
 }
 
 window.addEventListener('hashchange', render);
