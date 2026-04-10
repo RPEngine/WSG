@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import apiRoutes from "./routes/apiRoutes.js";
 import { healthCheck } from "./controllers/healthController.js";
+import { aiChat, generateAiScenario } from "./controllers/aiController.js";
 import { PORT } from "./config/env.js";
 
 const app = express();
@@ -31,6 +32,8 @@ app.use(express.json());
 
 app.get("/health", healthCheck);
 app.use("/api", apiRoutes);
+app.post("/chat", aiChat);
+app.post("/scenario", generateAiScenario);
 
 app.get("/", (req, res) => {
   res.send("WSG backend is running");
