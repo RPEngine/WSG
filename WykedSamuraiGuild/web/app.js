@@ -1,19 +1,22 @@
 const routes = {
-  '/': 'home',
-  '/arena': 'arena',
-  '/guild-world': 'guild',
-  '/members/profile': 'profile',
-  '/recruiter-console': 'recruiter',
+  '/': { key: 'home' },
+  '/arena': { key: 'arena' },
+  '/guild-world': { key: 'guild' },
+  '/members': { key: 'members' },
+  '/profile': { key: 'profile', requiresAuth: true },
+  '/profile/edit': { key: 'profileEdit', requiresAuth: true },
+  '/login': { key: 'login', guestOnly: true },
+  '/signup': { key: 'signup', guestOnly: true },
+  '/recruiter-console': { key: 'recruiter' },
 };
 
 const navItems = [
   ['Home', '/'],
   ['Arena', '/arena'],
   ['Guild', '/guild-world'],
-  ['World RP', '/guild-world'],
-  ['Members', '/members/profile'],
+  ['Members', '/members'],
+  ['My Profile', '/profile'],
   ['Recruiter Console', '/recruiter-console'],
-  ['Discussions', '/discussions'],
 ];
 
 const mock = {
@@ -21,22 +24,45 @@ const mock = {
   chats: ['Arena squad sync', 'Guild storytellers', 'Recruiter outreach', 'Mission planning'],
 };
 
-let mode = localStorage.getItem('wsg-mode') || 'professional';
-let profileTab = 'Overview';
+const state = {
+  mode: localStorage.getItem('wsg-mode') || 'professional',
+  authToken: localStorage.getItem('wsg-auth-token') || '',
+  currentUser: null,
+  members: [],
+  activeProfile: null,
+  membersLoaded: false,
+  loading: false,
+};
 
 function linkFor(path) {
   return `#${path}`;
 }
 
-function pageTitle(key) {
-  return {
-    home: ['Welcome back, Ronin Strategist', 'Your community pulse and scenario opportunities.'],
-    arena: ['Arena Command', 'Bridge tactical planning with cinematic roleplay missions.'],
-    guild: ['Guild World', 'Story streams, locations, and social immersion in one space.'],
-    profile: ['Member Profile', 'Identity, contribution history, and guild network presence.'],
-    recruiter: ['Recruiter Console', 'Talent intelligence for strategic hiring conversations.'],
-    fallback: ['Page Placeholder', 'This section is not built yet, but routing remains intact.'],
-  }[key] || ['Wyked Samurai Guild', ''];
+function apiUrl(path) {
+  return `/api${path}`;
+}
+
+async function apiRequest(path, options = {}) {
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(options.headers || {}),
+  };
+
+  if (state.authToken) {
+    headers.Authorization = `Bearer ${state.authToken}`;
+  }
+
+  const response = await fetch(apiUrl(path), { ...options, headers });
+  if (response.status === 204) {
+    return null;
+  }
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || 'Request failed.');
+  }
+
+  return data;
 }
 
 function card(title, body) {
@@ -45,6 +71,43 @@ function card(title, body) {
 
 function list(items) {
   return `<ul class="list">${items.map((i) => `<li>${i}</li>`).join('')}</ul>`;
+}
+
+function avatarMarkup(profile, size = 'md') {
+  const initials = (profile.displayName || profile.username || '?')
+    .split(' ')
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || '')
+    .join('');
+
+  if (profile.avatarUrl) {
+    return `<img src="${profile.avatarUrl}" alt="${profile.displayName}" class="avatar-${size}"/>`;
+  }
+
+  return `<div class="avatar-${size} avatar-fallback">${initials || '?'}</div>`;
+}
+
+function formatDate(value) {
+  if (!value) {
+    return 'Not available';
+  }
+
+  return new Date(value).toLocaleString();
+}
+
+function pageTitle(key) {
+  return {
+    home: ['Welcome to Wyked Samurai Guild', 'Your command center for tactical collaboration and growth.'],
+    arena: ['Arena Command', 'Bridge tactical planning with cinematic roleplay missions.'],
+    guild: ['Guild World', 'Story streams, locations, and social immersion in one space.'],
+    members: ['Guild Members', 'Discover member profiles and current contribution footprint.'],
+    profile: ['Member Profile', 'Identity snapshot and profile scaffolding for trial records.'],
+    profileEdit: ['Edit Profile', 'Update your guild identity details.'],
+    login: ['Log In', 'Access your guild account.'],
+    signup: ['Create Account', 'Join Wyked Samurai Guild.'],
+    recruiter: ['Recruiter Console', 'Talent intelligence for strategic hiring conversations.'],
+    fallback: ['Page Placeholder', 'This section is not built yet, but routing remains intact.'],
+  }[key] || ['Wyked Samurai Guild', ''];
 }
 
 function rightSidebar() {
@@ -63,21 +126,12 @@ function homePage() {
       ${card('Recommended Scenarios', list(['Shadow Market Negotiation', 'Supply Chain Siege', 'Cross-Guild Accord'].map((s) => `<span>${s}</span><span class="muted">Match 92%</span>`)))}
       ${card('Recent Roleplay', list(['Moonlit reconnaissance thread', 'Dojo council session', 'Nexus summit debrief'].map((s) => `<span>${s}</span><span class="muted">12m ago</span>`)))}
     </div>
-    <div class="grid two" style="margin-top:14px;">
-      ${card('Guild Updates', list(['New event: Ember Protocol', 'Lore drop: The Iron Tributary', 'Mentor pairing round open'].map((s) => `<span>${s}</span><span class="muted">Update</span>`)))}
-      ${card('Top Contributors', list(['Aiko — Storycraft lead', 'Rook — Arena tactician', 'Mina — Recruiter liaison'].map((s) => `<span>${s}</span><span class="muted">Elite</span>`)))}
-    </div>
   `;
 }
 
 function arenaPage() {
   return `
     <section class="feature"><h3 style="margin-top:0">Cinematic Scenario Header</h3><p class="muted">"Operation: Violet Horizon" blends mission analytics with immersive narrative stakes.</p></section>
-    <div class="grid two" style="margin-top:14px;">
-      ${card('Featured Scenario', '<p>Coordinate infiltration timing, diplomacy paths, and extraction options through a unified mission board.</p><div class="actions"><button class="pill-btn">Deploy Brief</button><button class="pill-btn">Join Mission</button><button class="pill-btn">Review Intel</button></div>')}
-      ${card('Active Scenarios', list(['Harbor Ghost Route', 'Council of Blades', 'Silent Relay'].map((s) => `<span>${s}</span><span class="muted">Active</span>`)))}
-    </div>
-    <div style="margin-top:14px;">${card('Mission Actions', '<div class="actions"><button class="pill-btn">Create Strategy</button><button class="pill-btn">Launch RP Prompt</button><button class="pill-btn">Invite Participants</button></div>')}</div>
   `;
 }
 
@@ -87,57 +141,332 @@ function guildPage() {
       ${card('Roleplay Feed', list(['"Mist over Kagemori as scouts return."', '"Alliance envoy arrives at moon gate."', '"Campfire confessions in the cedar court."'].map((s) => `<span>${s}</span><span class="muted">Story</span>`)))}
       ${card('Featured Locations', list(['Moonfall Harbor', 'Cinder Dojo', 'Glass Pine Ridge'].map((s) => `<span>${s}</span><span class="muted">Live scene</span>`)))}
     </div>
-    <div class="grid two" style="margin-top:14px;">
-      ${card('Recent Stories', list(['Echoes of the Ninth Banner', 'Ashes at First Light', 'The Jade Pact'].map((s) => `<span>${s}</span><span class="muted">Chapter update</span>`)))}
-      ${card('Embedded Chat', '<p class="muted">#guild-rp stream active with 19 participants, 4 recruiters observing cultural fit and collaboration.</p>')}
+  `;
+}
+
+function membersPage() {
+  if (state.loading && !state.membersLoaded) {
+    return card('Members', '<p class="muted">Loading members...</p>');
+  }
+
+  if (!state.members.length) {
+    return card('Members', '<p class="muted">No members yet. Invite the first samurai.</p>');
+  }
+
+  return `
+    <div class="member-list">
+      ${state.members
+        .map(
+          (member) => `
+            <article class="card member-row">
+              <div>${avatarMarkup(member)}</div>
+              <div>
+                <h3 style="margin:0;">${member.displayName}</h3>
+                <p class="muted" style="margin:4px 0;">@${member.username}</p>
+                <p>${member.bio || '<span class="muted">No bio yet.</span>'}</p>
+              </div>
+              <div class="member-meta">
+                <span>Trials completed: <strong>${member.trialCount}</strong></span>
+                <a class="pill-btn" href="#/members/${member.id}">View profile</a>
+              </div>
+            </article>`
+        )
+        .join('')}
     </div>
   `;
 }
 
 function profilePage() {
-  const tabs = ['Overview', 'Arena Contributions', 'Guild Activity', 'Connections'];
+  const profile = state.activeProfile;
+  if (!profile) {
+    return card('Profile', '<p class="muted">Profile not found.</p>');
+  }
+
+  const isOwnProfile = state.currentUser?.id === profile.id;
+
   return `
-    <section class="feature"><h3 style="margin-top:0">Kira Tanaka · Tactical Story Architect</h3><p class="muted">Tags: Mentor · Negotiator · Systems Thinker · Lore Curator</p><div class="actions"><button class="pill-btn">Message</button><button class="pill-btn">Connect</button></div></section>
-    <div class="tabs" style="margin:14px 0;">${tabs.map((t) => `<button class="${profileTab === t ? 'active' : ''}" data-tab="${t}">${t}</button>`).join('')}</div>
-    <div class="grid two">
-      ${card('Recent Scenarios', list(['Delta Convoy Accord', 'Twin Lantern Recovery', 'Crescent Bastion Breach'].map((s) => `<span>${s}</span><span class="muted">Contributor</span>`)))}
-      ${card('Guild Participation', list(['Led 6 RP events this month', 'Mentoring 3 new members', 'Drafted 2 lore expansions'].map((s) => `<span>${s}</span><span class="muted">Impact</span>`)))}
+    <section class="feature profile-head">
+      ${avatarMarkup(profile, 'lg')}
+      <div>
+        <h3 style="margin:0;">${profile.displayName}</h3>
+        <p class="muted" style="margin:4px 0;">@${profile.username}</p>
+        <p>${profile.bio || '<span class="muted">No bio added yet.</span>'}</p>
+      </div>
+      ${isOwnProfile ? '<a href="#/profile/edit" class="pill-btn">Edit Profile</a>' : ''}
+    </section>
+    <div class="grid two" style="margin-top:14px;">
+      ${card('Stats', `<p>Trials completed: <strong>${profile.trialCount}</strong></p><p class="muted">Last active: ${formatDate(profile.lastActiveAt)}</p>`)}
+      ${card('Account', `<p class="muted">Joined: ${formatDate(profile.createdAt)}</p><p class="muted">Updated: ${formatDate(profile.updatedAt)}</p>`)}
+    </div>
+    <div class="grid two" style="margin-top:14px;">
+      ${card('Saved Trial Results', '<p class="muted">No trial results yet. This section is ready for Phase 3 data binding.</p>')}
+      ${card('Recent Activity', '<p class="muted">No recent activity yet. Activity stream scaffolding is in place.</p>')}
     </div>
   `;
 }
 
-function recruiterPage() {
+function profileEditPage() {
+  const profile = state.currentUser;
+  if (!profile) {
+    return card('Profile', '<p class="muted">Please log in first.</p>');
+  }
+
   return `
-    <div class="grid two">
-      ${card('Candidate Insights', list(['Cross-functional collaboration score: 94', 'Narrative leadership index: 89', 'Strategic communication consistency: High'].map((s) => `<span>${s}</span><span class="muted">Insight</span>`)))}
-      ${card('Top Contributors', list(['Kira Tanaka', 'Mina Alvarez', 'Rook Harmon'].map((s) => `<span>${s}</span><span class="muted">Benchmarked</span>`)))}
-    </div>
-    <div class="grid two" style="margin-top:14px;">
-      ${card('Performance Metrics', '<p class="muted">Participation rate 87% · Task completion 91% · Peer endorsements +23% MoM</p>')}
-      ${card('Scenario Intelligence', '<p class="muted">Scenario stress tests indicate strongest candidate behavior during ambiguity and team conflict resolution.</p>')}
-    </div>
-    <div style="margin-top:14px;">${card('Guild Network Map', '<p class="muted">[Placeholder visualization] Relationship clusters and influence paths between mentors, candidates, and recruiters.</p>')}</div>
+    <section class="card form-card">
+      <h3>Edit profile</h3>
+      <form id="edit-profile-form" class="form-stack">
+        <label>Display name
+          <input name="displayName" maxlength="60" value="${profile.displayName || ''}" required />
+        </label>
+        <label>Avatar URL
+          <input name="avatarUrl" type="url" placeholder="https://..." value="${profile.avatarUrl || ''}" />
+        </label>
+        <label>Bio
+          <textarea name="bio" maxlength="280" rows="4" placeholder="Tell the guild about your strengths...">${profile.bio || ''}</textarea>
+        </label>
+        <div class="actions">
+          <button class="pill-btn" type="submit">Save changes</button>
+          <a href="#/profile" class="pill-btn">Cancel</a>
+        </div>
+        <p id="edit-profile-feedback" class="muted"></p>
+      </form>
+    </section>
   `;
+}
+
+function loginPage() {
+  return `
+    <section class="card form-card">
+      <h3>Log in</h3>
+      <form id="login-form" class="form-stack">
+        <label>Username or email
+          <input name="identifier" required />
+        </label>
+        <label>Password
+          <input name="password" type="password" minlength="8" required />
+        </label>
+        <button class="pill-btn" type="submit">Log in</button>
+        <p id="login-feedback" class="muted"></p>
+      </form>
+      <p class="muted">New here? <a href="#/signup">Create an account.</a></p>
+    </section>
+  `;
+}
+
+function signupPage() {
+  return `
+    <section class="card form-card">
+      <h3>Create account</h3>
+      <form id="signup-form" class="form-stack">
+        <label>Username
+          <input name="username" minlength="3" required />
+        </label>
+        <label>Display name
+          <input name="displayName" required />
+        </label>
+        <label>Email (optional)
+          <input name="email" type="email" />
+        </label>
+        <label>Password
+          <input name="password" type="password" minlength="8" required />
+        </label>
+        <button class="pill-btn" type="submit">Sign up</button>
+        <p id="signup-feedback" class="muted"></p>
+      </form>
+      <p class="muted">Already have an account? <a href="#/login">Log in.</a></p>
+    </section>
+  `;
+}
+
+function recruiterPage() {
+  return card('Recruiter Console', '<p class="muted">Recruiter workflows are intentionally out of scope for this phase.</p>');
 }
 
 function fallbackPage() {
   return card('Coming Soon', '<p class="muted">This route currently uses a placeholder shell to preserve navigation continuity.</p>');
 }
 
-function render() {
-  const path = location.hash.replace('#', '') || '/';
-  const key = routes[path] || 'fallback';
-  document.body.classList.toggle('mode-roleplay', mode === 'roleplay');
+function setAuthSession({ sessionToken, user }) {
+  state.authToken = sessionToken;
+  state.currentUser = user;
+  localStorage.setItem('wsg-auth-token', sessionToken);
+}
 
+function clearAuthSession() {
+  state.authToken = '';
+  state.currentUser = null;
+  localStorage.removeItem('wsg-auth-token');
+}
+
+async function bootstrapAuth() {
+  if (!state.authToken) {
+    return;
+  }
+
+  try {
+    const data = await apiRequest('/auth/me');
+    state.currentUser = data.user;
+  } catch {
+    clearAuthSession();
+  }
+}
+
+async function ensureMembersLoaded() {
+  if (state.membersLoaded) {
+    return;
+  }
+
+  state.loading = true;
+  try {
+    const data = await apiRequest('/members', { method: 'GET' });
+    state.members = data.items;
+    state.membersLoaded = true;
+  } finally {
+    state.loading = false;
+  }
+}
+
+async function loadProfileForRoute(path) {
+  if (path === '/profile') {
+    state.activeProfile = state.currentUser;
+    return;
+  }
+
+  const match = path.match(/^\/members\/([a-fA-F0-9-]+)$/);
+  if (!match) {
+    return;
+  }
+
+  try {
+    const data = await apiRequest(`/members/${match[1]}`);
+    state.activeProfile = data.profile;
+  } catch {
+    state.activeProfile = null;
+  }
+}
+
+function applyRouteGuards(path) {
+  const known = routes[path] || (path.startsWith('/members/') ? { key: 'profile' } : null);
+  if (!known) {
+    return path;
+  }
+
+  if (known.requiresAuth && !state.currentUser) {
+    return '/login';
+  }
+
+  if (known.guestOnly && state.currentUser) {
+    return '/profile';
+  }
+
+  return path;
+}
+
+async function handleAuthSubmit(formId, endpoint, feedbackId, mapPayload) {
+  const form = document.getElementById(formId);
+  if (!form) {
+    return;
+  }
+
+  form.onsubmit = async (event) => {
+    event.preventDefault();
+    const feedback = document.getElementById(feedbackId);
+    const formData = new FormData(form);
+    const payload = mapPayload(formData);
+
+    feedback.textContent = 'Submitting...';
+    try {
+      const result = await apiRequest(endpoint, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      setAuthSession(result);
+      feedback.textContent = 'Success. Redirecting...';
+      state.membersLoaded = false;
+      location.hash = '/profile';
+    } catch (error) {
+      feedback.textContent = error.message;
+    }
+  };
+}
+
+function attachProfileEditHandler() {
+  const form = document.getElementById('edit-profile-form');
+  if (!form) {
+    return;
+  }
+
+  form.onsubmit = async (event) => {
+    event.preventDefault();
+    const feedback = document.getElementById('edit-profile-feedback');
+    const formData = new FormData(form);
+    const payload = {
+      displayName: String(formData.get('displayName') || ''),
+      avatarUrl: String(formData.get('avatarUrl') || ''),
+      bio: String(formData.get('bio') || ''),
+    };
+
+    feedback.textContent = 'Saving...';
+
+    try {
+      const result = await apiRequest('/profile/me', {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      });
+      state.currentUser = result.profile;
+      state.activeProfile = result.profile;
+      state.membersLoaded = false;
+      feedback.textContent = 'Profile updated.';
+      location.hash = '/profile';
+    } catch (error) {
+      feedback.textContent = error.message;
+    }
+  };
+}
+
+function attachHeaderActions() {
+  document.getElementById('professional-mode').onclick = () => setMode('professional');
+  document.getElementById('roleplay-mode').onclick = () => setMode('roleplay');
+
+  const logoutButton = document.getElementById('logout-btn');
+  if (logoutButton) {
+    logoutButton.onclick = async () => {
+      try {
+        await apiRequest('/auth/logout', { method: 'POST' });
+      } catch {
+        // noop
+      }
+      clearAuthSession();
+      state.membersLoaded = false;
+      location.hash = '/login';
+    };
+  }
+
+  const healthButton = document.getElementById('check-backend');
+  if (healthButton) {
+    healthButton.onclick = async () => {
+      const result = document.getElementById('health-result');
+      result.textContent = 'Checking...';
+      try {
+        const data = await apiRequest('/health');
+        result.textContent = JSON.stringify(data);
+      } catch (error) {
+        result.textContent = error.message;
+      }
+    };
+  }
+}
+
+function setMode(nextMode) {
+  state.mode = nextMode;
+  localStorage.setItem('wsg-mode', state.mode);
+  render();
+}
+
+function renderLayout(path, key, pageHtml) {
   const [title, subtitle] = pageTitle(key);
-  const pageHtml = {
-    home: homePage,
-    arena: arenaPage,
-    guild: guildPage,
-    profile: profilePage,
-    recruiter: recruiterPage,
-    fallback: fallbackPage,
-  }[key]();
+  document.body.classList.toggle('mode-roleplay', state.mode === 'roleplay');
 
   document.getElementById('app').innerHTML = `
     <div class="app-shell">
@@ -151,11 +480,10 @@ function render() {
         </div>
         <div class="header-actions">
           <div class="toggle">
-            <button id="professional-mode" class="${mode === 'professional' ? 'active' : ''}">Professional</button>
-            <button id="roleplay-mode" class="${mode === 'roleplay' ? 'active' : ''}">Roleplay</button>
+            <button id="professional-mode" class="${state.mode === 'professional' ? 'active' : ''}">Professional</button>
+            <button id="roleplay-mode" class="${state.mode === 'roleplay' ? 'active' : ''}">Roleplay</button>
           </div>
-          <button class="icon-btn" aria-label="Notifications">🔔</button>
-          <div class="avatar">KT</div>
+          ${state.currentUser ? `<span class="muted">${state.currentUser.displayName}</span><button class="pill-btn" id="logout-btn">Log out</button>` : '<a class="pill-btn" href="#/login">Log in</a>'}
         </div>
       </header>
 
@@ -178,35 +506,58 @@ function render() {
     </div>
   `;
 
-  document.getElementById('professional-mode').onclick = () => setMode('professional');
-  document.getElementById('roleplay-mode').onclick = () => setMode('roleplay');
-  const healthButton = document.getElementById('check-backend');
-  if (healthButton) {
-    healthButton.onclick = async () => {
-      const result = document.getElementById('health-result');
-      result.textContent = 'Checking...';
-      try {
-        const response = await fetch('/api/health');
-        const data = await response.json();
-        result.textContent = JSON.stringify(data);
-      } catch (error) {
-        result.textContent = 'Unable to reach backend health endpoint.';
-      }
-    };
-  }
-  document.querySelectorAll('[data-tab]').forEach((el) => {
-    el.onclick = () => {
-      profileTab = el.dataset.tab;
-      render();
-    };
-  });
+  attachHeaderActions();
 }
 
-function setMode(nextMode) {
-  mode = nextMode;
-  localStorage.setItem('wsg-mode', mode);
-  render();
+async function render() {
+  let path = location.hash.replace('#', '') || '/';
+  path = applyRouteGuards(path);
+
+  if (location.hash.replace('#', '') !== path) {
+    location.hash = path;
+    return;
+  }
+
+  if (path === '/members') {
+    await ensureMembersLoaded();
+  }
+  if (path === '/profile' || path.startsWith('/members/')) {
+    await loadProfileForRoute(path);
+  }
+
+  const route = routes[path] || (path.startsWith('/members/') ? { key: 'profile' } : { key: 'fallback' });
+  const pageHtml = {
+    home: homePage,
+    arena: arenaPage,
+    guild: guildPage,
+    members: membersPage,
+    profile: profilePage,
+    profileEdit: profileEditPage,
+    login: loginPage,
+    signup: signupPage,
+    recruiter: recruiterPage,
+    fallback: fallbackPage,
+  }[route.key]();
+
+  renderLayout(path, route.key, pageHtml);
+
+  handleAuthSubmit('login-form', '/auth/login', 'login-feedback', (formData) => ({
+    identifier: String(formData.get('identifier') || ''),
+    password: String(formData.get('password') || ''),
+  }));
+
+  handleAuthSubmit('signup-form', '/auth/register', 'signup-feedback', (formData) => ({
+    username: String(formData.get('username') || ''),
+    displayName: String(formData.get('displayName') || ''),
+    email: String(formData.get('email') || ''),
+    password: String(formData.get('password') || ''),
+  }));
+
+  attachProfileEditHandler();
 }
 
 window.addEventListener('hashchange', render);
-window.addEventListener('DOMContentLoaded', render);
+window.addEventListener('DOMContentLoaded', async () => {
+  await bootstrapAuth();
+  render();
+});
