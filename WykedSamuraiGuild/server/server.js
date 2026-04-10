@@ -6,16 +6,21 @@ import { PORT } from "./config/env.js";
 
 const app = express();
 
+const configuredOrigins = (process.env.WSG_FRONTEND_ORIGIN || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 const allowedOrigins = [
-  process.env.WSG_FRONTEND_ORIGIN,
+  ...configuredOrigins,
   "https://wyked-samurai-frontend.onrender.com",
   "http://localhost:5173",
   "http://localhost:3000",
-].filter(Boolean);
+];
 
 app.use(cors({
   origin(origin, callback) {
-    const isRenderFrontend = Boolean(origin && /^https:\/\/.*wyked-samurai-frontend.*\.onrender\.com$/i.test(origin));
+    const isRenderFrontend = Boolean(origin && /^https:\/\/(?:.*-)?(?:frontend|wsg)-[a-z0-9-]+\.onrender\.com$/i.test(origin));
     if (!origin || allowedOrigins.includes(origin) || isRenderFrontend) {
       return callback(null, true);
     }

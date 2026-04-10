@@ -86,7 +86,7 @@ const state = {
   },
 };
 
-const DEFAULT_RENDER_BACKEND_ORIGIN = 'https://wyked-samurai-backend.onrender.com';
+const DEFAULT_RENDER_BACKEND_ORIGIN = 'https://wsg-7hmk.onrender.com';
 
 function linkFor(path) {
   return `#${path}`;
@@ -701,7 +701,9 @@ function attachHeaderActions() {
       result.textContent = 'Checking...';
       try {
         const data = await connectionChecks.ai.run();
-        result.textContent = `${connectionChecks.ai.label}: ${data.status} · ${data.model} @ ${new Date(data.timestamp).toLocaleString()}`;
+        const providerStatus = data?.huggingFace?.status || 'unknown';
+        const model = data?.huggingFace?.details?.model || 'n/a';
+        result.textContent = `${connectionChecks.ai.label}: backend ${data.status} · provider ${providerStatus} · ${model} via ${apiUrl('/ai/test')} @ ${new Date(data.timestamp).toLocaleString()}`;
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown health check error.';
         result.textContent = `${connectionChecks.ai.label} error: ${message}`;
