@@ -86,8 +86,8 @@ const state = {
   },
 };
 
-const HEALTH_ENDPOINT = '/health';
 const DEFAULT_RENDER_BACKEND_ORIGIN = 'https://wyked-samurai-backend.onrender.com';
+const DEFAULT_HF_MODEL = 'mistralai/Mistral-7B-Instruct-v0.3';
 
 function linkFor(path) {
   return `#${path}`;
@@ -163,7 +163,7 @@ async function apiRequest(path, options = {}) {
 }
 
 async function checkBackendHealth() {
-  const healthUrl = apiUrl(HEALTH_ENDPOINT);
+  const healthUrl = apiUrl('/health');
   const response = await fetch(healthUrl);
   const contentType = response.headers.get('content-type') || '';
   const bodyText = await response.text();
@@ -204,6 +204,91 @@ async function checkBackendHealth() {
 
   return data;
 }
+
+function resolveHuggingFaceConfig() {
+  const token = window.WSG_HF_API_TOKEN || localStorage.getItem('wsg-hf-api-token') || '';
+  const model = window.WSG_HF_MODEL || localStorage.getItem('wsg-hf-model') || DEFAULT_HF_MODEL;
+  return {
+    token: token.trim(),
+    model: model.trim() || DEFAULT_HF_MODEL,
+  };
+}
+
+function huggingFaceEndpoint(model) {
+  return `https://api-inference.huggingface.co/models/${encodeURIComponent(model)}`;
+}
+
+async function checkHuggingFaceConnection() {
+  const { token, model } = resolveHuggingFaceConfig();
+
+  if (!token) {
+    throw new Error('Missing Hugging Face token. Set window.WSG_HF_API_TOKEN or localStorage["wsg-hf-api-token"].');
+  }
+
+  const endpoint = huggingFaceEndpoint(model);
+  const timeout = 15000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        inputs: 'Connection test. Reply with one short sentence.',
+        options: { wait_for_model: true },
+        parameters: { max_new_tokens: 24, return_full_text: false },
+      }),
+      signal: controller.signal,
+    });
+
+    const bodyText = await response.text();
+    let payload = null;
+    try {
+      payload = bodyText ? JSON.parse(bodyText) : null;
+    } catch {
+      payload = bodyText;
+    }
+
+    if (!response.ok) {
+      const hfError =
+        (payload && typeof payload === 'object' && (payload.error || payload.message))
+        || bodyText
+        || response.statusText;
+      throw new Error(`Hugging Face request failed (${response.status}): ${hfError}`);
+    }
+
+    return {
+      status: 'connected',
+      service: 'huggingface',
+      model,
+      endpoint,
+      timestamp: new Date().toISOString(),
+    };
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new Error(`Hugging Face request timed out after ${timeout / 1000}s.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const connectionChecks = {
+  ai: {
+    label: 'AI Connection',
+    run: checkHuggingFaceConnection,
+  },
+  // Retained for future backend split architecture.
+  backend: {
+    label: 'Backend Health',
+    run: checkBackendHealth,
+  },
+};
 
 function card(title, body) {
   return `<section class="card"><h3>${title}</h3>${body}</section>`;
@@ -269,7 +354,7 @@ function rightSidebar() {
     ${card('Search / Start Chat', '<input style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--panel-soft);color:var(--text-main)" placeholder="Search member or recruiter..."/>')}
     ${card('Recent Chats', list(mock.chats.map((c) => `<span>${c}</span><span class="muted">Now</span>`)))}
     ${card('Messaging Presence', '<p class="muted">Recruiters online: 3 · Members online: 41 · Response SLA: 2m</p>')}
-    ${card('Backend Health', '<button id="check-backend" class="pill-btn">Check Backend</button><p id="health-result" class="muted" style="margin-top:8px;">Waiting for check.</p>')}
+    ${card('AI Connection', '<button id="check-ai-connection" class="pill-btn">Check Hugging Face</button><p id="ai-connection-result" class="muted" style="margin-top:8px;">Waiting for check.</p>')}
   `;
 }
 
@@ -662,17 +747,17 @@ function attachHeaderActions() {
     };
   }
 
-  const healthButton = document.getElementById('check-backend');
+  const healthButton = document.getElementById('check-ai-connection');
   if (healthButton) {
     healthButton.onclick = async () => {
-      const result = document.getElementById('health-result');
+      const result = document.getElementById('ai-connection-result');
       result.textContent = 'Checking...';
       try {
-        const data = await checkBackendHealth();
-        result.textContent = `Backend ${data.status} (${data.service}) @ ${new Date(data.timestamp).toLocaleString()} via ${apiUrl(HEALTH_ENDPOINT)}`;
+        const data = await connectionChecks.ai.run();
+        result.textContent = `${connectionChecks.ai.label}: ${data.status} · ${data.model} @ ${new Date(data.timestamp).toLocaleString()}`;
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown health check error.';
-        result.textContent = `Backend health check error: ${message}`;
+        result.textContent = `${connectionChecks.ai.label} error: ${message}`;
       }
     };
   }
