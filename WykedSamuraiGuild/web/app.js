@@ -86,29 +86,29 @@ const state = {
   },
 };
 
-const DEPRECATED_API_HOSTS = new Set([
-  'https://wyked-samurai-backend.onrender.com',
-  'https://penny-carter-resume.onrender.com',
-]);
+const DEFAULT_BACKEND_BASE_URL = 'https://wyked-samurai-backend.onrender.com';
+const BACKEND_BASE_URL_CONFIG_KEY = 'wsg-backend-base-url';
 
 function linkFor(path) {
   return `#${path}`;
 }
 
 function resolveApiBaseUrl() {
+  const configuredBackendBase = document
+    .querySelector('meta[name="wsg-backend-base-url"]')
+    ?.getAttribute('content');
   const configuredMetaBase = document
     .querySelector('meta[name="wsg-api-base-url"]')
     ?.getAttribute('content');
-  const configuredBase = window.WSG_API_BASE_URL || configuredMetaBase || localStorage.getItem('wsg-api-base-url') || '';
+  const configuredBase = configuredBackendBase
+    || window.WSG_BACKEND_BASE_URL
+    || localStorage.getItem(BACKEND_BASE_URL_CONFIG_KEY)
+    || window.WSG_API_BASE_URL
+    || configuredMetaBase
+    || localStorage.getItem('wsg-api-base-url')
+    || '';
   if (configuredBase) {
-    const normalized = configuredBase.replace(/\/$/, '');
-    if (DEPRECATED_API_HOSTS.has(normalized)) {
-      console.warn('[ai:frontend] Ignoring deprecated API base URL override. Falling back to same-origin API.', {
-        configuredBase: normalized,
-      });
-    } else {
-      return normalized;
-    }
+    return configuredBase.replace(/\/$/, '');
   }
 
   const { protocol, host } = window.location;
@@ -117,7 +117,10 @@ function resolveApiBaseUrl() {
     return '';
   }
 
-  // Default to same-origin API unless explicitly overridden.
+  if (/onrender\.com$/i.test(host)) {
+    return DEFAULT_BACKEND_BASE_URL;
+  }
+
   return `${protocol}//${host}`;
 }
 
@@ -134,6 +137,7 @@ function apiUrl(path) {
 
 async function apiRequest(path, options = {}) {
   const requestUrl = apiUrl(path);
+  const isAiRequest = path.includes('/ai') || path.includes('/scenarios');
   const headers = {
     'Content-Type': 'application/json',
     ...(options.headers || {}),
@@ -147,7 +151,7 @@ async function apiRequest(path, options = {}) {
   try {
     response = await fetch(requestUrl, { ...options, headers });
   } catch (error) {
-    if (path.includes('/ai') || path.includes('/scenarios')) {
+    if (isAiRequest) {
       console.error('[ai:frontend] API network failure', {
         path,
         requestUrl,
@@ -172,18 +176,38 @@ async function apiRequest(path, options = {}) {
   let data = null;
   if (bodyText) {
     if (!looksLikeJson) {
+      if (isAiRequest) {
+        console.error('[ai:frontend] API non-JSON response', {
+          path,
+          requestUrl,
+          method: options.method || 'GET',
+          status: response.status,
+          responseText: bodyText || null,
+          errorMessage: `Expected JSON response but received: ${bodyText.slice(0, 120)}`,
+        });
+      }
       throw new Error(`Expected JSON response but received: ${bodyText.slice(0, 120)}`);
     }
 
     try {
       data = JSON.parse(bodyText);
-    } catch {
+    } catch (error) {
+      if (isAiRequest) {
+        console.error('[ai:frontend] API malformed JSON response', {
+          path,
+          requestUrl,
+          method: options.method || 'GET',
+          status: response.status,
+          responseText: bodyText || null,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        });
+      }
       throw new Error(`Received malformed JSON response: ${bodyText.slice(0, 120)}`);
     }
   }
 
   if (!response.ok) {
-    if (path.includes('/ai') || path.includes('/scenarios')) {
+    if (isAiRequest) {
       console.error('[ai:frontend] API request failed', {
         path,
         requestUrl,
@@ -245,7 +269,7 @@ async function checkBackendHealth() {
 
 async function checkHuggingFaceConnection() {
   return apiRequest('/ai/test', {
-    method: 'POST',
+    method: 'GET',
   });
 }
 
@@ -262,7 +286,7 @@ async function requestArenaAssistantReply({ userMessage, activeTrial }) {
     constraints: 'Keep it concise and actionable.',
   };
 
-  const data = await apiRequest('/scenarios/generate', {
+  const data = await apiRequest('/ai/chat', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
@@ -752,10 +776,7 @@ function attachHeaderActions() {
       try {
         const data = await connectionChecks.ai.run();
         const backendStatus = typeof data?.backend === 'string' ? data.backend : 'unknown';
-        const providerStatus = typeof data?.provider === 'string' ? data.provider : 'unknown';
-        const providerName = typeof data?.providerName === 'string' && data.providerName.trim()
-          ? data.providerName.trim()
-          : 'provider';
+        const provider = typeof data?.provider === 'string' ? data.provider : 'unknown';
         const model = typeof data?.model === 'string' && data.model.trim() ? data.model.trim() : 'n/a';
         const reason = typeof data?.reason === 'string' && data.reason.trim() ? data.reason.trim() : null;
         const timestamp = typeof data?.timestamp === 'string' && !Number.isNaN(Date.parse(data.timestamp))
@@ -763,7 +784,7 @@ function attachHeaderActions() {
           : 'unknown time';
 
         const reasonSuffix = reason ? ` · reason ${reason}` : '';
-        result.textContent = `${connectionChecks.ai.label}: backend ${backendStatus} · provider ${providerStatus} (${providerName}) · model ${model}${reasonSuffix} via ${apiUrl('/ai/test')} @ ${timestamp}`;
+        result.textContent = `${connectionChecks.ai.label}: backend ${backendStatus} · provider ${provider} · model ${model}${reasonSuffix} via ${apiUrl('/ai/test')} @ ${timestamp}`;
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown health check error.';
         result.textContent = `${connectionChecks.ai.label} error: ${message}`;
