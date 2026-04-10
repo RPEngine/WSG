@@ -109,12 +109,48 @@ async function apiRequest(path, options = {}) {
     return null;
   }
 
-  const data = await response.json();
+  const contentType = response.headers.get('content-type') || '';
+  const bodyText = await response.text();
+  const looksLikeJson = contentType.includes('application/json');
+
+  let data = null;
+  if (bodyText) {
+    if (!looksLikeJson) {
+      throw new Error(`Expected JSON response but received: ${bodyText.slice(0, 120)}`);
+    }
+
+    try {
+      data = JSON.parse(bodyText);
+    } catch {
+      throw new Error(`Received malformed JSON response: ${bodyText.slice(0, 120)}`);
+    }
+  }
+
   if (!response.ok) {
-    throw new Error(data.error || 'Request failed.');
+    throw new Error(data?.error || `Request failed (${response.status}).`);
   }
 
   return data;
+}
+
+async function checkBackendHealth() {
+  const response = await fetch(apiUrl('/health'));
+  const contentType = response.headers.get('content-type') || '';
+  const bodyText = await response.text();
+
+  if (!response.ok) {
+    throw new Error(`Health check failed (${response.status}): ${bodyText || 'No response body'}`);
+  }
+
+  if (!contentType.includes('application/json')) {
+    throw new Error(`Backend returned non-JSON health response: ${bodyText.slice(0, 120)}`);
+  }
+
+  try {
+    return JSON.parse(bodyText);
+  } catch {
+    throw new Error(`Backend returned malformed JSON health response: ${bodyText.slice(0, 120)}`);
+  }
 }
 
 function card(title, body) {
@@ -580,10 +616,10 @@ function attachHeaderActions() {
       const result = document.getElementById('health-result');
       result.textContent = 'Checking...';
       try {
-        const data = await apiRequest('/health');
-        result.textContent = JSON.stringify(data);
+        const data = await checkBackendHealth();
+        result.textContent = `Backend ${data.status} (${data.service}) @ ${new Date(data.timestamp).toLocaleString()}`;
       } catch (error) {
-        result.textContent = error.message;
+        result.textContent = `Backend health check error: ${error.message}`;
       }
     };
   }
