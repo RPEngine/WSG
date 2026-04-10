@@ -377,6 +377,17 @@ body {
   color: var(--text-main);
 }
 
+
+.home-chat-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.home-chat-log {
+  min-height: 220px;
+  max-height: 320px;
+}
+
 .status-list {
   margin: 0;
   padding: 0;
