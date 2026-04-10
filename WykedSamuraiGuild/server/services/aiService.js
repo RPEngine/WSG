@@ -1,4 +1,4 @@
-const DEFAULT_HF_HEALTH_MODEL = "distilbert/distilbert-base-uncased-finetuned-sst-2-english";
+const DEFAULT_HF_HEALTH_MODEL = "gpt2";
 const HF_MODEL = process.env.HUGGING_FACE_MODEL || "mistralai/Mistral-7B-Instruct-v0.3";
 
 const HF_TOKEN_ENV_NAMES = [
@@ -81,7 +81,15 @@ const resolveHuggingFaceToken = () => {
   };
 };
 
-const huggingFaceEndpoint = (model) => `https://api-inference.huggingface.co/models/${encodeURIComponent(model)}`;
+const huggingFaceEndpoint = (model) => {
+  const normalizedModel = String(model || "").trim().replace(/^\/+|\/+$/g, "");
+  const safeModelPath = normalizedModel
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+  return `https://api-inference.huggingface.co/models/${safeModelPath}`;
+};
 
 const callHuggingFace = async ({
   model,
@@ -147,8 +155,12 @@ export const testHuggingFaceConnection = async () => {
   const healthModel = process.env.HUGGING_FACE_HEALTH_MODEL || DEFAULT_HF_HEALTH_MODEL;
   const { payload, model, endpoint, method, tokenEnvName, requestBody } = await callHuggingFace({
     model: healthModel,
-    inputs: "health check",
-    parameters: {},
+    inputs: "Hugging Face health check:",
+    parameters: {
+      max_new_tokens: 12,
+      return_full_text: false,
+      temperature: 0.2,
+    },
   });
 
   return {
@@ -182,8 +194,12 @@ export const checkHuggingFaceHealth = async () => {
       "Content-Type": "application/json",
     },
     body: {
-      inputs: "health check",
-      parameters: {},
+      inputs: "Hugging Face health check:",
+      parameters: {
+        max_new_tokens: 12,
+        return_full_text: false,
+        temperature: 0.2,
+      },
       options: {
         wait_for_model: true,
       },
