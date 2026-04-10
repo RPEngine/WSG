@@ -1,18 +1,13 @@
-import { testHuggingFaceConnection } from "../services/aiService.js";
+import { checkHuggingFaceHealth } from "../services/aiService.js";
 
 export const testAiConnection = async (req, res) => {
-  try {
-    const result = await testHuggingFaceConnection();
-    return res.status(200).json(result);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to check AI connection.";
-    const missingToken = message.includes("Missing Hugging Face token");
-
-    return res.status(missingToken ? 500 : 502).json({
-      status: "error",
-      provider: "huggingface",
-      error: message,
-      timestamp: new Date().toISOString(),
-    });
-  }
+  const huggingFace = await checkHuggingFaceHealth();
+  return res.status(200).json({
+    status: "ok",
+    service: "wsg-backend",
+    message: "Backend is running.",
+    port: process.env.PORT || 3000,
+    timestamp: new Date().toISOString(),
+    huggingFace,
+  });
 };
