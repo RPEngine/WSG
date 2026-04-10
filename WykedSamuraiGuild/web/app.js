@@ -87,7 +87,6 @@ const state = {
 };
 
 const DEFAULT_RENDER_BACKEND_ORIGIN = 'https://wyked-samurai-backend.onrender.com';
-const DEFAULT_HF_MODEL = 'mistralai/Mistral-7B-Instruct-v0.3';
 
 function linkFor(path) {
   return `#${path}`;
@@ -205,77 +204,10 @@ async function checkBackendHealth() {
   return data;
 }
 
-function resolveHuggingFaceConfig() {
-  const token = window.WSG_HF_API_TOKEN || localStorage.getItem('wsg-hf-api-token') || '';
-  const model = window.WSG_HF_MODEL || localStorage.getItem('wsg-hf-model') || DEFAULT_HF_MODEL;
-  return {
-    token: token.trim(),
-    model: model.trim() || DEFAULT_HF_MODEL,
-  };
-}
-
-function huggingFaceEndpoint(model) {
-  return `https://api-inference.huggingface.co/models/${encodeURIComponent(model)}`;
-}
-
 async function checkHuggingFaceConnection() {
-  const { token, model } = resolveHuggingFaceConfig();
-
-  if (!token) {
-    throw new Error('Missing Hugging Face token. Set window.WSG_HF_API_TOKEN or localStorage["wsg-hf-api-token"].');
-  }
-
-  const endpoint = huggingFaceEndpoint(model);
-  const timeout = 15000;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeout);
-
-  try {
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        inputs: 'Connection test. Reply with one short sentence.',
-        options: { wait_for_model: true },
-        parameters: { max_new_tokens: 24, return_full_text: false },
-      }),
-      signal: controller.signal,
-    });
-
-    const bodyText = await response.text();
-    let payload = null;
-    try {
-      payload = bodyText ? JSON.parse(bodyText) : null;
-    } catch {
-      payload = bodyText;
-    }
-
-    if (!response.ok) {
-      const hfError =
-        (payload && typeof payload === 'object' && (payload.error || payload.message))
-        || bodyText
-        || response.statusText;
-      throw new Error(`Hugging Face request failed (${response.status}): ${hfError}`);
-    }
-
-    return {
-      status: 'connected',
-      service: 'huggingface',
-      model,
-      endpoint,
-      timestamp: new Date().toISOString(),
-    };
-  } catch (error) {
-    if (error?.name === 'AbortError') {
-      throw new Error(`Hugging Face request timed out after ${timeout / 1000}s.`);
-    }
-    throw error;
-  } finally {
-    clearTimeout(timer);
-  }
+  return apiRequest('/ai/test', {
+    method: 'POST',
+  });
 }
 
 const connectionChecks = {
