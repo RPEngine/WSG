@@ -83,6 +83,8 @@ const state = {
   arena: {
     activeTrialId: '',
     messages: [],
+    pending: false,
+    error: '',
   },
 };
 
@@ -129,7 +131,7 @@ function resolveApiBaseUrl() {
   }
 
   if (isLocalDevHost) {
-    return '';
+    return CANONICAL_BACKEND_BASE_URL;
   }
 
   return `${protocol}//${host}`;
@@ -298,22 +300,10 @@ async function requestArenaAssistantReply({ userMessage, activeTrial }) {
   };
 
   let data;
-  try {
-    data = await apiRequest(AI_ENDPOINTS.chat, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
-  } catch (error) {
-    const shouldFallbackToScenarioEndpoint = /404|405/.test(error?.message || '');
-    if (!shouldFallbackToScenarioEndpoint) {
-      throw error;
-    }
-
-    data = await apiRequest(AI_ENDPOINTS.scenario, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
-  }
+  data = await apiRequest(AI_ENDPOINTS.chat, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 
   const generated = data?.scenario;
   if (!generated) {
@@ -459,8 +449,9 @@ function arenaPage() {
         }
         <form id="arena-input-form" class="arena-input">
           <input id="arena-input" name="message" placeholder="${hasActiveTrial ? 'Enter your response to the Trial...' : 'Start a Trial to enable messaging'}" ${hasActiveTrial ? '' : 'disabled'} />
-          <button class="pill-btn" type="submit" ${hasActiveTrial ? '' : 'disabled'}>Send</button>
+          <button id="arena-send-btn" class="pill-btn" type="submit" ${(hasActiveTrial && !state.arena.pending) ? '' : 'disabled'}>${state.arena.pending ? 'Sending...' : 'Send'}</button>
         </form>
+        ${state.arena.error ? `<p class="muted" style="color:#ff7b7b;margin-top:8px;" role="alert">${escapeHtml(state.arena.error)}</p>` : ''}
       </section>
 
       <aside class="arena-panel arena-status card">
@@ -847,7 +838,12 @@ function attachArenaHandlers() {
         return;
       }
 
+      state.arena.error = '';
       state.arena.messages.push({ id: crypto.randomUUID(), type: 'user', content: value });
+      input.value = '';
+      state.arena.pending = true;
+      render();
+
       const activeTrial = getActiveTrial();
       if (!activeTrial) {
         state.arena.messages.push({
@@ -855,6 +851,7 @@ function attachArenaHandlers() {
           type: 'system',
           content: 'No active trial found.',
         });
+        state.arena.pending = false;
         render();
         return;
       }
@@ -872,12 +869,14 @@ function attachArenaHandlers() {
           message: value,
           error,
         });
+        state.arena.error = error instanceof Error ? error.message : 'AI chat request failed.';
         state.arena.messages.push({
           id: crypto.randomUUID(),
           type: 'system',
-          content: 'AI response unavailable right now. Please try again.',
+          content: 'AI response unavailable right now.',
         });
       }
+      state.arena.pending = false;
       render();
     };
   }
