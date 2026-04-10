@@ -15,6 +15,16 @@ Static HTML/CSS/JS interface.
 ## Deployment
 Configured for Render using `render.yaml`.
 
+### Render backend service settings
+
+If configuring manually in Render, create a **Web Service** (not Static Site) with:
+- Root Directory: `server`
+- Build Command: `npm install`
+- Start Command: `npm start`
+
+The backend health route is:
+- `GET /api/ai/test`
+
 ### Environment variables
 
 Backend (`/server`):

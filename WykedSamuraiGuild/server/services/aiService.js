@@ -136,6 +136,23 @@ export const testHuggingFaceConnection = async () => {
   };
 };
 
+export const checkHuggingFaceHealth = async () => {
+  try {
+    const result = await testHuggingFaceConnection();
+    return {
+      status: "ok",
+      details: result,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown Hugging Face error.";
+    return {
+      status: "degraded",
+      error: message,
+      timestamp: new Date().toISOString(),
+    };
+  }
+};
+
 export const generateScenarioFromAI = async ({ prompt, genre, tone, constraints }) => {
   const inputPrompt = promptForScenario({ prompt, genre, tone, constraints });
 
