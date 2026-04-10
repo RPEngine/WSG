@@ -24,6 +24,8 @@ If configuring manually in Render, create a **Web Service** (not Static Site) wi
 
 The backend health route is:
 - `GET /api/ai/test` (also accepts `POST`)
+- `POST /api/ai/chat` (AI-compatible alias to scenario generation)
+- `POST /api/ai/scenario` (AI-compatible alias to scenario generation)
 
 ### Environment variables
 
@@ -39,5 +41,5 @@ Backend (`/server`):
 
 Frontend (`/web`):
 - `window.WSG_API_BASE_URL` (optional runtime global override).
-  - For Render, set this value to `https://wyked-samurai-backend.onrender.com` if you inject frontend env vars via a runtime script.
-- `<meta name="wsg-api-base-url" content="https://wyked-samurai-backend.onrender.com">` (current static override in `web/index.html`).
+  - Leave unset to use same-origin API calls.
+- `<meta name="wsg-api-base-url" content="">` (optional static override in `web/index.html`).
