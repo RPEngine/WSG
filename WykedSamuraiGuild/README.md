@@ -40,9 +40,18 @@ Backend (`/server`):
 - `WSG_FRONTEND_ORIGIN` (optional explicit frontend origin(s) for CORS allowlist; supports comma-separated values).
 
 Frontend (`/web`):
-- `window.WSG_BACKEND_BASE_URL` (preferred runtime global override for backend API host).
-- `localStorage['wsg-backend-base-url']` (preferred browser override for backend API host).
-- `<meta name="wsg-backend-base-url" content="">` (preferred static override in `web/index.html`).
-- `window.WSG_API_BASE_URL` (optional runtime global override).
-  - Leave unset to use same-origin API calls.
-- `<meta name="wsg-api-base-url" content="">` (optional static override in `web/index.html`).
+- Render deployments default to `https://wyked-samurai-backend.onrender.com` unless overridden.
+- Production-safe override order on Render:
+  1. `<meta name="wsg-backend-base-url" content="">`
+  2. `window.WSG_BACKEND_BASE_URL`
+  3. `window.WSG_API_BASE_URL`
+  4. `<meta name="wsg-api-base-url" content="">`
+  5. hardcoded Render fallback (`https://wyked-samurai-backend.onrender.com`)
+- Local development override order:
+  1. `<meta name="wsg-backend-base-url" content="">`
+  2. `window.WSG_BACKEND_BASE_URL`
+  3. `localStorage['wsg-backend-base-url']`
+  4. `window.WSG_API_BASE_URL`
+  5. `<meta name="wsg-api-base-url" content="">`
+  6. `localStorage['wsg-api-base-url']`
+  7. same-origin API calls

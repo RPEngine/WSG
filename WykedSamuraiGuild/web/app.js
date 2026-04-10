@@ -86,7 +86,7 @@ const state = {
   },
 };
 
-const DEFAULT_BACKEND_BASE_URL = 'https://wyked-samurai-backend.onrender.com';
+const RENDER_BACKEND_BASE_URL = 'https://wyked-samurai-backend.onrender.com';
 const BACKEND_BASE_URL_CONFIG_KEY = 'wsg-backend-base-url';
 
 function linkFor(path) {
@@ -94,31 +94,37 @@ function linkFor(path) {
 }
 
 function resolveApiBaseUrl() {
+  const { protocol, host } = window.location;
+  const isLocalDevHost = host.startsWith('localhost') || host.startsWith('127.0.0.1');
+  const isRenderHost = /onrender\.com$/i.test(host);
   const configuredBackendBase = document
     .querySelector('meta[name="wsg-backend-base-url"]')
     ?.getAttribute('content');
   const configuredMetaBase = document
     .querySelector('meta[name="wsg-api-base-url"]')
     ?.getAttribute('content');
+  if (isRenderHost) {
+    const renderConfiguredBase = configuredBackendBase
+      || window.WSG_BACKEND_BASE_URL
+      || window.WSG_API_BASE_URL
+      || configuredMetaBase
+      || '';
+    return (renderConfiguredBase || RENDER_BACKEND_BASE_URL).replace(/\/$/, '');
+  }
+
   const configuredBase = configuredBackendBase
     || window.WSG_BACKEND_BASE_URL
-    || localStorage.getItem(BACKEND_BASE_URL_CONFIG_KEY)
+    || (isLocalDevHost ? localStorage.getItem(BACKEND_BASE_URL_CONFIG_KEY) : '')
     || window.WSG_API_BASE_URL
     || configuredMetaBase
-    || localStorage.getItem('wsg-api-base-url')
+    || (isLocalDevHost ? localStorage.getItem('wsg-api-base-url') : '')
     || '';
   if (configuredBase) {
     return configuredBase.replace(/\/$/, '');
   }
 
-  const { protocol, host } = window.location;
-
-  if (host.startsWith('localhost') || host.startsWith('127.0.0.1')) {
+  if (isLocalDevHost) {
     return '';
-  }
-
-  if (/onrender\.com$/i.test(host)) {
-    return DEFAULT_BACKEND_BASE_URL;
   }
 
   return `${protocol}//${host}`;
