@@ -1,17 +1,18 @@
 const routes = {
-  '/': { key: 'home' },
-  '/arena': { key: 'arena' },
-  '/guild-world': { key: 'guild' },
-  '/members': { key: 'members' },
+  '/': { key: 'landing' },
+  '/app': { key: 'home', requiresAuth: true },
+  '/arena': { key: 'arena', requiresAuth: true },
+  '/guild-world': { key: 'guild', requiresAuth: true },
+  '/members': { key: 'members', requiresAuth: true },
   '/profile': { key: 'profile', requiresAuth: true },
   '/profile/edit': { key: 'profileEdit', requiresAuth: true },
   '/login': { key: 'login', guestOnly: true },
   '/signup': { key: 'signup', guestOnly: true },
-  '/recruiter-console': { key: 'recruiter' },
+  '/recruiter-console': { key: 'recruiter', requiresAuth: true },
 };
 
 const navItems = [
-  ['Home', '/'],
+  ['Home', '/app'],
   ['Arena', '/arena'],
   ['Guild', '/guild-world'],
   ['Members', '/members'],
@@ -362,6 +363,7 @@ function formatDate(value) {
 
 function pageTitle(key) {
   return {
+    landing: ['Wyked Samurai Guild', 'Professional simulation and roleplay training for modern teams.'],
     home: ['Welcome to Wyked Samurai Guild', 'Your command center for tactical collaboration and growth.'],
     arena: ['Trial Arena', 'Run starter leadership Trials and prepare for live simulation loops.'],
     guild: ['Guild World', 'Story streams, locations, and social immersion in one space.'],
@@ -458,6 +460,34 @@ function homePage() {
         <button class="pill-btn" type="submit" ${state.homeChat.pending ? 'disabled' : ''}>${state.homeChat.pending ? 'Sending...' : 'Send'}</button>
       </form>
       ${state.homeChat.error ? `<p class="muted" style="color:#ff7b7b;margin-top:8px;" role="alert">${escapeHtml(state.homeChat.error)}</p>` : ''}
+    </section>
+  `;
+}
+
+function landingPage() {
+  return `
+    <section class="landing-hero feature">
+      <p class="landing-kicker">Professional + Roleplay Simulation</p>
+      <h1>Train your team through high-stakes scenarios before they happen.</h1>
+      <p class="muted">Wyked Samurai Guild helps professionals rehearse difficult leadership moments, customer escalations, and operational crises in a guided simulation environment.</p>
+      <div class="actions">
+        <a class="pill-btn cta-primary" href="#/signup">Sign Up</a>
+        <a class="pill-btn" href="#/login">Log In</a>
+      </div>
+    </section>
+    <div class="grid two landing-highlights">
+      ${card('Professional Readiness', '<p class="muted">Practice communication, judgment, and execution with structured trial flows built for real-world team performance.</p>')}
+      ${card('Roleplay Immersion', '<p class="muted">Switch into roleplay mode for story-rich scenarios that sharpen decision-making under pressure.</p>')}
+      ${card('Scenario Library', '<p class="muted">Launch from starter Trials covering people management, customer escalation, and executive tradeoff decisions.</p>')}
+      ${card('Actionable Coaching', '<p class="muted">Use AI-guided prompts and feedback loops to improve responses, not just complete checklists.</p>')}
+    </div>
+    <section class="card landing-footer-cta">
+      <h3>Start with a free guild account.</h3>
+      <p class="muted">Create your profile, enter the app, and run your first scenario in minutes.</p>
+      <div class="actions">
+        <a class="pill-btn cta-primary" href="#/signup">Create Account</a>
+        <a class="pill-btn" href="#/login">I already have an account</a>
+      </div>
     </section>
   `;
 }
@@ -746,7 +776,7 @@ async function loadProfileForRoute(path) {
 }
 
 function applyRouteGuards(path) {
-  const known = routes[path] || (path.startsWith('/members/') ? { key: 'profile' } : null);
+  const known = routes[path] || (path.startsWith('/members/') ? { key: 'profile', requiresAuth: true } : null);
   if (!known) {
     return path;
   }
@@ -756,7 +786,7 @@ function applyRouteGuards(path) {
   }
 
   if (known.guestOnly && state.currentUser) {
-    return '/profile';
+    return '/app';
   }
 
   return path;
@@ -784,7 +814,7 @@ async function handleAuthSubmit(formId, endpoint, feedbackId, mapPayload) {
       setAuthSession(result);
       feedback.textContent = 'Success. Redirecting...';
       state.membersLoaded = false;
-      location.hash = '/profile';
+      location.hash = '/app';
     } catch (error) {
       feedback.textContent = error.message;
     }
@@ -1045,6 +1075,43 @@ function renderLayout(path, key, pageHtml) {
   attachHeaderActions();
 }
 
+function renderPublicLayout(path, key, pageHtml) {
+  const [title, subtitle] = pageTitle(key);
+  document.body.classList.toggle('mode-roleplay', state.mode === 'roleplay');
+
+  document.getElementById('app').innerHTML = `
+    <div class="public-shell">
+      <header class="header panel">
+        <div class="brand">
+          <div class="brand-logo">WS</div>
+          <div>
+            <div class="title">Wyked Samurai</div>
+            <div class="subtitle">Guild Platform Prototype</div>
+          </div>
+        </div>
+        <div class="header-actions">
+          <div class="toggle">
+            <button id="professional-mode" class="${state.mode === 'professional' ? 'active' : ''}">Professional</button>
+            <button id="roleplay-mode" class="${state.mode === 'roleplay' ? 'active' : ''}">Roleplay</button>
+          </div>
+          <a class="pill-btn" href="#/signup">Sign Up</a>
+          <a class="pill-btn" href="#/login">Log In</a>
+        </div>
+      </header>
+
+      <main class="public-content panel">
+        <section class="main-header">
+          <h2>${title}</h2>
+          <p>${subtitle}</p>
+        </section>
+        <section style="margin-top:14px;">${pageHtml}</section>
+      </main>
+    </div>
+  `;
+
+  attachHeaderActions();
+}
+
 async function render() {
   let path = location.hash.replace('#', '') || '/';
   path = applyRouteGuards(path);
@@ -1061,8 +1128,9 @@ async function render() {
     await loadProfileForRoute(path);
   }
 
-  const route = routes[path] || (path.startsWith('/members/') ? { key: 'profile' } : { key: 'fallback' });
+  const route = routes[path] || (path.startsWith('/members/') ? { key: 'profile', requiresAuth: true } : { key: 'fallback' });
   const pageHtml = {
+    landing: landingPage,
     home: homePage,
     arena: arenaPage,
     guild: guildPage,
@@ -1075,7 +1143,11 @@ async function render() {
     fallback: fallbackPage,
   }[route.key]();
 
-  renderLayout(path, route.key, pageHtml);
+  if (route.key === 'landing' || route.key === 'login' || route.key === 'signup') {
+    renderPublicLayout(path, route.key, pageHtml);
+  } else {
+    renderLayout(path, route.key, pageHtml);
+  }
 
   handleAuthSubmit('login-form', '/auth/login', 'login-feedback', (formData) => ({
     identifier: String(formData.get('identifier') || ''),
