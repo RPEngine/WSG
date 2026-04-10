@@ -86,7 +86,10 @@ const state = {
   },
 };
 
-const DEFAULT_RENDER_BACKEND_ORIGIN = 'https://wyked-samurai-backend.onrender.com';
+const DEPRECATED_API_HOSTS = new Set([
+  'https://wyked-samurai-backend.onrender.com',
+  'https://penny-carter-resume.onrender.com',
+]);
 
 function linkFor(path) {
   return `#${path}`;
@@ -98,25 +101,24 @@ function resolveApiBaseUrl() {
     ?.getAttribute('content');
   const configuredBase = window.WSG_API_BASE_URL || configuredMetaBase || localStorage.getItem('wsg-api-base-url') || '';
   if (configuredBase) {
-    return configuredBase.replace(/\/$/, '');
+    const normalized = configuredBase.replace(/\/$/, '');
+    if (DEPRECATED_API_HOSTS.has(normalized)) {
+      console.warn('[ai:frontend] Ignoring deprecated API base URL override. Falling back to same-origin API.', {
+        configuredBase: normalized,
+      });
+    } else {
+      return normalized;
+    }
   }
 
-  const { protocol, host, hostname } = window.location;
+  const { protocol, host } = window.location;
 
-  if (hostname.includes('wyked-samurai-frontend')) {
-    return DEFAULT_RENDER_BACKEND_ORIGIN;
-  }
-
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+  if (host.startsWith('localhost') || host.startsWith('127.0.0.1')) {
     return '';
   }
 
-  if (hostname.endsWith('.onrender.com')) {
-    return DEFAULT_RENDER_BACKEND_ORIGIN;
-  }
-
-  // Non-localhost + no explicit API base usually means split frontend/backend deployment.
-  return DEFAULT_RENDER_BACKEND_ORIGIN;
+  // Default to same-origin API unless explicitly overridden.
+  return `${protocol}//${host}`;
 }
 
 function apiUrl(path) {
@@ -150,6 +152,9 @@ async function apiRequest(path, options = {}) {
         path,
         requestUrl,
         method: options.method || 'GET',
+        status: null,
+        responseText: null,
+        errorMessage: error instanceof Error ? error.message : String(error),
         error,
       });
     }
@@ -184,6 +189,8 @@ async function apiRequest(path, options = {}) {
         requestUrl,
         method: options.method || 'GET',
         status: response.status,
+        responseText: bodyText || null,
+        errorMessage: data?.error || response.statusText || 'Unknown error',
         error: data?.error || null,
       });
     }
