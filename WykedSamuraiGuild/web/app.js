@@ -93,7 +93,10 @@ function linkFor(path) {
 }
 
 function resolveApiBaseUrl() {
-  const configuredBase = window.WSG_API_BASE_URL || localStorage.getItem('wsg-api-base-url') || '';
+  const configuredMetaBase = document
+    .querySelector('meta[name="wsg-api-base-url"]')
+    ?.getAttribute('content');
+  const configuredBase = window.WSG_API_BASE_URL || configuredMetaBase || localStorage.getItem('wsg-api-base-url') || '';
   if (configuredBase) {
     return configuredBase.replace(/\/$/, '');
   }
@@ -104,11 +107,16 @@ function resolveApiBaseUrl() {
     return `${protocol}//${host.replace('wyked-samurai-frontend', 'wyked-samurai-backend')}`;
   }
 
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return '';
+  }
+
   if (hostname.endsWith('.onrender.com')) {
     return DEFAULT_RENDER_BACKEND_ORIGIN;
   }
 
-  return '';
+  // Non-localhost + no explicit API base usually means split frontend/backend deployment.
+  return DEFAULT_RENDER_BACKEND_ORIGIN;
 }
 
 function apiUrl(path) {
@@ -123,6 +131,7 @@ function apiUrl(path) {
 }
 
 async function apiRequest(path, options = {}) {
+  const requestUrl = apiUrl(path);
   const headers = {
     'Content-Type': 'application/json',
     ...(options.headers || {}),
@@ -132,7 +141,13 @@ async function apiRequest(path, options = {}) {
     headers.Authorization = `Bearer ${state.authToken}`;
   }
 
-  const response = await fetch(apiUrl(path), { ...options, headers });
+  let response;
+  try {
+    response = await fetch(requestUrl, { ...options, headers });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown network error.';
+    throw new Error(`Network error calling ${requestUrl}: ${message}`);
+  }
   if (response.status === 204) {
     return null;
   }
@@ -155,7 +170,7 @@ async function apiRequest(path, options = {}) {
   }
 
   if (!response.ok) {
-    throw new Error(data?.error || `Request failed (${response.status}).`);
+    throw new Error(data?.error || `Request failed (${response.status}) at ${requestUrl}.`);
   }
 
   return data;
