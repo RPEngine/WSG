@@ -35,4 +35,5 @@ Backend (`/server`):
 
 Frontend (`/web`):
 - `window.WSG_API_BASE_URL` (optional runtime global override).
+  - For Render, set this value to `https://wsg-7hmk.onrender.com` if you inject frontend env vars via a runtime script.
 - `<meta name="wsg-api-base-url" content="https://wsg-7hmk.onrender.com">` (current static override in `web/index.html`).
