@@ -87,6 +87,7 @@ const state = {
 };
 
 const HEALTH_ENDPOINT = '/health';
+const DEFAULT_RENDER_BACKEND_ORIGIN = 'https://wyked-samurai-backend.onrender.com';
 
 function linkFor(path) {
   return `#${path}`;
@@ -98,8 +99,14 @@ function resolveApiBaseUrl() {
     return configuredBase.replace(/\/$/, '');
   }
 
-  if (window.location.hostname.includes('wyked-samurai-frontend')) {
-    return `${window.location.protocol}//${window.location.host.replace('wyked-samurai-frontend', 'wyked-samurai-backend')}`;
+  const { protocol, host, hostname } = window.location;
+
+  if (hostname.includes('wyked-samurai-frontend')) {
+    return `${protocol}//${host.replace('wyked-samurai-frontend', 'wyked-samurai-backend')}`;
+  }
+
+  if (hostname.endsWith('.onrender.com')) {
+    return DEFAULT_RENDER_BACKEND_ORIGIN;
   }
 
   return '';
@@ -156,7 +163,8 @@ async function apiRequest(path, options = {}) {
 }
 
 async function checkBackendHealth() {
-  const response = await fetch(apiUrl(HEALTH_ENDPOINT));
+  const healthUrl = apiUrl(HEALTH_ENDPOINT);
+  const response = await fetch(healthUrl);
   const contentType = response.headers.get('content-type') || '';
   const bodyText = await response.text();
   const isJson = contentType.includes('application/json');
@@ -172,7 +180,7 @@ async function checkBackendHealth() {
 
   if (!response.ok) {
     const errorMessage = data?.error || bodyText || response.statusText || 'Request failed';
-    throw new Error(`Health check failed (${response.status}): ${errorMessage}`);
+    throw new Error(`Health check failed (${response.status}) at ${healthUrl}: ${errorMessage}`);
   }
 
   if (!isJson) {
@@ -661,7 +669,7 @@ function attachHeaderActions() {
       result.textContent = 'Checking...';
       try {
         const data = await checkBackendHealth();
-        result.textContent = `Backend ${data.status} (${data.service}) @ ${new Date(data.timestamp).toLocaleString()}`;
+        result.textContent = `Backend ${data.status} (${data.service}) @ ${new Date(data.timestamp).toLocaleString()} via ${apiUrl(HEALTH_ENDPOINT)}`;
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown health check error.';
         result.textContent = `Backend health check error: ${message}`;
