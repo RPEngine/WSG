@@ -104,7 +104,7 @@ function resolveApiBaseUrl() {
   const { protocol, host, hostname } = window.location;
 
   if (hostname.includes('wyked-samurai-frontend')) {
-    return `${protocol}//${host.replace('wyked-samurai-frontend', 'wyked-samurai-backend')}`;
+    return DEFAULT_RENDER_BACKEND_ORIGIN;
   }
 
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
