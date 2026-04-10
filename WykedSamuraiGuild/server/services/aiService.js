@@ -1,5 +1,8 @@
 const DEFAULT_HF_HEALTH_MODEL = "gpt2";
 const HF_MODEL = process.env.HUGGING_FACE_MODEL || "mistralai/Mistral-7B-Instruct-v0.3";
+const HF_ROUTER_ENDPOINT = "https://router.huggingface.co/v1/chat/completions";
+const HF_ROUTER_MODEL = "meta-llama/Llama-3.1-8B-Instruct:novita";
+const HF_ROUTER_TOKEN_ENV = "HUGGINGFACE_API_TOKEN";
 
 const HF_TOKEN_ENV_NAMES = [
   "HUGGING_FACE_API_TOKEN",
@@ -184,94 +187,102 @@ export const testHuggingFaceConnection = async () => {
 };
 
 export const checkHuggingFaceHealth = async () => {
-  const { token, envName } = resolveHuggingFaceToken();
-  const model = process.env.HUGGING_FACE_HEALTH_MODEL || DEFAULT_HF_HEALTH_MODEL;
-  const endpoint = huggingFaceEndpoint(model);
-  const method = "POST";
-  const requestPreview = {
-    headers: {
-      Authorization: "Bearer [REDACTED]",
-      "Content-Type": "application/json",
-    },
-    body: {
-      inputs: "Hugging Face health check:",
-      parameters: {
-        max_new_tokens: 12,
-        return_full_text: false,
-        temperature: 0.2,
-      },
-      options: {
-        wait_for_model: true,
-      },
-    },
-  };
+  const token = process.env[HF_ROUTER_TOKEN_ENV]?.trim() || "";
 
   if (!token) {
-    const failureReason = `Missing token. Configure one of: ${HF_TOKEN_ENV_NAMES.join(", ")}.`;
-    console.error("[ai:test] Hugging Face provider test failed:", {
+    const failureReason = `Missing token. Configure ${HF_ROUTER_TOKEN_ENV}.`;
+    console.error("[ai:test] Hugging Face router provider test failed:", {
       reason: failureReason,
-      model,
-      endpoint,
-      tokenEnvNamesChecked: HF_TOKEN_ENV_NAMES,
+      endpoint: HF_ROUTER_ENDPOINT,
+      model: HF_ROUTER_MODEL,
+      tokenEnvName: HF_ROUTER_TOKEN_ENV,
+      tokenPresent: false,
     });
     return {
       provider: "huggingface",
       status: "degraded",
+      model: HF_ROUTER_MODEL,
+      endpoint: HF_ROUTER_ENDPOINT,
+      method: "POST",
       token: {
         present: false,
-        envName: null,
+        envName: HF_ROUTER_TOKEN_ENV,
       },
-      reachable: false,
-      model,
-      endpoint,
-      method,
-      requestPreview,
       failureReason,
       timestamp: new Date().toISOString(),
     };
   }
 
+  const requestBody = {
+    model: HF_ROUTER_MODEL,
+    messages: [
+      {
+        role: "user",
+        content: "Reply with exactly: ok",
+      },
+    ],
+    max_tokens: 5,
+    temperature: 0,
+  };
+
   try {
-    const result = await testHuggingFaceConnection();
+    const response = await fetch(HF_ROUTER_ENDPOINT, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    const responseText = await response.text();
+    let payload = null;
+    if (responseText) {
+      try {
+        payload = JSON.parse(responseText);
+      } catch {
+        payload = { raw: responseText };
+      }
+    }
+
+    if (!response.ok) {
+      const reason = payload?.error?.message || payload?.error || payload?.message || response.statusText || "Unknown Hugging Face router error.";
+      throw new Error(`Hugging Face router request failed (${response.status}): ${reason}`);
+    }
+
     return {
       provider: "huggingface",
       status: "ok",
+      model: HF_ROUTER_MODEL,
+      endpoint: HF_ROUTER_ENDPOINT,
+      method: "POST",
       token: {
         present: true,
-        envName,
+        envName: HF_ROUTER_TOKEN_ENV,
       },
-      reachable: true,
-      model: result.model,
-      endpoint: result.endpoint,
-      method: result.method,
-      requestPreview,
       failureReason: null,
-      details: result,
       timestamp: new Date().toISOString(),
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown Hugging Face error.";
-    console.error("[ai:test] Hugging Face provider test failed:", {
-      reason: message,
-      model,
-      endpoint,
+    const failureReason = error instanceof Error ? error.message : "Unknown Hugging Face router error.";
+    console.error("[ai:test] Hugging Face router provider test failed:", {
+      reason: failureReason,
+      endpoint: HF_ROUTER_ENDPOINT,
+      model: HF_ROUTER_MODEL,
+      tokenEnvName: HF_ROUTER_TOKEN_ENV,
       tokenPresent: true,
-      tokenEnvName: envName,
     });
     return {
       provider: "huggingface",
       status: "degraded",
+      model: HF_ROUTER_MODEL,
+      endpoint: HF_ROUTER_ENDPOINT,
+      method: "POST",
       token: {
         present: true,
-        envName,
+        envName: HF_ROUTER_TOKEN_ENV,
       },
-      reachable: false,
-      model,
-      endpoint,
-      method,
-      requestPreview,
-      failureReason: message,
-      error: message,
+      failureReason,
       timestamp: new Date().toISOString(),
     };
   }
