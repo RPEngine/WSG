@@ -1,23 +1,13 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Wyked Samurai Guild</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wyked Samurai Guild</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-
-<h1>WSG Frontend Online</h1>
-
-<button id="check">Check Backend</button>
-
-<p id="result"></p>
-
-<script>
-document.getElementById("check").addEventListener("click", async () => {
-    const res = await fetch("https://wykedsamuraiguild.onrender.com/api/health");
-    const data = await res.json();
-    document.getElementById("result").innerText = JSON.stringify(data);
-});
-</script>
-
+  <div id="app"></div>
+  <script src="app.js"></script>
 </body>
 </html>
