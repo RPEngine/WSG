@@ -90,8 +90,21 @@ function linkFor(path) {
   return `#${path}`;
 }
 
+function resolveApiBaseUrl() {
+  const configuredBase = window.WSG_API_BASE_URL || localStorage.getItem('wsg-api-base-url') || '';
+  if (configuredBase) {
+    return configuredBase.replace(/\/$/, '');
+  }
+
+  if (window.location.hostname.includes('wyked-samurai-frontend')) {
+    return `${window.location.protocol}//${window.location.host.replace('wyked-samurai-frontend', 'wyked-samurai-backend')}`;
+  }
+
+  return '';
+}
+
 function apiUrl(path) {
-  return `/api${path}`;
+  return `${resolveApiBaseUrl()}/api${path}`;
 }
 
 async function apiRequest(path, options = {}) {
@@ -137,20 +150,31 @@ async function checkBackendHealth() {
   const response = await fetch(apiUrl('/health'));
   const contentType = response.headers.get('content-type') || '';
   const bodyText = await response.text();
+  const isJson = contentType.includes('application/json');
+  let data = null;
+
+  if (bodyText && isJson) {
+    try {
+      data = JSON.parse(bodyText);
+    } catch {
+      throw new Error(`Backend returned malformed JSON health response: ${bodyText.slice(0, 120)}`);
+    }
+  }
 
   if (!response.ok) {
-    throw new Error(`Health check failed (${response.status}): ${bodyText || 'No response body'}`);
+    const errorMessage = data?.error || bodyText || response.statusText || 'Request failed';
+    throw new Error(`Health check failed (${response.status}): ${errorMessage}`);
   }
 
-  if (!contentType.includes('application/json')) {
-    throw new Error(`Backend returned non-JSON health response: ${bodyText.slice(0, 120)}`);
+  if (!isJson) {
+    throw new Error(`Backend returned non-JSON health response (${response.status})`);
   }
 
-  try {
-    return JSON.parse(bodyText);
-  } catch {
-    throw new Error(`Backend returned malformed JSON health response: ${bodyText.slice(0, 120)}`);
+  if (!data || typeof data !== 'object') {
+    throw new Error('Backend returned an empty health payload.');
   }
+
+  return data;
 }
 
 function card(title, body) {
@@ -619,7 +643,8 @@ function attachHeaderActions() {
         const data = await checkBackendHealth();
         result.textContent = `Backend ${data.status} (${data.service}) @ ${new Date(data.timestamp).toLocaleString()}`;
       } catch (error) {
-        result.textContent = `Backend health check error: ${error.message}`;
+        const message = error instanceof Error ? error.message : 'Unknown health check error.';
+        result.textContent = `Backend health check error: ${message}`;
       }
     };
   }

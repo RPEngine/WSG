@@ -1,7 +1,7 @@
 export const getHealthStatus = () => {
   return {
     status: "ok",
-    service: "backend",
+    service: "wsg-backend",
     timestamp: new Date().toISOString(),
   };
 };
