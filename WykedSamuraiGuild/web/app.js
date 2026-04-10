@@ -1,6 +1,6 @@
 const routes = {
   '/': { key: 'home' },
-  '/arena': { key: 'arena' },
+  '/arena': { key: 'arena', requiresAuth: true },
   '/guild-world': { key: 'guild' },
   '/members': { key: 'members' },
   '/profile': { key: 'profile', requiresAuth: true },
@@ -24,6 +24,54 @@ const mock = {
   chats: ['Arena squad sync', 'Guild storytellers', 'Recruiter outreach', 'Mission planning'],
 };
 
+const STARTER_TRIALS = [
+  {
+    id: 'team-conflict',
+    title: 'Team Conflict',
+    description: 'Resolve escalating conflict between two high-performing contributors before delivery deadlines slip.',
+    category: 'People Management',
+    difficulty: 'Intermediate',
+    openingPrompt: 'Two senior specialists are publicly disagreeing in channel threads. You are asked to mediate immediately while preserving trust and output.',
+    suggestedRole: 'Team Lead',
+  },
+  {
+    id: 'customer-escalation',
+    title: 'Customer Escalation',
+    description: 'A strategic customer reports repeated failures and demands executive-level action within the hour.',
+    category: 'Client Communication',
+    difficulty: 'Advanced',
+    openingPrompt: 'Your largest customer has issued a formal escalation after a production outage. They want a recovery plan and accountability now.',
+    suggestedRole: 'Account Director',
+  },
+  {
+    id: 'leadership-decision',
+    title: 'Leadership Decision',
+    description: 'Choose between speed and stability while leadership stakeholders push conflicting priorities.',
+    category: 'Executive Judgment',
+    difficulty: 'Intermediate',
+    openingPrompt: 'You must decide whether to ship a risky feature this week or delay for quality, knowing each option carries business consequences.',
+    suggestedRole: 'Head of Product',
+  },
+  {
+    id: 'operational-crisis',
+    title: 'Operational Crisis',
+    description: 'Coordinate cross-functional response to cascading operational failures during peak demand.',
+    category: 'Operations',
+    difficulty: 'Advanced',
+    openingPrompt: 'Logistics, support, and engineering all report blockers at once. You are now running incident command for the next 90 minutes.',
+    suggestedRole: 'Operations Lead',
+  },
+  {
+    id: 'ethical-dilemma',
+    title: 'Ethical Dilemma',
+    description: 'Navigate pressure to hit targets while concerns emerge about fairness and policy compliance.',
+    category: 'Integrity & Compliance',
+    difficulty: 'Advanced',
+    openingPrompt: 'A manager suggests withholding critical context from a partner to close a quarter-end objective. Your decision will set precedent.',
+    suggestedRole: 'Program Manager',
+  },
+];
+
 const state = {
   mode: localStorage.getItem('wsg-mode') || 'professional',
   authToken: localStorage.getItem('wsg-auth-token') || '',
@@ -32,6 +80,10 @@ const state = {
   activeProfile: null,
   membersLoaded: false,
   loading: false,
+  arena: {
+    activeTrialId: '',
+    messages: [],
+  },
 };
 
 function linkFor(path) {
@@ -98,7 +150,7 @@ function formatDate(value) {
 function pageTitle(key) {
   return {
     home: ['Welcome to Wyked Samurai Guild', 'Your command center for tactical collaboration and growth.'],
-    arena: ['Arena Command', 'Bridge tactical planning with cinematic roleplay missions.'],
+    arena: ['Trial Arena', 'Run starter leadership Trials and prepare for live simulation loops.'],
     guild: ['Guild World', 'Story streams, locations, and social immersion in one space.'],
     members: ['Guild Members', 'Discover member profiles and current contribution footprint.'],
     profile: ['Member Profile', 'Identity snapshot and profile scaffolding for trial records.'],
@@ -108,6 +160,19 @@ function pageTitle(key) {
     recruiter: ['Recruiter Console', 'Talent intelligence for strategic hiring conversations.'],
     fallback: ['Page Placeholder', 'This section is not built yet, but routing remains intact.'],
   }[key] || ['Wyked Samurai Guild', ''];
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function getActiveTrial() {
+  return STARTER_TRIALS.find((trial) => trial.id === state.arena.activeTrialId) || null;
 }
 
 function rightSidebar() {
@@ -130,8 +195,74 @@ function homePage() {
 }
 
 function arenaPage() {
+  const activeTrial = getActiveTrial();
+  const hasActiveTrial = Boolean(activeTrial);
+  const chatMessages = state.arena.messages
+    .map(
+      (message) => `
+        <article class="message ${message.type}">
+          <div class="message-label">${message.type === 'user' ? 'You' : 'Arena System'}</div>
+          <p>${escapeHtml(message.content)}</p>
+        </article>
+      `
+    )
+    .join('');
+
   return `
-    <section class="feature"><h3 style="margin-top:0">Cinematic Scenario Header</h3><p class="muted">"Operation: Violet Horizon" blends mission analytics with immersive narrative stakes.</p></section>
+    <section class="arena-layout">
+      <aside class="arena-panel arena-trials card">
+        <h3>Starter Trial Library</h3>
+        <p class="muted">Select one of five starter Trials to initialize the Arena session.</p>
+        <div class="trial-list">
+          ${STARTER_TRIALS.map(
+            (trial) => `
+              <article class="trial-card ${trial.id === state.arena.activeTrialId ? 'active' : ''}">
+                <h4>${trial.title}</h4>
+                <p class="muted">${trial.description}</p>
+                <div class="trial-meta">
+                  <span>${trial.category}</span>
+                  <span>${trial.difficulty}</span>
+                </div>
+                <button class="pill-btn start-trial-btn" data-trial-id="${trial.id}">
+                  ${trial.id === state.arena.activeTrialId ? 'Restart Trial' : 'Start Trial'}
+                </button>
+              </article>
+            `
+          ).join('')}
+        </div>
+      </aside>
+
+      <section class="arena-panel arena-conversation card">
+        <h3>Conversation Console</h3>
+        ${
+          hasActiveTrial
+            ? `<div id="arena-conversation-log" class="conversation-log">${chatMessages}</div>`
+            : '<div class="arena-empty"><h4>No Trial active</h4><p class="muted">Choose a starter Trial from the left panel to begin.</p></div>'
+        }
+        <form id="arena-input-form" class="arena-input">
+          <input id="arena-input" name="message" placeholder="${hasActiveTrial ? 'Enter your response to the Trial...' : 'Start a Trial to enable messaging'}" ${hasActiveTrial ? '' : 'disabled'} />
+          <button class="pill-btn" type="submit" ${hasActiveTrial ? '' : 'disabled'}>Send</button>
+        </form>
+      </section>
+
+      <aside class="arena-panel arena-status card">
+        <h3>Trial Status</h3>
+        ${
+          hasActiveTrial
+            ? `
+              <ul class="status-list">
+                <li><span class="muted">Title</span><strong>${activeTrial.title}</strong></li>
+                <li><span class="muted">Category</span><strong>${activeTrial.category}</strong></li>
+                <li><span class="muted">Difficulty</span><strong>${activeTrial.difficulty}</strong></li>
+                <li><span class="muted">Suggested Role</span><strong>${activeTrial.suggestedRole || 'Unspecified'}</strong></li>
+                <li><span class="muted">Pressure State</span><strong>Stable (placeholder)</strong></li>
+                <li><span class="muted">NPCs</span><strong>Stakeholder A, Stakeholder B (placeholder)</strong></li>
+              </ul>
+            `
+            : '<p class="muted">No active Trial yet. Status details will populate after you start one.</p>'
+        }
+      </aside>
+    </section>
   `;
 }
 
@@ -458,6 +589,52 @@ function attachHeaderActions() {
   }
 }
 
+function attachArenaHandlers() {
+  const startButtons = document.querySelectorAll('.start-trial-btn');
+  if (!startButtons.length) {
+    return;
+  }
+
+  startButtons.forEach((button) => {
+    button.onclick = () => {
+      const trialId = button.getAttribute('data-trial-id');
+      const selectedTrial = STARTER_TRIALS.find((trial) => trial.id === trialId);
+      if (!selectedTrial) {
+        return;
+      }
+
+      state.arena.activeTrialId = selectedTrial.id;
+      state.arena.messages = [{ id: crypto.randomUUID(), type: 'system', content: selectedTrial.openingPrompt }];
+      render();
+    };
+  });
+
+  const inputForm = document.getElementById('arena-input-form');
+  if (inputForm) {
+    inputForm.onsubmit = (event) => {
+      event.preventDefault();
+      const input = document.getElementById('arena-input');
+      const value = String(input?.value || '').trim();
+      if (!value) {
+        return;
+      }
+
+      state.arena.messages.push({ id: crypto.randomUUID(), type: 'user', content: value });
+      state.arena.messages.push({
+        id: crypto.randomUUID(),
+        type: 'system',
+        content: 'Acknowledged. Live Trial AI responses are scheduled for Phase 4 integration.',
+      });
+      render();
+    };
+  }
+
+  const chatLog = document.getElementById('arena-conversation-log');
+  if (chatLog) {
+    chatLog.scrollTop = chatLog.scrollHeight;
+  }
+}
+
 function setMode(nextMode) {
   state.mode = nextMode;
   localStorage.setItem('wsg-mode', state.mode);
@@ -554,6 +731,7 @@ async function render() {
   }));
 
   attachProfileEditHandler();
+  attachArenaHandlers();
 }
 
 window.addEventListener('hashchange', render);

@@ -258,3 +258,159 @@ body {
   background: var(--panel-soft);
   font-weight: 700;
 }
+
+.arena-layout {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 300px minmax(0, 1fr) 280px;
+}
+
+.arena-panel {
+  min-height: 620px;
+}
+
+.arena-trials,
+.arena-status {
+  overflow: auto;
+}
+
+.trial-list {
+  display: grid;
+  gap: 10px;
+}
+
+.trial-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  background: var(--panel-soft);
+}
+
+.trial-card.active {
+  border-color: var(--ring);
+  background: var(--accent-soft);
+}
+
+.trial-card h4 {
+  margin: 0 0 8px;
+}
+
+.trial-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.arena-conversation {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.conversation-log {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 10px;
+  overflow: auto;
+  max-height: 470px;
+  display: grid;
+  gap: 10px;
+}
+
+.message {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  max-width: 85%;
+}
+
+.message-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.message.system {
+  background: rgba(72, 214, 203, 0.1);
+  justify-self: start;
+}
+
+.message.user {
+  background: rgba(208, 107, 47, 0.14);
+  justify-self: end;
+}
+
+.message p {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.arena-empty {
+  display: grid;
+  place-items: center;
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 30px 18px;
+}
+
+.arena-empty h4 {
+  margin: 0 0 8px;
+}
+
+.arena-input {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.arena-input input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel-soft);
+  color: var(--text-main);
+}
+
+.status-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+
+.status-list li {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--border);
+  background: var(--panel-soft);
+  border-radius: 10px;
+  padding: 10px;
+}
+
+@media (max-width: 1400px) {
+  .arena-layout {
+    grid-template-columns: 260px minmax(0, 1fr);
+  }
+
+  .arena-status {
+    grid-column: 1 / -1;
+    min-height: auto;
+  }
+}
+
+@media (max-width: 980px) {
+  .arena-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .arena-panel {
+    min-height: auto;
+  }
+}
