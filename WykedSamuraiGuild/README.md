@@ -29,7 +29,8 @@ The backend health route is:
 
 Backend (`/server`):
 - `PORT` (Render supplies this automatically).
-- `HUGGING_FACE_API_TOKEN` (primary Hugging Face token variable).
+- `HUGGINGFACE_API_TOKEN` (primary Hugging Face token variable).
+- `HUGGING_FACE_API_TOKEN` (legacy-compatible Hugging Face token variable).
 - `WSG_HF_API_TOKEN` (legacy-compatible Hugging Face token variable).
 - `HF_TOKEN` (also accepted).
 - `HUGGING_FACE_MODEL` (optional override; defaults to `mistralai/Mistral-7B-Instruct-v0.3`).
@@ -38,5 +39,5 @@ Backend (`/server`):
 
 Frontend (`/web`):
 - `window.WSG_API_BASE_URL` (optional runtime global override).
-  - For Render, set this value to `https://wsg-7hmk.onrender.com` if you inject frontend env vars via a runtime script.
-- `<meta name="wsg-api-base-url" content="https://wsg-7hmk.onrender.com">` (current static override in `web/index.html`).
+  - For Render, set this value to `https://wyked-samurai-backend.onrender.com` if you inject frontend env vars via a runtime script.
+- `<meta name="wsg-api-base-url" content="https://wyked-samurai-backend.onrender.com">` (current static override in `web/index.html`).

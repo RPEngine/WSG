@@ -5,6 +5,7 @@ const HF_ROUTER_MODEL = "meta-llama/Llama-3.1-8B-Instruct:novita";
 const HF_ROUTER_TOKEN_ENV = "HUGGINGFACE_API_TOKEN";
 
 const HF_TOKEN_ENV_NAMES = [
+  "HUGGINGFACE_API_TOKEN",
   "HUGGING_FACE_API_TOKEN",
   "WSG_HF_API_TOKEN",
   "HF_TOKEN",
@@ -137,6 +138,13 @@ const callHuggingFace = async ({
       (payload && typeof payload === "object" && (payload.error || payload.message || payload.raw))
       || response.statusText
       || "Unknown Hugging Face error.";
+    console.error("[ai:generate] Hugging Face inference request failed", {
+      endpoint,
+      model,
+      tokenEnvName: envName,
+      status: response.status,
+      reason: message,
+    });
     throw new Error(`Hugging Face request failed (${response.status}): ${message}`);
   }
 
@@ -291,20 +299,31 @@ export const checkHuggingFaceHealth = async () => {
 export const generateScenarioFromAI = async ({ prompt, genre, tone, constraints }) => {
   const inputPrompt = promptForScenario({ prompt, genre, tone, constraints });
 
-  const { payload: result } = await callHuggingFace({
-    model: HF_MODEL,
-    inputs: inputPrompt,
-    parameters: {
-      max_new_tokens: 300,
-      return_full_text: false,
-      temperature: 0.7,
-    },
-  });
+  try {
+    const { payload: result } = await callHuggingFace({
+      model: HF_MODEL,
+      inputs: inputPrompt,
+      parameters: {
+        max_new_tokens: 300,
+        return_full_text: false,
+        temperature: 0.7,
+      },
+    });
 
-  const textOutput = Array.isArray(result)
-    ? result[0]?.generated_text || result[0]?.summary_text || ""
-    : result?.generated_text || "";
+    const textOutput = Array.isArray(result)
+      ? result[0]?.generated_text || result[0]?.summary_text || ""
+      : result?.generated_text || "";
 
-  const parsed = parseGeneratedJson(textOutput);
-  return validateGeneratedScenario(parsed);
+    const parsed = parseGeneratedJson(textOutput);
+    return validateGeneratedScenario(parsed);
+  } catch (error) {
+    console.error("[ai:generate] Failed to generate scenario", {
+      model: HF_MODEL,
+      hasPrompt: Boolean(prompt),
+      genre: genre || null,
+      tone: tone || null,
+      error: error instanceof Error ? error.message : error,
+    });
+    throw error;
+  }
 };

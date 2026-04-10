@@ -86,7 +86,7 @@ const state = {
   },
 };
 
-const DEFAULT_RENDER_BACKEND_ORIGIN = 'https://wsg-7hmk.onrender.com';
+const DEFAULT_RENDER_BACKEND_ORIGIN = 'https://wyked-samurai-backend.onrender.com';
 
 function linkFor(path) {
   return `#${path}`;
@@ -145,6 +145,14 @@ async function apiRequest(path, options = {}) {
   try {
     response = await fetch(requestUrl, { ...options, headers });
   } catch (error) {
+    if (path.includes('/ai') || path.includes('/scenarios')) {
+      console.error('[ai:frontend] API network failure', {
+        path,
+        requestUrl,
+        method: options.method || 'GET',
+        error,
+      });
+    }
     const message = error instanceof Error ? error.message : 'Unknown network error.';
     throw new Error(`Network error calling ${requestUrl}: ${message}`);
   }
@@ -170,6 +178,15 @@ async function apiRequest(path, options = {}) {
   }
 
   if (!response.ok) {
+    if (path.includes('/ai') || path.includes('/scenarios')) {
+      console.error('[ai:frontend] API request failed', {
+        path,
+        requestUrl,
+        method: options.method || 'GET',
+        status: response.status,
+        error: data?.error || null,
+      });
+    }
     throw new Error(data?.error || `Request failed (${response.status}) at ${requestUrl}.`);
   }
 
@@ -223,6 +240,32 @@ async function checkHuggingFaceConnection() {
   return apiRequest('/ai/test', {
     method: 'POST',
   });
+}
+
+async function requestArenaAssistantReply({ userMessage, activeTrial }) {
+  const payload = {
+    prompt: [
+      `Active trial: ${activeTrial.title}`,
+      `Trial opening: ${activeTrial.openingPrompt}`,
+      `User response: ${userMessage}`,
+      'Continue the simulation and return the next system message.',
+    ].join('\n'),
+    genre: activeTrial.category,
+    tone: activeTrial.difficulty,
+    constraints: 'Keep it concise and actionable.',
+  };
+
+  const data = await apiRequest('/scenarios/generate', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+  const generated = data?.scenario;
+  if (!generated) {
+    throw new Error('AI scenario response is missing scenario data.');
+  }
+
+  return generated.openingSituation || generated.premise || generated.title;
 }
 
 const connectionChecks = {
@@ -744,7 +787,7 @@ function attachArenaHandlers() {
 
   const inputForm = document.getElementById('arena-input-form');
   if (inputForm) {
-    inputForm.onsubmit = (event) => {
+    inputForm.onsubmit = async (event) => {
       event.preventDefault();
       const input = document.getElementById('arena-input');
       const value = String(input?.value || '').trim();
@@ -753,11 +796,36 @@ function attachArenaHandlers() {
       }
 
       state.arena.messages.push({ id: crypto.randomUUID(), type: 'user', content: value });
-      state.arena.messages.push({
-        id: crypto.randomUUID(),
-        type: 'system',
-        content: 'Acknowledged. Live Trial AI responses are scheduled for Phase 4 integration.',
-      });
+      const activeTrial = getActiveTrial();
+      if (!activeTrial) {
+        state.arena.messages.push({
+          id: crypto.randomUUID(),
+          type: 'system',
+          content: 'No active trial found.',
+        });
+        render();
+        return;
+      }
+
+      try {
+        const aiReply = await requestArenaAssistantReply({ userMessage: value, activeTrial });
+        state.arena.messages.push({
+          id: crypto.randomUUID(),
+          type: 'system',
+          content: aiReply,
+        });
+      } catch (error) {
+        console.error('[ai:frontend] Arena response failed', {
+          trialId: activeTrial.id,
+          message: value,
+          error,
+        });
+        state.arena.messages.push({
+          id: crypto.randomUUID(),
+          type: 'system',
+          content: 'AI response unavailable right now. Please try again.',
+        });
+      }
       render();
     };
   }
