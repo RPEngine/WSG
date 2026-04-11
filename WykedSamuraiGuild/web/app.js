@@ -5,7 +5,9 @@ const routes = {
   '/guild-world': { key: 'guild', requiresAuth: true },
   '/members': { key: 'members', requiresAuth: true },
   '/profile': { key: 'profile', requiresAuth: true },
-  '/profile/edit': { key: 'profileEdit', requiresAuth: true },
+  '/profile/direct-chat': { key: 'directChat', requiresAuth: true },
+  '/profile/scenario-chat': { key: 'scenarioChat', requiresAuth: true },
+  '/profile/area-chat': { key: 'areaChat', requiresAuth: true },
   '/login': { key: 'login', guestOnly: true },
   '/signup': { key: 'signup', guestOnly: true },
   '/recruiter-console': { key: 'recruiter', requiresAuth: true },
@@ -16,14 +18,9 @@ const navItems = [
   ['Arena', '/arena'],
   ['Guild', '/guild-world'],
   ['Members', '/members'],
-  ['My Profile', '/profile'],
+  ['Profile Hub', '/profile'],
   ['Recruiter Console', '/recruiter-console'],
 ];
-
-const mock = {
-  friends: ['Aiko', 'Maverick', 'ShinobiRae', 'Devon', 'Kuma'],
-  chats: ['Arena squad sync', 'Guild storytellers', 'Recruiter outreach', 'Mission planning'],
-};
 
 const STARTER_TRIALS = [
   {
@@ -79,6 +76,34 @@ const state = {
   currentUser: null,
   members: [],
   activeProfile: null,
+  profileHub: {
+    saving: false,
+  },
+  network: {
+    connections: [],
+    searchTerm: '',
+    results: [],
+    loading: false,
+  },
+  directChat: {
+    activeConnectionId: '',
+    messages: [],
+    loading: false,
+    pending: false,
+    error: '',
+  },
+  scenarioChat: {
+    scenarioId: 'starter-scenario',
+    messages: [],
+    loading: false,
+    pending: false,
+  },
+  areaChat: {
+    areaId: 'guild-plaza',
+    messages: [],
+    loading: false,
+    pending: false,
+  },
   membersLoaded: false,
   loading: false,
   arena: {
@@ -410,8 +435,10 @@ function pageTitle(key) {
     arena: ['Trial Arena', 'Run starter leadership Trials and prepare for live simulation loops.'],
     guild: ['Guild World', 'Story streams, locations, and social immersion in one space.'],
     members: ['Guild Members', 'Discover member profiles and current contribution footprint.'],
-    profile: ['Member Profile', 'Identity snapshot and profile scaffolding for trial records.'],
-    profileEdit: ['Edit Profile', 'Update your guild identity details.'],
+    profile: ['Profile Hub', 'Your authenticated command center for profile, modes, network, and chat.'],
+    directChat: ['Direct Chat', 'One-to-one chat with your Connections.'],
+    scenarioChat: ['Scenario Chat', 'Guided roleplay communications tied to a scenario.'],
+    areaChat: ['Area Chat', 'Shared roleplay room chat for your current area.'],
     login: ['Log In', 'Access your guild account.'],
     signup: ['Create Account', 'Join Wyked Samurai Guild.'],
     recruiter: ['Recruiter Console', 'Talent intelligence for strategic hiring conversations.'],
@@ -464,11 +491,10 @@ async function requestHomeAssistantReply(userMessage) {
 }
 
 function rightSidebar() {
+  const networkItems = state.network.connections.slice(0, 5).map((connection) => `<span>${escapeHtml(connection.displayName || connection.username)}</span><span class="muted">Connected</span>`);
   return `
-    ${card('Friends Online', list(mock.friends.map((f) => `<span>${f}</span><span class="muted">Available</span>`)))}
-    ${card('Search / Start Chat', '<input style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--panel-soft);color:var(--text-main)" placeholder="Search member or recruiter..."/>')}
-    ${card('Recent Chats', list(mock.chats.map((c) => `<span>${c}</span><span class="muted">Now</span>`)))}
-    ${card('Messaging Presence', '<p class="muted">Recruiters online: 3 · Members online: 41 · Response SLA: 2m</p>')}
+    ${card('Connections', list(networkItems.length ? networkItems : ['<span>No active connections yet.</span><span class="muted">Build your network</span>']))}
+    ${card('Messaging Presence', '<p class="muted">Direct chats are available from Profile Hub. Roleplay channels are in Scenario/Area chat.</p>')}
     ${card('AI Connection', '<button id="check-ai-connection" class="pill-btn">Check Hugging Face</button><p id="ai-connection-result" class="muted" style="margin-top:8px;">Waiting for check.</p>')}
   `;
 }
@@ -649,75 +675,196 @@ function membersPage() {
 }
 
 function profilePage() {
-  const profile = state.activeProfile;
+  const profile = state.currentUser;
   if (!profile) {
-    return card('Profile', '<p class="muted">Profile not found.</p>');
+    return card('Profile Hub', '<p class="muted">Please log in first.</p>');
   }
 
-  const isOwnProfile = state.currentUser?.id === profile.id;
+  const recruiterVisible = profile.role === 'recruiter' || profile.role === 'employer';
+  const connectionRows = state.network.connections.length
+    ? state.network.connections.map((connection) => `
+        <li>
+          <div>
+            <strong>${escapeHtml(connection.displayName || connection.username)}</strong>
+            <p class="muted" style="margin:4px 0 0;">${escapeHtml(connection.role || 'member')} · ${escapeHtml(connection.organizationName || 'No guild listed')}</p>
+          </div>
+          <div class="actions">
+            <button class="pill-btn open-direct-chat-btn" data-connection-id="${escapeAttr(connection.id)}">Chat</button>
+            <button class="pill-btn remove-connection-btn" data-connection-id="${escapeAttr(connection.id)}">Remove Connection</button>
+          </div>
+        </li>
+      `).join('')
+    : '<li><span class="muted">No Connections yet. Search members and add your first connection.</span></li>';
+
+  const candidateRows = state.network.results.length
+    ? state.network.results.map((member) => `
+        <li>
+          <div>
+            <strong>${escapeHtml(member.displayName || member.username)}</strong>
+            <p class="muted" style="margin:4px 0 0;">${escapeHtml(member.role || 'member')} · ${escapeHtml(member.organizationName || 'No guild listed')}</p>
+          </div>
+          <div class="actions">
+            ${member.isConnected
+    ? '<span class="muted">Connected</span>'
+    : `<button class="pill-btn add-connection-btn" data-connection-id="${escapeAttr(member.id)}">Add Connection</button>`}
+          </div>
+        </li>
+      `).join('')
+    : '<li><span class="muted">Search for users by name, role, or guild to build your network.</span></li>';
+
+  const directChatMessages = state.directChat.messages
+    .map((message) => `
+      <article class="message ${message.senderId === state.currentUser?.id ? 'user' : 'system'}">
+        <div class="message-label">${message.senderId === state.currentUser?.id ? 'You' : 'Connection'}</div>
+        <p>${escapeHtml(message.content)}</p>
+      </article>
+    `).join('');
 
   return `
-    <section class="feature profile-head">
-      ${avatarMarkup(profile, 'lg')}
-      <div>
-        <h3 style="margin:0;">${profile.displayName}</h3>
-        <p class="muted" style="margin:4px 0;">@${profile.username}</p>
-        <p>${profile.bio || '<span class="muted">No bio added yet.</span>'}</p>
+    <section class="feature profile-head profile-hub-head">
+      <div class="profile-summary-row">
+        ${avatarMarkup(profile, 'lg')}
+        <div>
+          <h3 style="margin:0;">${escapeHtml(profile.displayName)}</h3>
+          <p class="muted" style="margin:4px 0;">@${escapeHtml(profile.username)}</p>
+          <p class="muted" style="margin:0;">${escapeHtml(profile.role || 'member')} · ${escapeHtml(profile.organizationName || 'Independent')}</p>
+        </div>
       </div>
-      ${isOwnProfile ? '<a href="#/profile/edit" class="pill-btn">Edit Profile</a>' : ''}
+      <div class="actions">
+        <button class="pill-btn" id="save-profile-hub-btn">Save Profile</button>
+      </div>
     </section>
-    <div class="grid two" style="margin-top:14px;">
-      ${card('Stats', `<p>Trials completed: <strong>${profile.trialCount}</strong></p><p class="muted">Last active: ${formatDate(profile.lastActiveAt)}</p>`)}
-      ${card('Account', `<p class="muted">Joined: ${formatDate(profile.createdAt)}</p><p class="muted">Updated: ${formatDate(profile.updatedAt)}</p>`)}
-    </div>
-    <div class="grid two" style="margin-top:14px;">
-      ${card('Saved Trial Results', '<p class="muted">No trial results yet. This section is ready for Phase 3 data binding.</p>')}
-      ${card('Recent Activity', '<p class="muted">No recent activity yet. Activity stream scaffolding is in place.</p>')}
-    </div>
-    <section class="card" style="margin-top:14px;">
-      <h3>Choose Your Mode</h3>
-      <p class="muted">Switch modes and jump to the area you want to train in next.</p>
-      <div class="grid two" style="margin-top:10px;">
-        <article class="card">
-          <h4 style="margin:0 0 8px;">Professional Mode</h4>
-          <p class="muted">Structured coaching and business-focused simulation flows.</p>
-          <a class="pill-btn mode-nav-btn" href="#/app" data-mode="professional">Enter Professional Mode</a>
-        </article>
-        <article class="card">
-          <h4 style="margin:0 0 8px;">Roleplay Mode</h4>
-          <p class="muted">Narrative-rich simulation for immersive decision practice.</p>
-          <a class="pill-btn mode-nav-btn" href="#/arena" data-mode="roleplay">Enter Roleplay Mode</a>
-        </article>
+    <section class="profile-hub-grid" style="margin-top:14px;">
+      <div class="profile-hub-col">
+        <section class="card">
+          <h3>Profile Setup</h3>
+          <form id="profile-hub-form" class="form-stack">
+            <label>Legal Name<input name="legalName" value="${escapeAttr(profile.legalName || '')}" required /></label>
+            <label>Display Name<input name="displayName" value="${escapeAttr(profile.displayName || '')}" required /></label>
+            <label>Email<input type="email" name="email" value="${escapeAttr(profile.email || '')}" required /></label>
+            <label>Role
+              <select name="role">
+                <option value="employee_member" ${profile.role === 'employee_member' ? 'selected' : ''}>Employee / Member</option>
+                <option value="employer" ${profile.role === 'employer' ? 'selected' : ''}>Employer</option>
+                <option value="recruiter" ${profile.role === 'recruiter' ? 'selected' : ''}>Recruiter</option>
+              </select>
+            </label>
+            <label>Organization / Guild Name<input name="organizationName" value="${escapeAttr(profile.organizationName || '')}" /></label>
+            <label>Bio / About<textarea name="bio" rows="4" maxlength="500">${escapeHtml(profile.bio || '')}</textarea></label>
+            <label>Skills / Interests (comma-separated)<input name="skillsInterests" value="${escapeAttr((profile.skillsInterests || []).join(', '))}" /></label>
+          </form>
+          <p class="muted">Trials completed: ${profile.trialCount} · Last active: ${formatDate(profile.lastActiveAt)}</p>
+        </section>
+        <section class="card">
+          <h3>Choose Your Mode</h3>
+          <div class="grid two">
+            <a class="pill-btn mode-nav-btn" href="#/app" data-mode="professional">Professional Mode</a>
+            <a class="pill-btn mode-nav-btn" href="#/arena" data-mode="roleplay">Roleplay Mode</a>
+            ${recruiterVisible ? '<a class="pill-btn" href="#/recruiter-console">Recruiter / Employer Mode</a>' : ''}
+          </div>
+        </section>
+      </div>
+      <div class="profile-hub-col">
+        <section class="card">
+          <h3>Connections Network</h3>
+          <form id="connection-search-form" class="actions" style="margin-bottom:10px;">
+            <input id="connection-search-input" placeholder="Search members..." value="${escapeAttr(state.network.searchTerm)}" />
+            <button class="pill-btn" type="submit">Search Network</button>
+          </form>
+          <h4>Browse Members</h4>
+          <ul class="list compact-list">${candidateRows}</ul>
+          <h4 style="margin-top:12px;">Current Connections</h4>
+          <ul class="list compact-list">${connectionRows}</ul>
+        </section>
+        <section class="card">
+          <h3>Direct Chat</h3>
+          <p class="muted">Select a connection to open chat.</p>
+          <div id="direct-chat-log" class="conversation-log home-chat-log">
+            ${state.directChat.activeConnectionId
+    ? (directChatMessages || '<p class="muted">No messages yet in this conversation.</p>')
+    : '<p class="muted">No conversation selected.</p>'}
+          </div>
+          <form id="direct-chat-form" class="arena-input" style="margin-top:10px;">
+            <input id="direct-chat-input" placeholder="Type a direct message..." ${state.directChat.activeConnectionId ? '' : 'disabled'} />
+            <button class="pill-btn" type="submit" ${state.directChat.activeConnectionId ? '' : 'disabled'}>Send</button>
+          </form>
+        </section>
+      </div>
+      <div class="profile-hub-col">
+        <section class="card">
+          <h3>Roleplay Communications</h3>
+          <p class="muted">Choose your roleplay communication channel.</p>
+          <div class="actions">
+            <a class="pill-btn" href="#/profile/scenario-chat" id="open-scenario-chat">Scenario Chat</a>
+            <a class="pill-btn" href="#/profile/area-chat" id="open-area-chat">Area Chat</a>
+          </div>
+          <p class="muted" style="margin-top:10px;">Scenario Chat is tied to guided RP trials. Area Chat is tied to shared rooms.</p>
+        </section>
+        <section class="card">
+          <h3>Status Panel</h3>
+          <p class="muted">Joined: ${formatDate(profile.createdAt)}</p>
+          <p class="muted">Updated: ${formatDate(profile.updatedAt)}</p>
+          <p class="muted">Connection count: ${state.network.connections.length}</p>
+        </section>
       </div>
     </section>
   `;
 }
 
-function profileEditPage() {
-  const profile = state.currentUser;
-  if (!profile) {
-    return card('Profile', '<p class="muted">Please log in first.</p>');
-  }
+function roleplayChannelPage(type) {
+  const isScenario = type === 'scenario';
+  const stateSlice = isScenario ? state.scenarioChat : state.areaChat;
+  const routeLabel = isScenario ? 'Scenario Chat' : 'Area Chat';
+  const inputId = isScenario ? 'scenario-chat-input' : 'area-chat-input';
+  const formId = isScenario ? 'scenario-chat-form' : 'area-chat-form';
+  const messagesMarkup = (stateSlice.messages || [])
+    .map((message) => `
+      <article class="message ${message.senderId === state.currentUser?.id ? 'user' : 'system'}">
+        <div class="message-label">${message.senderId === state.currentUser?.id ? 'You' : 'Guild'}</div>
+        <p>${escapeHtml(message.content)}</p>
+      </article>
+    `).join('');
 
   return `
-    <section class="card form-card">
-      <h3>Edit profile</h3>
-      <form id="edit-profile-form" class="form-stack">
-        <label>Display name
-          <input name="displayName" maxlength="60" value="${profile.displayName || ''}" required />
-        </label>
-        <label>Avatar URL
-          <input name="avatarUrl" type="url" placeholder="https://..." value="${profile.avatarUrl || ''}" />
-        </label>
-        <label>Bio
-          <textarea name="bio" maxlength="280" rows="4" placeholder="Tell the guild about your strengths...">${profile.bio || ''}</textarea>
-        </label>
-        <div class="actions">
-          <button class="pill-btn" type="submit">Save changes</button>
-          <a href="#/profile" class="pill-btn">Cancel</a>
-        </div>
-        <p id="edit-profile-feedback" class="muted"></p>
+    <section class="card">
+      <h3>${routeLabel}</h3>
+      <p class="muted">${isScenario ? 'Guided roleplay scenario stream.' : 'Shared roleplay area room stream.'}</p>
+      <div class="conversation-log home-chat-log">${messagesMarkup || '<p class="muted">No messages yet.</p>'}</div>
+      <form id="${formId}" class="arena-input" style="margin-top:10px;">
+        <input id="${inputId}" placeholder="Type a message..." />
+        <button class="pill-btn" type="submit">Send</button>
       </form>
+      <div class="actions" style="margin-top:10px;">
+        <a class="pill-btn" href="#/profile">Back to Profile Hub</a>
+      </div>
+    </section>
+  `;
+}
+
+function directChatPage() {
+  return `
+    <section class="card">
+      <h3>Direct Chat</h3>
+      <p class="muted">Use the Profile Hub Connections section to select a user and open direct chat.</p>
+      <a class="pill-btn" href="#/profile">Back to Profile Hub</a>
+    </section>
+  `;
+}
+
+function scenarioChatPage() {
+  return roleplayChannelPage('scenario');
+}
+
+function areaChatPage() {
+  return roleplayChannelPage('area');
+}
+
+function profileEditPage() {
+  return `
+    <section class="card">
+      <h3>Profile Edit moved</h3>
+      <p class="muted">Profile setup now lives directly in the Profile Hub.</p>
+      <a href="#/profile" class="pill-btn">Open Profile Hub</a>
     </section>
   `;
 }
@@ -862,6 +1009,54 @@ async function ensureMembersLoaded() {
   }
 }
 
+async function loadConnections() {
+  if (!state.currentUser) {
+    return;
+  }
+  const data = await apiRequest('/connections');
+  state.network.connections = data.items || [];
+}
+
+async function searchConnectionCandidates(query = '') {
+  if (!state.currentUser) {
+    return;
+  }
+  const encoded = encodeURIComponent(query);
+  const data = await apiRequest(`/connections/search?q=${encoded}`);
+  state.network.results = data.items || [];
+}
+
+async function loadDirectChat(connectionId) {
+  if (!connectionId) {
+    state.directChat.messages = [];
+    state.directChat.activeConnectionId = '';
+    return;
+  }
+  state.directChat.loading = true;
+  state.directChat.error = '';
+  try {
+    const data = await apiRequest(`/chats/direct/${connectionId}`);
+    state.directChat.activeConnectionId = connectionId;
+    state.directChat.messages = data.thread?.messages || [];
+    setStatusMessage('Direct chat opened.', 'success');
+  } catch (error) {
+    state.directChat.error = error instanceof Error ? error.message : 'Chat unavailable.';
+    setStatusMessage('Chat unavailable.', 'error');
+  } finally {
+    state.directChat.loading = false;
+  }
+}
+
+async function loadScenarioChat() {
+  const data = await apiRequest(`/chats/scenario?scenarioId=${encodeURIComponent(state.scenarioChat.scenarioId)}`);
+  state.scenarioChat.messages = data.thread?.messages || [];
+}
+
+async function loadAreaChat() {
+  const data = await apiRequest(`/chats/area?areaId=${encodeURIComponent(state.areaChat.areaId)}`);
+  state.areaChat.messages = data.thread?.messages || [];
+}
+
 async function loadProfileForRoute(path) {
   if (path === '/profile') {
     state.activeProfile = state.currentUser;
@@ -966,38 +1161,147 @@ function isStrongPassword(password) {
 }
 
 function attachProfileEditHandler() {
-  const form = document.getElementById('edit-profile-form');
-  if (!form) {
-    return;
+  const saveButton = document.getElementById('save-profile-hub-btn');
+  const profileHubForm = document.getElementById('profile-hub-form');
+  if (saveButton && profileHubForm) {
+    saveButton.onclick = async () => {
+      const formData = new FormData(profileHubForm);
+      const payload = {
+        legalName: String(formData.get('legalName') || ''),
+        displayName: String(formData.get('displayName') || ''),
+        email: String(formData.get('email') || ''),
+        role: String(formData.get('role') || ''),
+        organizationName: String(formData.get('organizationName') || ''),
+        bio: String(formData.get('bio') || ''),
+        skillsInterests: String(formData.get('skillsInterests') || ''),
+      };
+      try {
+        const result = await apiRequest('/profile/hub', { method: 'PATCH', body: JSON.stringify(payload) });
+        state.currentUser = result.profile;
+        state.activeProfile = result.profile;
+        setStatusMessage('Profile saved successfully.', 'success');
+        render();
+      } catch (error) {
+        setStatusMessage(error instanceof Error ? error.message : 'Failed to save profile.', 'error');
+      }
+    };
   }
 
-  form.onsubmit = async (event) => {
-    event.preventDefault();
-    const feedback = document.getElementById('edit-profile-feedback');
-    const formData = new FormData(form);
-    const payload = {
-      displayName: String(formData.get('displayName') || ''),
-      avatarUrl: String(formData.get('avatarUrl') || ''),
-      bio: String(formData.get('bio') || ''),
+  const searchForm = document.getElementById('connection-search-form');
+  if (searchForm) {
+    searchForm.onsubmit = async (event) => {
+      event.preventDefault();
+      const searchInput = document.getElementById('connection-search-input');
+      state.network.searchTerm = String(searchInput?.value || '').trim();
+      await searchConnectionCandidates(state.network.searchTerm);
+      render();
     };
+  }
 
-    feedback.textContent = 'Saving...';
+  document.querySelectorAll('.add-connection-btn').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const connectionId = button.getAttribute('data-connection-id');
+      if (!connectionId) return;
+      try {
+        await apiRequest(`/connections/${connectionId}`, { method: 'POST' });
+        await loadConnections();
+        await searchConnectionCandidates(state.network.searchTerm);
+        setStatusMessage('Connection added.', 'success');
+        render();
+      } catch (error) {
+        setStatusMessage(error instanceof Error ? error.message : 'Failed to add connection.', 'error');
+      }
+    });
+  });
 
-    try {
-      const result = await apiRequest('/profile/me', {
-        method: 'PATCH',
-        body: JSON.stringify(payload),
-      });
-      state.currentUser = result.profile;
-      state.activeProfile = result.profile;
-      state.membersLoaded = false;
-      feedback.textContent = 'Profile saved successfully.';
-      setStatusMessage('Profile saved successfully.', 'success');
-      location.hash = '/profile';
-    } catch (error) {
-      feedback.textContent = error.message;
-    }
-  };
+  document.querySelectorAll('.remove-connection-btn').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const connectionId = button.getAttribute('data-connection-id');
+      if (!connectionId) return;
+      try {
+        await apiRequest(`/connections/${connectionId}`, { method: 'DELETE' });
+        await loadConnections();
+        await searchConnectionCandidates(state.network.searchTerm);
+        if (state.directChat.activeConnectionId === connectionId) {
+          state.directChat.activeConnectionId = '';
+          state.directChat.messages = [];
+        }
+        setStatusMessage('Connection removed.', 'success');
+        render();
+      } catch (error) {
+        setStatusMessage(error instanceof Error ? error.message : 'Failed to remove connection.', 'error');
+      }
+    });
+  });
+
+  document.querySelectorAll('.open-direct-chat-btn').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const connectionId = button.getAttribute('data-connection-id');
+      await loadDirectChat(connectionId);
+      render();
+    });
+  });
+
+  const directChatForm = document.getElementById('direct-chat-form');
+  if (directChatForm) {
+    directChatForm.onsubmit = async (event) => {
+      event.preventDefault();
+      if (!state.directChat.activeConnectionId) return;
+      const input = document.getElementById('direct-chat-input');
+      const content = String(input?.value || '').trim();
+      if (!content) return;
+      try {
+        await apiRequest(`/chats/direct/${state.directChat.activeConnectionId}/messages`, {
+          method: 'POST',
+          body: JSON.stringify({ content }),
+        });
+        if (input) input.value = '';
+        await loadDirectChat(state.directChat.activeConnectionId);
+        render();
+      } catch (error) {
+        setStatusMessage(error instanceof Error ? error.message : 'Chat unavailable.', 'error');
+      }
+    };
+  }
+
+  const scenarioForm = document.getElementById('scenario-chat-form');
+  if (scenarioForm) {
+    scenarioForm.onsubmit = async (event) => {
+      event.preventDefault();
+      const input = document.getElementById('scenario-chat-input');
+      const content = String(input?.value || '').trim();
+      if (!content) return;
+      await apiRequest('/chats/scenario/messages', { method: 'POST', body: JSON.stringify({ scenarioId: state.scenarioChat.scenarioId, content }) });
+      if (input) input.value = '';
+      await loadScenarioChat();
+      setStatusMessage('Scenario chat opened.', 'success');
+      render();
+    };
+  }
+
+  const areaForm = document.getElementById('area-chat-form');
+  if (areaForm) {
+    areaForm.onsubmit = async (event) => {
+      event.preventDefault();
+      const input = document.getElementById('area-chat-input');
+      const content = String(input?.value || '').trim();
+      if (!content) return;
+      await apiRequest('/chats/area/messages', { method: 'POST', body: JSON.stringify({ areaId: state.areaChat.areaId, content }) });
+      if (input) input.value = '';
+      await loadAreaChat();
+      setStatusMessage('Area chat opened.', 'success');
+      render();
+    };
+  }
+
+  const openScenarioChat = document.getElementById('open-scenario-chat');
+  if (openScenarioChat) {
+    openScenarioChat.addEventListener('click', () => setStatusMessage('Scenario chat opened.', 'success'));
+  }
+  const openAreaChat = document.getElementById('open-area-chat');
+  if (openAreaChat) {
+    openAreaChat.addEventListener('click', () => setStatusMessage('Area chat opened.', 'success'));
+  }
 }
 
 function starterScenarioModalMarkup() {
@@ -1330,6 +1634,16 @@ async function render() {
   if (path === '/profile' || path.startsWith('/members/')) {
     await loadProfileForRoute(path);
   }
+  if (path === '/profile') {
+    await loadConnections();
+    await searchConnectionCandidates(state.network.searchTerm || '');
+  }
+  if (path === '/profile/scenario-chat') {
+    await loadScenarioChat();
+  }
+  if (path === '/profile/area-chat') {
+    await loadAreaChat();
+  }
   if (path !== '/profile') {
     state.onboarding.starterModalOpen = false;
   } else {
@@ -1347,6 +1661,9 @@ async function render() {
     guild: guildPage,
     members: membersPage,
     profile: profilePage,
+    directChat: directChatPage,
+    scenarioChat: scenarioChatPage,
+    areaChat: areaChatPage,
     profileEdit: profileEditPage,
     login: loginPage,
     signup: signupPage,

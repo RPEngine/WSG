@@ -26,6 +26,8 @@ function publicUser(user) {
     backupEmailVerified: Boolean(user.backupEmailVerified),
     avatarUrl: user.avatarUrl,
     bio: user.bio,
+    skillsInterests: Array.isArray(user.skillsInterests) ? [...user.skillsInterests] : [],
+    connections: Array.isArray(user.connections) ? [...user.connections] : [],
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
     lastActiveAt: user.lastActiveAt,
@@ -78,6 +80,8 @@ export function createUser({
     backupEmailVerified: Boolean(backupEmailVerified),
     avatarUrl: "",
     bio: "",
+    skillsInterests: [],
+    connections: [],
     passwordHash,
     passwordSalt,
     createdAt: now,
@@ -128,6 +132,90 @@ export function updateUserProfile(userId, { displayName, avatarUrl, bio }) {
 
   user.updatedAt = new Date().toISOString();
 
+  return publicUser(user);
+}
+
+export function updateUserHubProfile(
+  userId,
+  {
+    legalName,
+    displayName,
+    email,
+    role,
+    organizationName,
+    bio,
+    skillsInterests,
+  },
+) {
+  const user = findUserById(userId);
+  if (!user) {
+    return null;
+  }
+
+  if (typeof legalName === "string") {
+    user.legalName = legalName.trim();
+  }
+  if (typeof displayName === "string") {
+    user.displayName = displayName.trim();
+  }
+  if (typeof email === "string") {
+    const nextEmail = email.trim();
+    if (nextEmail !== user.email) {
+      if (user.email) {
+        usersByHandle.delete(normalizeHandle(user.email));
+      }
+      user.email = nextEmail;
+      if (nextEmail) {
+        usersByHandle.set(normalizeHandle(nextEmail), user.id);
+      }
+      user.emailVerified = false;
+    }
+  }
+  if (typeof role === "string") {
+    user.role = role.trim();
+  }
+  if (typeof organizationName === "string") {
+    user.organizationName = organizationName.trim();
+  }
+  if (typeof bio === "string") {
+    user.bio = bio.trim();
+  }
+  if (Array.isArray(skillsInterests)) {
+    user.skillsInterests = skillsInterests.map((skill) => String(skill).trim()).filter(Boolean).slice(0, 20);
+  }
+
+  user.updatedAt = new Date().toISOString();
+  return publicUser(user);
+}
+
+export function addConnection(userId, connectionUserId) {
+  const user = findUserById(userId);
+  if (!user) {
+    return null;
+  }
+  if (!Array.isArray(user.connections)) {
+    user.connections = [];
+  }
+  if (!user.connections.includes(connectionUserId)) {
+    user.connections.push(connectionUserId);
+    user.updatedAt = new Date().toISOString();
+  }
+  return publicUser(user);
+}
+
+export function removeConnection(userId, connectionUserId) {
+  const user = findUserById(userId);
+  if (!user) {
+    return null;
+  }
+  if (!Array.isArray(user.connections)) {
+    user.connections = [];
+  }
+  const before = user.connections.length;
+  user.connections = user.connections.filter((id) => id !== connectionUserId);
+  if (user.connections.length !== before) {
+    user.updatedAt = new Date().toISOString();
+  }
   return publicUser(user);
 }
 
