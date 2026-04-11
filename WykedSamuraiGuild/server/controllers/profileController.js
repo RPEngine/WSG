@@ -6,7 +6,9 @@ import {
 } from "../services/profileService.js";
 
 export function getMyProfile(req, res) {
+  console.log("[profile] profile fetch request received", { userId: req.user.id, email: req.user.email });
   const profile = getOwnProfile(req.user.id);
+  console.log("[profile] profile fetch success", { userId: profile?.id, email: profile?.email });
   return res.json({ profile });
 }
 
@@ -28,6 +30,7 @@ export function getMember(req, res) {
   const member = getMemberProfile(req.params.id);
 
   if (!member) {
+    console.warn("[profile] profile fetch failure", { memberId: req.params.id, error: "Member not found." });
     return res.status(404).json({ error: "Member not found." });
   }
 
