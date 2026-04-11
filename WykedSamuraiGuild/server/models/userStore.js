@@ -1,250 +1,233 @@
 import crypto from "crypto";
+import pool from "../config/db.js";
 
-const usersById = new Map();
-const usersByHandle = new Map();
-const sessions = new Map();
+function publicUser(row, connections = []) {
+  if (!row) return null;
 
-function normalizeHandle(value = "") {
-  return value.trim().toLowerCase();
-}
-
-function publicUser(user) {
-  if (!user) {
-    return null;
-  }
+  const email = row.email || "";
+  const username = String(email).split("@")[0] || "member";
 
   return {
-    id: user.id,
-    username: user.username,
-    displayName: user.displayName,
-    legalName: user.legalName,
-    email: user.email,
-    emailVerified: Boolean(user.emailVerified),
-    role: user.role,
-    organizationName: user.organizationName,
-    backupEmail: user.backupEmail,
-    backupEmailVerified: Boolean(user.backupEmailVerified),
-    avatarUrl: user.avatarUrl,
-    bio: user.bio,
-    skillsInterests: Array.isArray(user.skillsInterests) ? [...user.skillsInterests] : [],
-    connections: Array.isArray(user.connections) ? [...user.connections] : [],
-    createdAt: user.createdAt,
-    updatedAt: user.updatedAt,
-    lastActiveAt: user.lastActiveAt,
-    trialCount: user.trialCount,
+    id: row.id,
+    username,
+    displayName: row.display_name || row.legal_name,
+    legalName: row.legal_name,
+    email,
+    emailVerified: false,
+    role: row.role,
+    organizationName: row.organization_name || "",
+    backupEmail: row.backup_email || "",
+    backupEmailVerified: false,
+    avatarUrl: "",
+    bio: row.bio || "",
+    skillsInterests: Array.isArray(row.skills) ? row.skills : [],
+    connections,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    lastActiveAt: row.updated_at,
+    trialCount: 0,
   };
 }
 
-function buildUniqueUsername(baseUsername) {
-  const safeBase = (baseUsername || "member").trim() || "member";
-  const normalizedBase = normalizeHandle(safeBase);
-  if (!usersByHandle.has(normalizedBase)) {
-    return safeBase;
-  }
-
-  for (let attempt = 2; attempt < 10_000; attempt += 1) {
-    const candidate = `${safeBase}-${attempt}`;
-    if (!usersByHandle.has(normalizeHandle(candidate))) {
-      return candidate;
-    }
-  }
-
-  return `${safeBase}-${Date.now()}`;
+async function getConnectionIds(userId) {
+  const { rows } = await pool.query(
+    `SELECT connection_user_id FROM connections WHERE user_id = $1`,
+    [userId],
+  );
+  return rows.map((row) => row.connection_user_id);
 }
 
-export function createUser({
-  username,
+export async function createUser({
   displayName,
   legalName,
   email = "",
   role,
   organizationName = "",
   backupEmail = "",
-  emailVerified = false,
-  backupEmailVerified = false,
   passwordHash,
-  passwordSalt,
 }) {
-  const now = new Date().toISOString();
-  const resolvedUsername = buildUniqueUsername(username.trim());
-  const user = {
-    id: crypto.randomUUID(),
-    username: resolvedUsername,
-    displayName: (displayName || username).trim(),
-    legalName: (legalName || displayName || username).trim(),
-    email: email.trim(),
-    emailVerified: Boolean(emailVerified),
-    role: role || "employee_member",
-    organizationName: organizationName.trim(),
-    backupEmail: backupEmail.trim(),
-    backupEmailVerified: Boolean(backupEmailVerified),
-    avatarUrl: "",
-    bio: "",
-    skillsInterests: [],
-    connections: [],
-    passwordHash,
-    passwordSalt,
-    createdAt: now,
-    updatedAt: now,
-    lastActiveAt: now,
-    trialCount: 0,
-  };
+  const userId = crypto.randomUUID();
+  const profileId = crypto.randomUUID();
 
-  usersById.set(user.id, user);
-  usersByHandle.set(normalizeHandle(user.username), user.id);
-  if (user.email) {
-    usersByHandle.set(normalizeHandle(user.email), user.id);
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const userInsert = await client.query(
+      `INSERT INTO users (id, legal_name, email, password_hash, role, organization_name, backup_email)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [userId, legalName.trim(), email.trim(), passwordHash, role, organizationName.trim(), backupEmail.trim()],
+    );
+
+    await client.query(
+      `INSERT INTO profiles (id, user_id, display_name, bio, skills)
+       VALUES ($1, $2, $3, '', ARRAY[]::TEXT[])`,
+      [profileId, userId, (displayName || legalName).trim()],
+    );
+
+    await client.query("COMMIT");
+    return publicUser({ ...userInsert.rows[0], display_name: (displayName || legalName).trim(), bio: "", skills: [] }, []);
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
   }
-
-  return publicUser(user);
 }
 
-export function findUserByIdentifier(identifier) {
-  const userId = usersByHandle.get(normalizeHandle(identifier));
-  return userId ? usersById.get(userId) : null;
+export async function findUserByIdentifier(identifier) {
+  const { rows } = await pool.query(
+    `SELECT u.*, p.display_name, p.bio, p.skills
+     FROM users u
+     LEFT JOIN profiles p ON p.user_id = u.id
+     WHERE LOWER(u.email) = LOWER($1)
+     LIMIT 1`,
+    [String(identifier || "").trim()],
+  );
+  return rows[0] || null;
 }
 
-export function findUserById(userId) {
-  return usersById.get(userId) || null;
+export async function findUserById(userId) {
+  const { rows } = await pool.query(
+    `SELECT u.*, p.display_name, p.bio, p.skills
+     FROM users u
+     LEFT JOIN profiles p ON p.user_id = u.id
+     WHERE u.id = $1
+     LIMIT 1`,
+    [userId],
+  );
+  return rows[0] || null;
 }
 
-export function listUsers() {
-  return Array.from(usersById.values())
-    .sort((a, b) => a.displayName.localeCompare(b.displayName))
-    .map(publicUser);
+export async function listUsers() {
+  const { rows } = await pool.query(
+    `SELECT u.*, p.display_name, p.bio, p.skills
+     FROM users u
+     LEFT JOIN profiles p ON p.user_id = u.id
+     ORDER BY COALESCE(p.display_name, u.legal_name) ASC`,
+  );
+
+  const users = [];
+  for (const row of rows) {
+    const connections = await getConnectionIds(row.id);
+    users.push(publicUser(row, connections));
+  }
+  return users;
 }
 
-export function updateUserProfile(userId, { displayName, avatarUrl, bio }) {
-  const user = findUserById(userId);
-  if (!user) {
-    return null;
-  }
+export async function updateUserProfile(userId, { displayName, bio }) {
+  const { rows } = await pool.query(
+    `UPDATE profiles
+     SET display_name = $2, bio = $3, updated_at = NOW()
+     WHERE user_id = $1
+     RETURNING *`,
+    [userId, String(displayName || "").trim(), String(bio || "").trim()],
+  );
 
-  if (typeof displayName === "string") {
-    user.displayName = displayName.trim();
-  }
-  if (typeof avatarUrl === "string") {
-    user.avatarUrl = avatarUrl.trim();
-  }
-  if (typeof bio === "string") {
-    user.bio = bio.trim();
-  }
-
-  user.updatedAt = new Date().toISOString();
-
-  return publicUser(user);
+  const user = await findUserById(userId);
+  if (!user) return null;
+  const connections = await getConnectionIds(userId);
+  return publicUser({ ...user, ...rows[0], updated_at: rows[0]?.updated_at || user.updated_at }, connections);
 }
 
-export function updateUserHubProfile(
-  userId,
-  {
-    legalName,
-    displayName,
-    email,
-    role,
-    organizationName,
-    bio,
-    skillsInterests,
-  },
-) {
-  const user = findUserById(userId);
-  if (!user) {
-    return null;
+export async function updateUserHubProfile(userId, { legalName, displayName, email, role, organizationName, bio, skillsInterests }) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    await client.query(
+      `UPDATE users
+       SET legal_name = $2,
+           email = $3,
+           role = $4,
+           organization_name = $5,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [userId, legalName.trim(), email.trim(), role.trim(), organizationName.trim()],
+    );
+
+    await client.query(
+      `UPDATE profiles
+       SET display_name = $2,
+           bio = $3,
+           skills = $4,
+           updated_at = NOW()
+       WHERE user_id = $1`,
+      [userId, displayName.trim(), bio.trim(), skillsInterests],
+    );
+
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
   }
 
-  if (typeof legalName === "string") {
-    user.legalName = legalName.trim();
-  }
-  if (typeof displayName === "string") {
-    user.displayName = displayName.trim();
-  }
-  if (typeof email === "string") {
-    const nextEmail = email.trim();
-    if (nextEmail !== user.email) {
-      if (user.email) {
-        usersByHandle.delete(normalizeHandle(user.email));
-      }
-      user.email = nextEmail;
-      if (nextEmail) {
-        usersByHandle.set(normalizeHandle(nextEmail), user.id);
-      }
-      user.emailVerified = false;
-    }
-  }
-  if (typeof role === "string") {
-    user.role = role.trim();
-  }
-  if (typeof organizationName === "string") {
-    user.organizationName = organizationName.trim();
-  }
-  if (typeof bio === "string") {
-    user.bio = bio.trim();
-  }
-  if (Array.isArray(skillsInterests)) {
-    user.skillsInterests = skillsInterests.map((skill) => String(skill).trim()).filter(Boolean).slice(0, 20);
-  }
-
-  user.updatedAt = new Date().toISOString();
-  return publicUser(user);
+  const user = await findUserById(userId);
+  if (!user) return null;
+  const connections = await getConnectionIds(userId);
+  return publicUser(user, connections);
 }
 
-export function addConnection(userId, connectionUserId) {
-  const user = findUserById(userId);
-  if (!user) {
-    return null;
-  }
-  if (!Array.isArray(user.connections)) {
-    user.connections = [];
-  }
-  if (!user.connections.includes(connectionUserId)) {
-    user.connections.push(connectionUserId);
-    user.updatedAt = new Date().toISOString();
-  }
-  return publicUser(user);
+export async function addConnection(userId, connectionUserId) {
+  await pool.query(
+    `INSERT INTO connections (id, user_id, connection_user_id)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (user_id, connection_user_id) DO NOTHING`,
+    [crypto.randomUUID(), userId, connectionUserId],
+  );
+
+  const user = await findUserById(userId);
+  const connections = await getConnectionIds(userId);
+  return publicUser(user, connections);
 }
 
-export function removeConnection(userId, connectionUserId) {
-  const user = findUserById(userId);
-  if (!user) {
-    return null;
-  }
-  if (!Array.isArray(user.connections)) {
-    user.connections = [];
-  }
-  const before = user.connections.length;
-  user.connections = user.connections.filter((id) => id !== connectionUserId);
-  if (user.connections.length !== before) {
-    user.updatedAt = new Date().toISOString();
-  }
-  return publicUser(user);
+export async function removeConnection(userId, connectionUserId) {
+  await pool.query(
+    `DELETE FROM connections WHERE user_id = $1 AND connection_user_id = $2`,
+    [userId, connectionUserId],
+  );
+  const user = await findUserById(userId);
+  const connections = await getConnectionIds(userId);
+  return publicUser(user, connections);
 }
 
-export function touchLastActiveAt(userId) {
-  const user = findUserById(userId);
-  if (!user) {
-    return null;
-  }
-
-  user.lastActiveAt = new Date().toISOString();
-  user.updatedAt = user.lastActiveAt;
-
-  return publicUser(user);
+export async function touchLastActiveAt(userId) {
+  await pool.query(`UPDATE users SET updated_at = NOW() WHERE id = $1`, [userId]);
+  const user = await findUserById(userId);
+  const connections = await getConnectionIds(userId);
+  return publicUser(user, connections);
 }
 
-export function createSession(userId) {
+export async function createSession(userId) {
   const sessionToken = crypto.randomBytes(24).toString("hex");
-  sessions.set(sessionToken, { userId, createdAt: new Date().toISOString() });
+  const sessionId = crypto.randomUUID();
+  const expiresAt = new Date(Date.now() + (1000 * 60 * 60 * 24 * 7)).toISOString();
+
+  await pool.query(
+    `INSERT INTO sessions (id, user_id, token, expires_at)
+     VALUES ($1, $2, $3, $4)`,
+    [sessionId, userId, sessionToken, expiresAt],
+  );
+
   return sessionToken;
 }
 
-export function getSession(sessionToken) {
-  return sessions.get(sessionToken) || null;
+export async function getSession(sessionToken) {
+  const { rows } = await pool.query(
+    `SELECT * FROM sessions WHERE token = $1 AND expires_at > NOW() LIMIT 1`,
+    [sessionToken],
+  );
+  return rows[0] || null;
 }
 
-export function deleteSession(sessionToken) {
-  sessions.delete(sessionToken);
+export async function deleteSession(sessionToken) {
+  await pool.query(`DELETE FROM sessions WHERE token = $1`, [sessionToken]);
 }
 
-export function toPublicUser(user) {
-  return publicUser(user);
+export async function toPublicUser(user) {
+  if (!user) return null;
+  const connections = await getConnectionIds(user.id);
+  return publicUser(user, connections);
 }
