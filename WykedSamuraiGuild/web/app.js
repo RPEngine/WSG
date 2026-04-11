@@ -724,6 +724,7 @@ function loginPage() {
   return `
     <section class="card form-card">
       <h3>Log in</h3>
+      <p class="muted">Note: accounts are currently stored in volatile in-memory server storage and may reset when the backend restarts.</p>
       <form id="login-form" class="form-stack">
         <label>Email
           <input name="email" type="email" autocomplete="email" required />
@@ -744,6 +745,7 @@ function signupPage() {
     <section class="card form-card">
       <h3>Create account</h3>
       <p class="muted">Use your legal identity details so employers and recruiters can verify your profile.</p>
+      <p class="muted">Storage note: account records currently use in-memory backend storage for this environment.</p>
       <form id="signup-form" class="form-stack">
         <section class="form-section">
           <h4>Account Identity</h4>
@@ -814,6 +816,11 @@ function setAuthSession({ sessionToken, user }) {
   state.authToken = sessionToken;
   state.currentUser = user;
   localStorage.setItem('wsg-auth-token', sessionToken);
+  console.log('[auth:frontend] session token saved', {
+    hasSessionToken: Boolean(sessionToken),
+    userId: user?.id || null,
+    email: user?.email || null,
+  });
 }
 
 function clearAuthSession() {
@@ -830,7 +837,9 @@ async function bootstrapAuth() {
   try {
     const data = await apiRequest('/auth/me');
     state.currentUser = data.user;
+    console.log('[auth:frontend] bootstrap /auth/me success', { userId: data?.user?.id, email: data?.user?.email });
   } catch {
+    console.warn('[auth:frontend] bootstrap /auth/me failed, clearing local auth session');
     clearAuthSession();
   }
 }
@@ -853,6 +862,11 @@ async function ensureMembersLoaded() {
 async function loadProfileForRoute(path) {
   if (path === '/profile') {
     state.activeProfile = state.currentUser;
+    console.log('[profile:frontend] profile route load success', {
+      path,
+      hasCurrentUser: Boolean(state.currentUser),
+      userId: state.currentUser?.id || null,
+    });
     return;
   }
 
@@ -864,7 +878,9 @@ async function loadProfileForRoute(path) {
   try {
     const data = await apiRequest(`/members/${match[1]}`);
     state.activeProfile = data.profile;
+    console.log('[profile:frontend] member profile fetch success', { memberId: match[1] });
   } catch {
+    console.warn('[profile:frontend] member profile fetch failure', { memberId: match[1] });
     state.activeProfile = null;
   }
 }
@@ -1354,6 +1370,10 @@ async function render() {
         identifier: email,
         password,
       };
+      console.log('[auth:frontend] login request payload prepared', {
+        identifier: payload.identifier,
+        fields: Object.keys(payload),
+      });
       feedback.textContent = 'Signing in...';
       setStatusMessage('Signing in...', 'info');
       if (submitButton) {
@@ -1363,6 +1383,7 @@ async function render() {
       try {
         const result = await apiRequest('/auth/login', { method: 'POST', body: JSON.stringify(payload) });
         setAuthSession(result);
+        console.log('[auth:frontend] login success', { userId: result?.user?.id, email: result?.user?.email });
         feedback.textContent = 'Login successful.';
         setStatusMessage('Login successful.', 'success');
         state.membersLoaded = false;
@@ -1370,6 +1391,7 @@ async function render() {
           location.hash = '/profile';
         }, 200);
       } catch (error) {
+        console.warn('[auth:frontend] login failure', { identifier: payload.identifier, message: error instanceof Error ? error.message : String(error) });
         const message = getLoginErrorMessage(error);
         feedback.textContent = message;
         setStatusMessage(message, 'error');
@@ -1408,6 +1430,7 @@ async function render() {
         return '';
       })();
       if (validationError) {
+        console.warn('[auth:frontend] signup validation failed', { validationError });
         feedback.textContent = validationError;
         return;
       }
@@ -1416,11 +1439,17 @@ async function render() {
       try {
         const requestPayload = { ...payload };
         delete requestPayload.confirmPassword;
+        console.log('[auth:frontend] signup request payload prepared', {
+          email: requestPayload.email,
+          role: requestPayload.role,
+          fields: Object.keys(requestPayload),
+        });
         const result = await apiRequest('/auth/register', {
           method: 'POST',
           body: JSON.stringify(requestPayload),
         });
         setAuthSession(result);
+        console.log('[auth:frontend] signup success', { userId: result?.user?.id, email: result?.user?.email });
         rememberNewUserForOnboarding(result?.user?.id);
         feedback.textContent = 'Account created successfully.';
         setStatusMessage('Account created successfully. Redirecting to profile setup…', 'success');
@@ -1428,6 +1457,7 @@ async function render() {
         location.hash = '/profile';
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error.';
+        console.warn('[auth:frontend] signup failure', { email: payload.email, message });
         feedback.textContent = `Account creation failed: ${message}`;
         setStatusMessage(`Account creation failed: ${message}`, 'error');
       }

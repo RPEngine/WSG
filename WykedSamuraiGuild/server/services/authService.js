@@ -135,7 +135,7 @@ export function registerUser(payload = {}) {
 }
 
 export function loginUser(payload = {}) {
-  const identifier = payload.identifier?.trim() || "";
+  const identifier = payload.identifier?.trim() || payload.email?.trim() || "";
   const password = payload.password || "";
 
   if (!identifier || !password) {
