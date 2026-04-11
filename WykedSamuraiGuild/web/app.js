@@ -1389,8 +1389,15 @@ function attachOnboardingHandlers() {
 }
 
 function attachHeaderActions() {
-  document.getElementById('professional-mode').onclick = () => setMode('professional');
-  document.getElementById('roleplay-mode').onclick = () => setMode('roleplay');
+  const professionalButton = document.getElementById('professional-mode');
+  if (professionalButton) {
+    professionalButton.onclick = () => setMode('professional');
+  }
+
+  const roleplayButton = document.getElementById('roleplay-mode');
+  if (roleplayButton) {
+    roleplayButton.onclick = () => setMode('roleplay');
+  }
 
   const logoutButton = document.getElementById('logout-btn');
   if (logoutButton) {
@@ -1410,7 +1417,9 @@ function attachHeaderActions() {
   if (healthButton) {
     healthButton.onclick = async () => {
       const result = document.getElementById('ai-connection-result');
-      result.textContent = 'Checking...';
+      if (result) {
+        result.textContent = 'Checking...';
+      }
       try {
         const data = await connectionChecks.ai.run();
         const backendStatus = typeof data?.backend === 'string' ? data.backend : 'unknown';
@@ -1422,10 +1431,14 @@ function attachHeaderActions() {
           : 'unknown time';
 
         const reasonSuffix = reason ? ` · reason ${reason}` : '';
-        result.textContent = `${connectionChecks.ai.label}: backend ${backendStatus} · provider ${provider} · model ${model}${reasonSuffix} via ${apiUrl(AI_ENDPOINTS.test)} @ ${timestamp}`;
+        if (result) {
+          result.textContent = `${connectionChecks.ai.label}: backend ${backendStatus} · provider ${provider} · model ${model}${reasonSuffix} via ${apiUrl(AI_ENDPOINTS.test)} @ ${timestamp}`;
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown health check error.';
-        result.textContent = `${connectionChecks.ai.label} error: ${message}`;
+        if (result) {
+          result.textContent = `${connectionChecks.ai.label} error: ${message}`;
+        }
       }
     };
   }
@@ -1838,6 +1851,7 @@ async function render() {
   });
   attachArenaHandlers();
   attachHomeChatHandlers();
+  console.log('[wsg] render complete');
 }
 
 window.addEventListener('hashchange', render);
