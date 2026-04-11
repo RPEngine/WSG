@@ -193,6 +193,7 @@ body {
   border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--panel-soft);
+  font-weight: 700;
 }
 
 .status-success {
@@ -203,11 +204,17 @@ body {
 .status-error {
   border-color: rgba(255, 123, 123, 0.6);
   background: rgba(255, 123, 123, 0.12);
+  color: #ff6b6b;
 }
 
 .status-info {
   border-color: var(--ring);
   background: var(--accent-soft);
+}
+
+.form-card .status-banner,
+#profile-hub-form .status-banner {
+  margin: 0 0 14px;
 }
 
 .feature {

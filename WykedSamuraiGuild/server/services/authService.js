@@ -95,6 +95,12 @@ export function registerUser(payload = {}) {
   const backupEmail = payload.backupEmail?.trim() || "";
   const username = deriveUsername({ legalName, email });
   const displayName = legalName;
+  console.log("[auth] registerUser called", {
+    email,
+    role,
+    hasBackupEmail: Boolean(backupEmail),
+    fields: Object.keys(payload || {}),
+  });
 
   if (!legalName || legalName.length < 2) {
     throw new Error("Legal name is required.");
@@ -131,6 +137,13 @@ export function registerUser(payload = {}) {
     passwordSalt: salt,
   });
   const sessionToken = createSession(user.id);
+  const storedUser = findUserByIdentifier(email);
+  console.log("[auth] registerUser persistence check", {
+    email,
+    userId: user.id,
+    existsAfterSignup: Boolean(storedUser),
+    storedFields: storedUser ? ["legalName", "email", "passwordHash", "role", "organizationName", "backupEmail"] : [],
+  });
   const verificationPlan = scaffoldVerificationPlan({ email, backupEmail });
   const verificationDispatch = mockVerificationDispatch(verificationPlan);
 
@@ -147,16 +160,19 @@ export function loginUser(payload = {}) {
 
   const user = findUserByIdentifier(identifier);
   if (!user) {
+    console.warn("[auth] loginUser missing user", { identifier });
     throw new Error("Invalid credentials.");
   }
 
   const attemptedHash = hashPassword(password, user.passwordSalt);
   if (attemptedHash !== user.passwordHash) {
+    console.warn("[auth] loginUser hash mismatch", { identifier, userId: user.id });
     throw new Error("Invalid credentials.");
   }
 
   touchLastActiveAt(user.id);
   const sessionToken = createSession(user.id);
+  console.log("[auth] loginUser success", { identifier, userId: user.id, email: user.email });
   return { user: toPublicUser(user), sessionToken };
 }
 

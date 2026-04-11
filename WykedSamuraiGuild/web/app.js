@@ -78,6 +78,12 @@ const state = {
   activeProfile: null,
   profileHub: {
     saving: false,
+    message: '',
+    tone: 'info',
+  },
+  authForms: {
+    login: { message: '', tone: 'info', loading: false },
+    signup: { message: '', tone: 'info', loading: false },
   },
   network: {
     connections: [],
@@ -141,6 +147,17 @@ function linkFor(path) {
 
 function setStatusMessage(message, tone = 'info') {
   state.statusMessage = message ? { message, tone } : null;
+}
+
+function setFormMessage(formName, message, tone = 'info') {
+  if (!state.authForms[formName]) return;
+  state.authForms[formName].message = message;
+  state.authForms[formName].tone = tone;
+}
+
+function setProfileHubMessage(message, tone = 'info') {
+  state.profileHub.message = message;
+  state.profileHub.tone = tone;
 }
 
 function escapeAttr(value) {
@@ -730,15 +747,14 @@ function profilePage() {
           <p class="muted" style="margin:0;">${escapeHtml(profile.role || 'member')} · ${escapeHtml(profile.organizationName || 'Independent')}</p>
         </div>
       </div>
-      <div class="actions">
-        <button class="pill-btn" id="save-profile-hub-btn">Save Profile</button>
-      </div>
+      <div class="actions"></div>
     </section>
     <section class="profile-hub-grid" style="margin-top:14px;">
       <div class="profile-hub-col">
         <section class="card">
           <h3>Profile Setup</h3>
           <form id="profile-hub-form" class="form-stack">
+            <p id="profile-hub-feedback" class="status-banner ${state.profileHub.message ? `status-${state.profileHub.tone}` : 'status-info'}" role="alert" aria-live="assertive">${escapeHtml(state.profileHub.message || 'Update and save your profile details here.')}</p>
             <label>Legal Name<input name="legalName" value="${escapeAttr(profile.legalName || '')}" required /></label>
             <label>Display Name<input name="displayName" value="${escapeAttr(profile.displayName || '')}" required /></label>
             <label>Email<input type="email" name="email" value="${escapeAttr(profile.email || '')}" required /></label>
@@ -752,6 +768,7 @@ function profilePage() {
             <label>Organization / Guild Name<input name="organizationName" value="${escapeAttr(profile.organizationName || '')}" /></label>
             <label>Bio / About<textarea name="bio" rows="4" maxlength="500">${escapeHtml(profile.bio || '')}</textarea></label>
             <label>Skills / Interests (comma-separated)<input name="skillsInterests" value="${escapeAttr((profile.skillsInterests || []).join(', '))}" /></label>
+            <button class="pill-btn" id="save-profile-hub-btn" type="submit" ${state.profileHub.saving ? 'disabled' : ''}>${state.profileHub.saving ? 'Saving Profile...' : 'Save Profile'}</button>
           </form>
           <p class="muted">Trials completed: ${profile.trialCount} · Last active: ${formatDate(profile.lastActiveAt)}</p>
         </section>
@@ -875,14 +892,14 @@ function loginPage() {
       <h3>Log in</h3>
       <p class="muted">Note: accounts are currently stored in volatile in-memory server storage and may reset when the backend restarts.</p>
       <form id="login-form" class="form-stack">
+        <p id="login-feedback" class="status-banner ${state.authForms.login.message ? `status-${state.authForms.login.tone}` : 'status-info'}" role="alert" aria-live="assertive">${escapeHtml(state.authForms.login.message || 'Enter your account email and password to sign in.')}</p>
         <label>Email
           <input name="email" type="email" autocomplete="email" required />
         </label>
         <label>Password
           <input name="password" type="password" autocomplete="current-password" required />
         </label>
-        <button class="pill-btn" type="submit" id="login-submit-btn">Log In</button>
-        <p id="login-feedback" class="muted" role="status" aria-live="polite"></p>
+        <button class="pill-btn" type="submit" id="login-submit-btn" ${state.authForms.login.loading ? 'disabled' : ''}>${state.authForms.login.loading ? 'Signing in...' : 'Log In'}</button>
       </form>
       <p class="muted">New here? <a href="#/signup">Create an account.</a></p>
     </section>
@@ -896,6 +913,7 @@ function signupPage() {
       <p class="muted">Use your legal identity details so employers and recruiters can verify your profile.</p>
       <p class="muted">Storage note: account records currently use in-memory backend storage for this environment.</p>
       <form id="signup-form" class="form-stack">
+        <p id="signup-feedback" class="status-banner ${state.authForms.signup.message ? `status-${state.authForms.signup.tone}` : 'status-info'}" role="alert" aria-live="assertive">${escapeHtml(state.authForms.signup.message || 'Complete all required fields to create your account.')}</p>
         <section class="form-section">
           <h4>Account Identity</h4>
           <label>Legal Name
@@ -945,9 +963,8 @@ function signupPage() {
           <p class="muted">Backup email receives recovery and verification codes if you lose access to your primary email.</p>
         </section>
         <div class="actions">
-          <button class="pill-btn cta-primary" type="submit">Create Account</button>
+          <button class="pill-btn cta-primary" type="submit" id="signup-submit-btn" ${state.authForms.signup.loading ? 'disabled' : ''}>${state.authForms.signup.loading ? 'Creating Account...' : 'Create Account'}</button>
         </div>
-        <p id="signup-feedback" class="muted" role="alert" aria-live="assertive"></p>
       </form>
       <p class="muted">Already have an account? <a href="#/login">Log In</a></p>
     </section>
@@ -1164,7 +1181,9 @@ function attachProfileEditHandler() {
   const saveButton = document.getElementById('save-profile-hub-btn');
   const profileHubForm = document.getElementById('profile-hub-form');
   if (saveButton && profileHubForm) {
-    saveButton.onclick = async () => {
+    profileHubForm.onsubmit = async (event) => {
+      event.preventDefault();
+      if (state.profileHub.saving) return;
       const formData = new FormData(profileHubForm);
       const payload = {
         legalName: String(formData.get('legalName') || ''),
@@ -1175,14 +1194,27 @@ function attachProfileEditHandler() {
         bio: String(formData.get('bio') || ''),
         skillsInterests: String(formData.get('skillsInterests') || ''),
       };
+      state.profileHub.saving = true;
+      setProfileHubMessage('Saving profile...', 'info');
+      render();
       try {
         const result = await apiRequest('/profile/hub', { method: 'PATCH', body: JSON.stringify(payload) });
         state.currentUser = result.profile;
         state.activeProfile = result.profile;
+        console.log('[profile:frontend] profile save success', { userId: result?.profile?.id, email: result?.profile?.email });
+        setProfileHubMessage('Profile saved successfully.', 'success');
         setStatusMessage('Profile saved successfully.', 'success');
-        render();
       } catch (error) {
-        setStatusMessage(error instanceof Error ? error.message : 'Failed to save profile.', 'error');
+        const message = 'Unable to save profile right now.';
+        console.warn('[profile:frontend] profile save failure', {
+          userId: state.currentUser?.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        setProfileHubMessage(message, 'error');
+        setStatusMessage(message, 'error');
+      } finally {
+        state.profileHub.saving = false;
+        render();
       }
     };
   }
@@ -1681,13 +1713,13 @@ async function render() {
   if (loginForm) {
     loginForm.onsubmit = async (event) => {
       event.preventDefault();
-      const feedback = document.getElementById('login-feedback');
-      const submitButton = document.getElementById('login-submit-btn');
+      if (state.authForms.login.loading) return;
       const formData = new FormData(loginForm);
       const email = String(formData.get('email') || '').trim();
       const password = String(formData.get('password') || '');
       if (!email || !password) {
-        feedback.textContent = 'Email and password are required.';
+        setFormMessage('login', 'Invalid email or password.', 'error');
+        render();
         return;
       }
       const payload = {
@@ -1698,17 +1730,15 @@ async function render() {
         identifier: payload.identifier,
         fields: Object.keys(payload),
       });
-      feedback.textContent = 'Signing in...';
+      setFormMessage('login', 'Signing in...', 'info');
       setStatusMessage('Signing in...', 'info');
-      if (submitButton) {
-        submitButton.disabled = true;
-        submitButton.textContent = 'Signing in...';
-      }
+      state.authForms.login.loading = true;
+      render();
       try {
         const result = await apiRequest('/auth/login', { method: 'POST', body: JSON.stringify(payload) });
         setAuthSession(result);
         console.log('[auth:frontend] login success', { userId: result?.user?.id, email: result?.user?.email });
-        feedback.textContent = 'Login successful.';
+        setFormMessage('login', 'Login successful.', 'success');
         setStatusMessage('Login successful.', 'success');
         state.membersLoaded = false;
         setTimeout(() => {
@@ -1717,13 +1747,11 @@ async function render() {
       } catch (error) {
         console.warn('[auth:frontend] login failure', { identifier: payload.identifier, message: error instanceof Error ? error.message : String(error) });
         const message = getLoginErrorMessage(error);
-        feedback.textContent = message;
+        setFormMessage('login', message, 'error');
         setStatusMessage(message, 'error');
       } finally {
-        if (submitButton) {
-          submitButton.disabled = false;
-          submitButton.textContent = 'Log In';
-        }
+        state.authForms.login.loading = false;
+        render();
       }
     };
   }
@@ -1732,7 +1760,7 @@ async function render() {
   if (signupForm) {
     signupForm.onsubmit = async (event) => {
       event.preventDefault();
-      const feedback = document.getElementById('signup-feedback');
+      if (state.authForms.signup.loading) return;
       const formData = new FormData(signupForm);
       const payload = {
         legalName: String(formData.get('legalName') || '').trim(),
@@ -1755,13 +1783,14 @@ async function render() {
       })();
       if (validationError) {
         console.warn('[auth:frontend] signup validation failed', { validationError });
-        feedback.className = 'status-banner status-error';
-        feedback.textContent = validationError;
+        setFormMessage('signup', validationError, 'error');
+        render();
         return;
       }
 
-      feedback.className = 'muted';
-      feedback.textContent = 'Submitting...';
+      setFormMessage('signup', 'Creating account...', 'info');
+      state.authForms.signup.loading = true;
+      render();
       try {
         const requestPayload = { ...payload };
         delete requestPayload.confirmPassword;
@@ -1777,17 +1806,21 @@ async function render() {
         setAuthSession(result);
         console.log('[auth:frontend] signup success', { userId: result?.user?.id, email: result?.user?.email });
         rememberNewUserForOnboarding(result?.user?.id);
-        feedback.className = 'muted';
-        feedback.textContent = 'Account created successfully.';
+        setFormMessage('signup', 'Account created successfully.', 'success');
         setStatusMessage('Account created successfully. Redirecting to profile setup…', 'success');
         state.membersLoaded = false;
         location.hash = '/profile';
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error.';
+        const errorText = error instanceof Error ? error.message : 'Unknown error.';
+        const message = errorText.toLowerCase().includes('already in use')
+          ? 'This email is already in use.'
+          : 'Unable to create account. Please check the form and try again.';
         console.warn('[auth:frontend] signup failure', { email: payload.email, message });
-        feedback.className = 'status-banner status-error';
-        feedback.textContent = message;
+        setFormMessage('signup', message, 'error');
         setStatusMessage(message, 'error');
+      } finally {
+        state.authForms.signup.loading = false;
+        render();
       }
     };
   }
