@@ -49,10 +49,24 @@ export function getMember(req, res) {
 }
 
 export function updateMyHubProfile(req, res) {
+  console.log("[profile] profile save request received", {
+    userId: req.user.id,
+    email: req.user.email,
+    fields: Object.keys(req.body || {}),
+  });
   try {
     const profile = saveOwnHubProfile(req.user.id, req.body || {});
+    console.log("[profile] profile save success", {
+      userId: profile?.id,
+      email: profile?.email,
+      legalName: profile?.legalName,
+    });
     return res.json({ profile });
   } catch (error) {
+    console.warn("[profile] profile save failure", {
+      userId: req.user.id,
+      error: error.message || "Unable to update profile hub data.",
+    });
     return res.status(400).json({ error: error.message || "Unable to update profile hub data." });
   }
 }

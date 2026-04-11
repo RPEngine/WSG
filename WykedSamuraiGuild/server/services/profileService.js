@@ -89,6 +89,14 @@ export function saveOwnHubProfile(userId, payload = {}) {
     bio,
     skillsInterests,
   });
+  console.log("[profile] saveOwnHubProfile persistence check", {
+    userId,
+    profileReturned: Boolean(updated),
+    returnedEmail: updated?.email || "",
+    returnedRole: updated?.role || "",
+    returnedOrganizationName: updated?.organizationName || "",
+    returnedSkillsCount: Array.isArray(updated?.skillsInterests) ? updated.skillsInterests.length : 0,
+  });
   return updated;
 }
 
