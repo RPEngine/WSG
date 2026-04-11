@@ -697,6 +697,7 @@ function signupPage() {
           <label>Primary Email
             <input name="email" type="email" required />
           </label>
+          <p class="muted">Primary email secures daily account access and login verification.</p>
           <label>Password
             <input name="password" type="password" minlength="8" required />
           </label>
@@ -733,7 +734,7 @@ function signupPage() {
           <label>Backup Email Address
             <input name="backupEmail" type="email" />
           </label>
-          <p class="muted">Used for verification codes and account recovery if you cannot access your primary email.</p>
+          <p class="muted">Backup email receives recovery and verification codes if you lose access to your primary email.</p>
         </section>
         <div class="actions">
           <button class="pill-btn cta-primary" type="submit">Create Account</button>

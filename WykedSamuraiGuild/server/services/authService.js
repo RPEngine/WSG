@@ -39,6 +39,50 @@ function validateEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
+function scaffoldVerificationPlan({ email, backupEmail }) {
+  const normalizedPrimaryEmail = String(email || "").trim();
+  const normalizedBackupEmail = String(backupEmail || "").trim();
+
+  return {
+    primaryEmail: {
+      required: true,
+      email: normalizedPrimaryEmail,
+      status: "pending",
+      sendMode: "mocked",
+      mockReason: "mail-delivery-not-configured",
+      nextAction: "triggerPrimaryEmailVerificationCode",
+    },
+    backupEmail: normalizedBackupEmail
+      ? {
+          required: true,
+          email: normalizedBackupEmail,
+          status: "pending",
+          sendMode: "mocked",
+          mockReason: "mail-delivery-not-configured",
+          nextAction: "triggerBackupEmailRecoveryCode",
+        }
+      : {
+          required: false,
+          email: "",
+          status: "not_provided",
+          sendMode: "none",
+          nextAction: "promptBackupEmailCapture",
+        },
+  };
+}
+
+function mockVerificationDispatch(verificationPlan) {
+  // Hook: replace this with actual provider integration when transactional email is enabled.
+  return {
+    mode: "mocked",
+    queuedAt: new Date().toISOString(),
+    channels: [
+      verificationPlan.primaryEmail.required ? "primary-email" : null,
+      verificationPlan.backupEmail.required ? "backup-email" : null,
+    ].filter(Boolean),
+  };
+}
+
 export function registerUser(payload = {}) {
   const legalName = payload.legalName?.trim() || "";
   const email = payload.email?.trim() || "";
@@ -78,12 +122,16 @@ export function registerUser(payload = {}) {
     role,
     organizationName,
     backupEmail,
+    emailVerified: false,
+    backupEmailVerified: false,
     passwordHash,
     passwordSalt: salt,
   });
   const sessionToken = createSession(user.id);
+  const verificationPlan = scaffoldVerificationPlan({ email, backupEmail });
+  const verificationDispatch = mockVerificationDispatch(verificationPlan);
 
-  return { user, sessionToken };
+  return { user, sessionToken, verificationPlan, verificationDispatch };
 }
 
 export function loginUser(payload = {}) {
