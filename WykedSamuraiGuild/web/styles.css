@@ -13,6 +13,17 @@
   --ring: rgba(208, 107, 47, 0.5);
   --border: rgba(255, 255, 255, 0.08);
   --shadow: 0 14px 40px rgba(0, 0, 0, 0.38);
+  --container-max: 1160px;
+  --container-pad: 24px;
+  --space-1: 8px;
+  --space-2: 12px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 32px;
+  --font-h1: clamp(2rem, 4vw, 2.65rem);
+  --font-h2: clamp(1.45rem, 2.3vw, 1.8rem);
+  --font-body: 1rem;
+  --font-small: 0.95rem;
 }
 
 * { box-sizing: border-box; }
@@ -55,17 +66,35 @@ body {
 
 .public-shell {
   min-height: 100vh;
-  display: grid;
-  grid-template-rows: 76px 1fr;
-  gap: 14px;
-  padding: 14px;
+  display: flex;
+  flex-direction: column;
+}
+
+.public-container {
+  width: min(100%, var(--container-max));
+  margin: 0 auto;
+  padding-left: var(--container-pad);
+  padding-right: var(--container-pad);
+}
+
+.public-header {
+  margin: 14px auto 0;
+  width: min(100%, var(--container-max));
+  padding: 0;
+}
+
+.public-header-inner {
+  min-height: 76px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
 }
 
 .public-content {
-  padding: 20px;
-  max-width: 1100px;
   width: 100%;
-  margin: 0 auto;
+  margin: 14px auto 24px;
+  padding: var(--space-5);
 }
 
 .panel {
@@ -141,8 +170,8 @@ body {
 }
 
 .main-header h1 { margin: 0; font-size: 1.65rem; }
-.main-header h2 { margin: 0; font-size: 1.5rem; }
-.main-header p { margin: 6px 0 0; color: var(--text-muted); }
+.main-header h2 { margin: 0; font-size: var(--font-h2); }
+.main-header p { margin: 6px 0 0; color: var(--text-muted); font-size: var(--font-small); }
 
 .grid { display: grid; gap: 14px; }
 .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -150,7 +179,7 @@ body {
   background: var(--panel-strong);
   border: 1px solid var(--border);
   border-radius: 14px;
-  padding: 14px;
+  padding: var(--space-3);
 }
 .card h3 { margin: 0 0 10px; font-size: 1rem; }
 
@@ -166,9 +195,12 @@ body {
 }
 
 .pill-btn {
-  padding: 8px 12px;
+  padding: 10px 14px;
   border-radius: 999px;
   cursor: pointer;
+  font-size: var(--font-small);
+  font-weight: 600;
+  text-decoration: none;
 }
 
 .cta-primary {
@@ -180,6 +212,35 @@ body {
 .tabs { display: flex; gap: 8px; overflow: auto; }
 .tabs button { border: 1px solid var(--border); background: var(--panel-soft); color: var(--text-main); padding: 8px 10px; border-radius: 999px; }
 .tabs .active { border-color: var(--ring); background: var(--accent-soft); }
+
+.landing-hero h1 {
+  margin: 0;
+  font-size: var(--font-h1);
+  line-height: 1.2;
+}
+
+.landing-hero .muted,
+.landing-highlights .muted,
+.landing-footer-cta .muted {
+  font-size: var(--font-body);
+  line-height: 1.55;
+}
+
+.landing-kicker {
+  margin: 0 0 var(--space-1);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.landing-highlights {
+  margin-top: var(--space-4);
+}
+
+.landing-footer-cta {
+  margin-top: var(--space-4);
+}
 
 @media (max-width: 1100px) {
   .app-shell {
@@ -199,7 +260,22 @@ body {
     grid-template-areas: "header" "left" "main" "right";
   }
   .public-shell {
-    grid-template-rows: auto 1fr;
+    gap: var(--space-2);
+  }
+  .public-container {
+    padding-left: var(--space-3);
+    padding-right: var(--space-3);
+  }
+  .public-content {
+    padding: var(--space-4);
+  }
+  .public-header {
+    margin-top: var(--space-3);
+  }
+  .public-header-inner {
+    min-height: auto;
+    padding-top: var(--space-2);
+    padding-bottom: var(--space-2);
   }
   .grid.two { grid-template-columns: 1fr; }
   .header { flex-wrap: wrap; height: auto; padding: 12px; }
