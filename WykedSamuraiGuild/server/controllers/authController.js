@@ -14,7 +14,7 @@ function tokenFromRequest(req) {
   return "";
 }
 
-export function register(req, res) {
+export async function register(req, res) {
   const email = req.body?.email || "";
   const role = req.body?.role || "";
   console.log("[auth] signup request received", {
@@ -23,7 +23,7 @@ export function register(req, res) {
     fields: Object.keys(req.body || {}),
   });
   try {
-    const result = registerUser(req.body || {});
+    const result = await registerUser(req.body || {});
     console.log("[auth] signup success", {
       userId: result?.user?.id,
       email: result?.user?.email,
@@ -39,14 +39,14 @@ export function register(req, res) {
   }
 }
 
-export function login(req, res) {
+export async function login(req, res) {
   const identifier = req.body?.identifier || req.body?.email || "";
   console.log("[auth] login request received", {
     identifier,
     fields: Object.keys(req.body || {}),
   });
   try {
-    const result = loginUser(req.body || {});
+    const result = await loginUser(req.body || {});
     console.log("[auth] login success", {
       userId: result?.user?.id,
       email: result?.user?.email,
@@ -61,16 +61,16 @@ export function login(req, res) {
   }
 }
 
-export function logout(req, res) {
+export async function logout(req, res) {
   const sessionToken = tokenFromRequest(req);
-  logoutUser(sessionToken);
+  await logoutUser(sessionToken);
 
   return res.status(204).send();
 }
 
-export function me(req, res) {
+export async function me(req, res) {
   const sessionToken = tokenFromRequest(req);
-  const user = getUserFromSessionToken(sessionToken);
+  const user = await getUserFromSessionToken(sessionToken);
 
   if (!user) {
     return res.status(401).json({ error: "Unauthorized" });

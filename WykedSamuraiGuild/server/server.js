@@ -4,6 +4,7 @@ import apiRoutes from "./routes/apiRoutes.js";
 import { healthCheck } from "./controllers/healthController.js";
 import { aiChat, generateAiScenario } from "./controllers/aiController.js";
 import { PORT } from "./config/env.js";
+import { connectDatabase, initializeDatabase } from "./config/db.js";
 
 const app = express();
 
@@ -39,6 +40,18 @@ app.get("/", (req, res) => {
   res.send("WSG backend is running");
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+async function startServer() {
+  try {
+    await connectDatabase();
+    console.log("[db] database connection established");
+    await initializeDatabase();
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error("[db] database connection failed", { error: error.message });
+    process.exit(1);
+  }
+}
+
+startServer();

@@ -16,29 +16,35 @@ import {
   searchMembersForConnections,
 } from "../services/profileService.js";
 
-export function getMyProfile(req, res) {
+export async function getMyProfile(req, res) {
   console.log("[profile] profile fetch request received", { userId: req.user.id, email: req.user.email });
-  const profile = getOwnProfile(req.user.id);
+  const profile = await getOwnProfile(req.user.id);
   console.log("[profile] profile fetch success", { userId: profile?.id, email: profile?.email });
   return res.json({ profile });
 }
 
-export function updateMyProfile(req, res) {
+export async function updateMyProfile(req, res) {
+  console.log("[profile] profile save request received", {
+    userId: req.user.id,
+    email: req.user.email,
+    fields: Object.keys(req.body || {}),
+  });
   try {
-    const profile = saveOwnProfile(req.user.id, req.body || {});
+    const profile = await saveOwnProfile(req.user.id, req.body || {});
+    console.log("[profile] profile save success", { userId: profile?.id, email: profile?.email });
     return res.json({ profile });
   } catch (error) {
     return res.status(400).json({ error: error.message || "Unable to update profile." });
   }
 }
 
-export function listMembers(req, res) {
-  const members = getMembers();
+export async function listMembers(req, res) {
+  const members = await getMembers();
   return res.json({ items: members, count: members.length });
 }
 
-export function getMember(req, res) {
-  const member = getMemberProfile(req.params.id);
+export async function getMember(req, res) {
+  const member = await getMemberProfile(req.params.id);
 
   if (!member) {
     console.warn("[profile] profile fetch failure", { memberId: req.params.id, error: "Member not found." });
@@ -48,14 +54,14 @@ export function getMember(req, res) {
   return res.json({ profile: member });
 }
 
-export function updateMyHubProfile(req, res) {
+export async function updateMyHubProfile(req, res) {
   console.log("[profile] profile save request received", {
     userId: req.user.id,
     email: req.user.email,
     fields: Object.keys(req.body || {}),
   });
   try {
-    const profile = saveOwnHubProfile(req.user.id, req.body || {});
+    const profile = await saveOwnHubProfile(req.user.id, req.body || {});
     console.log("[profile] profile save success", {
       userId: profile?.id,
       email: profile?.email,
@@ -71,47 +77,47 @@ export function updateMyHubProfile(req, res) {
   }
 }
 
-export function listConnections(req, res) {
-  const items = listConnectionProfiles(req.user.id);
+export async function listConnections(req, res) {
+  const items = await listConnectionProfiles(req.user.id);
   return res.json({ items, count: items.length });
 }
 
-export function searchConnections(req, res) {
+export async function searchConnections(req, res) {
   const query = req.query?.q || "";
-  const items = searchMembersForConnections(req.user.id, query);
+  const items = await searchMembersForConnections(req.user.id, query);
   return res.json({ items, count: items.length, query: String(query || "") });
 }
 
-export function createConnection(req, res) {
+export async function createConnection(req, res) {
   try {
-    const result = addOwnConnection(req.user.id, req.params.connectionUserId);
+    const result = await addOwnConnection(req.user.id, req.params.connectionUserId);
     return res.status(201).json(result);
   } catch (error) {
     return res.status(400).json({ error: error.message || "Unable to add connection." });
   }
 }
 
-export function deleteConnection(req, res) {
+export async function deleteConnection(req, res) {
   try {
-    const result = removeOwnConnection(req.user.id, req.params.connectionUserId);
+    const result = await removeOwnConnection(req.user.id, req.params.connectionUserId);
     return res.json(result);
   } catch (error) {
     return res.status(400).json({ error: error.message || "Unable to remove connection." });
   }
 }
 
-export function getDirectChat(req, res) {
+export async function getDirectChat(req, res) {
   try {
-    const thread = getDirectConversation(req.user.id, req.params.connectionUserId);
+    const thread = await getDirectConversation(req.user.id, req.params.connectionUserId);
     return res.json({ thread });
   } catch (error) {
     return res.status(400).json({ error: error.message || "Direct chat unavailable." });
   }
 }
 
-export function postDirectChatMessage(req, res) {
+export async function postDirectChatMessage(req, res) {
   try {
-    const message = postDirectConversationMessage(req.user.id, req.params.connectionUserId, req.body?.content);
+    const message = await postDirectConversationMessage(req.user.id, req.params.connectionUserId, req.body?.content);
     return res.status(201).json({ message });
   } catch (error) {
     return res.status(400).json({ error: error.message || "Unable to send direct chat message." });
