@@ -107,6 +107,8 @@ const AI_ENDPOINTS = Object.freeze({
 });
 const ONBOARDING_NEW_USER_KEY = 'wsg-onboarding-new-user';
 const STARTER_SCENARIO_SEEN_PREFIX = 'wsg-starter-seen';
+const PASSWORD_POLICY_MESSAGE = 'Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a special character.';
+const PASSWORD_POLICY_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$/;
 
 function linkFor(path) {
   return `#${path}`;
@@ -730,7 +732,7 @@ function loginPage() {
           <input name="email" type="email" autocomplete="email" required />
         </label>
         <label>Password
-          <input name="password" type="password" minlength="8" autocomplete="current-password" required />
+          <input name="password" type="password" autocomplete="current-password" required />
         </label>
         <button class="pill-btn" type="submit" id="login-submit-btn">Log In</button>
         <p id="login-feedback" class="muted" role="status" aria-live="polite"></p>
@@ -759,6 +761,7 @@ function signupPage() {
           <label>Password
             <input name="password" type="password" minlength="8" required />
           </label>
+          <p class="muted">${PASSWORD_POLICY_MESSAGE}</p>
           <label>Confirm Password
             <input name="confirmPassword" type="password" minlength="8" required />
           </label>
@@ -797,7 +800,7 @@ function signupPage() {
         <div class="actions">
           <button class="pill-btn cta-primary" type="submit">Create Account</button>
         </div>
-        <p id="signup-feedback" class="muted"></p>
+        <p id="signup-feedback" class="muted" role="alert" aria-live="assertive"></p>
       </form>
       <p class="muted">Already have an account? <a href="#/login">Log In</a></p>
     </section>
@@ -956,6 +959,10 @@ async function handleAuthSubmit(formId, endpoint, feedbackId, mapPayload, valida
 
 function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function isStrongPassword(password) {
+  return PASSWORD_POLICY_REGEX.test(String(password || ''));
 }
 
 function attachProfileEditHandler() {
@@ -1423,7 +1430,7 @@ async function render() {
       const validationError = (() => {
         if (!payload.legalName) return 'Legal Name is required.';
         if (!payload.email || !isValidEmail(payload.email)) return 'Enter a valid Primary Email address.';
-        if (!payload.password || payload.password.length < 8) return 'Password must be at least 8 characters.';
+        if (!isStrongPassword(payload.password)) return PASSWORD_POLICY_MESSAGE;
         if (payload.password !== payload.confirmPassword) return 'Password and Confirm Password must match.';
         if (!payload.role) return 'Please select a role.';
         if (payload.backupEmail && !isValidEmail(payload.backupEmail)) return 'Enter a valid Backup Email Address.';
@@ -1431,10 +1438,12 @@ async function render() {
       })();
       if (validationError) {
         console.warn('[auth:frontend] signup validation failed', { validationError });
+        feedback.className = 'status-banner status-error';
         feedback.textContent = validationError;
         return;
       }
 
+      feedback.className = 'muted';
       feedback.textContent = 'Submitting...';
       try {
         const requestPayload = { ...payload };
@@ -1451,6 +1460,7 @@ async function render() {
         setAuthSession(result);
         console.log('[auth:frontend] signup success', { userId: result?.user?.id, email: result?.user?.email });
         rememberNewUserForOnboarding(result?.user?.id);
+        feedback.className = 'muted';
         feedback.textContent = 'Account created successfully.';
         setStatusMessage('Account created successfully. Redirecting to profile setup…', 'success');
         state.membersLoaded = false;
@@ -1458,8 +1468,9 @@ async function render() {
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error.';
         console.warn('[auth:frontend] signup failure', { email: payload.email, message });
-        feedback.textContent = `Account creation failed: ${message}`;
-        setStatusMessage(`Account creation failed: ${message}`, 'error');
+        feedback.className = 'status-banner status-error';
+        feedback.textContent = message;
+        setStatusMessage(message, 'error');
       }
     };
   }
