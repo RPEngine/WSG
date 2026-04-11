@@ -92,6 +92,10 @@ const state = {
     pending: false,
     error: '',
   },
+  statusMessage: null,
+  onboarding: {
+    starterModalOpen: false,
+  },
 };
 
 const CANONICAL_BACKEND_BASE_URL = 'https://wsg-7hmk.onrender.com';
@@ -101,9 +105,45 @@ const AI_ENDPOINTS = Object.freeze({
   chat: '/ai/chat',
   scenario: '/ai/scenario',
 });
+const ONBOARDING_NEW_USER_KEY = 'wsg-onboarding-new-user';
+const STARTER_SCENARIO_SEEN_PREFIX = 'wsg-starter-seen';
 
 function linkFor(path) {
   return `#${path}`;
+}
+
+function setStatusMessage(message, tone = 'info') {
+  state.statusMessage = message ? { message, tone } : null;
+}
+
+function escapeAttr(value) {
+  return escapeHtml(String(value || '')).replace(/"/g, '&quot;');
+}
+
+function getStarterScenarioSeenKey(userId) {
+  return `${STARTER_SCENARIO_SEEN_PREFIX}:${userId}`;
+}
+
+function rememberNewUserForOnboarding(userId) {
+  sessionStorage.setItem(ONBOARDING_NEW_USER_KEY, String(userId || ''));
+}
+
+function isFirstArrivalAfterSignup() {
+  const userId = state.currentUser?.id;
+  if (!userId) {
+    return false;
+  }
+  const pendingOnboardingForUser = sessionStorage.getItem(ONBOARDING_NEW_USER_KEY);
+  const hasSeenStarterScenario = localStorage.getItem(getStarterScenarioSeenKey(userId)) === 'true';
+  return pendingOnboardingForUser === userId && !hasSeenStarterScenario;
+}
+
+function markStarterScenarioSeen() {
+  if (!state.currentUser?.id) {
+    return;
+  }
+  localStorage.setItem(getStarterScenarioSeenKey(state.currentUser.id), 'true');
+  sessionStorage.removeItem(ONBOARDING_NEW_USER_KEY);
 }
 
 function resolveApiBaseUrl() {
@@ -860,7 +900,8 @@ async function handleAuthSubmit(formId, endpoint, feedbackId, mapPayload, valida
       });
 
       setAuthSession(result);
-      feedback.textContent = 'Success. Redirecting...';
+      feedback.textContent = 'Success.';
+      setStatusMessage('Login successful.', 'success');
       state.membersLoaded = false;
       location.hash = '/app';
     } catch (error) {
@@ -899,12 +940,63 @@ function attachProfileEditHandler() {
       state.currentUser = result.profile;
       state.activeProfile = result.profile;
       state.membersLoaded = false;
-      feedback.textContent = 'Profile updated.';
+      feedback.textContent = 'Profile saved successfully.';
+      setStatusMessage('Profile saved successfully.', 'success');
       location.hash = '/profile';
     } catch (error) {
       feedback.textContent = error.message;
     }
   };
+}
+
+function starterScenarioModalMarkup() {
+  if (!state.onboarding.starterModalOpen) {
+    return '';
+  }
+  const starterTrial = STARTER_TRIALS[0];
+  return `
+    <div class="modal-overlay" role="presentation">
+      <section class="onboarding-modal card" role="dialog" aria-modal="true" aria-labelledby="starter-scenario-title">
+        <h3 id="starter-scenario-title">Welcome to your first Trial</h3>
+        <p class="muted">Your account is ready. Start with this guided scenario to begin onboarding.</p>
+        <article class="feature">
+          <p class="muted" style="margin:0 0 6px;">Starter Scenario · ${escapeHtml(starterTrial.category)} · ${escapeHtml(starterTrial.difficulty)}</p>
+          <h4 style="margin:0 0 8px;">${escapeHtml(starterTrial.title)}</h4>
+          <p style="margin:0;">${escapeHtml(starterTrial.description)}</p>
+        </article>
+        <div class="actions" style="margin-top:14px;">
+          <button class="pill-btn cta-primary" id="start-starter-scenario" data-trial-id="${escapeAttr(starterTrial.id)}">Start Scenario</button>
+          <button class="pill-btn" id="close-starter-scenario">Continue Later</button>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function attachOnboardingHandlers() {
+  const startButton = document.getElementById('start-starter-scenario');
+  if (startButton) {
+    startButton.onclick = () => {
+      const starterTrialId = startButton.getAttribute('data-trial-id');
+      const selectedTrial = STARTER_TRIALS.find((trial) => trial.id === starterTrialId) || STARTER_TRIALS[0];
+      state.arena.activeTrialId = selectedTrial.id;
+      state.arena.messages = [{ id: crypto.randomUUID(), type: 'system', content: selectedTrial.openingPrompt }];
+      state.onboarding.starterModalOpen = false;
+      markStarterScenarioSeen();
+      setStatusMessage('Starter scenario loaded. Entering Trial Arena…', 'success');
+      location.hash = '/arena';
+    };
+  }
+
+  const closeButton = document.getElementById('close-starter-scenario');
+  if (closeButton) {
+    closeButton.onclick = () => {
+      state.onboarding.starterModalOpen = false;
+      markStarterScenarioSeen();
+      setStatusMessage('Starter scenario ready when you are.', 'info');
+      render();
+    };
+  }
 }
 
 function attachHeaderActions() {
@@ -1086,6 +1178,10 @@ function renderLayout(path, key, pageHtml) {
   const [title, subtitle] = pageTitle(key);
   document.body.classList.toggle('mode-roleplay', state.mode === 'roleplay');
 
+  const statusMarkup = state.statusMessage
+    ? `<p class="status-banner status-${state.statusMessage.tone}" role="status">${escapeHtml(state.statusMessage.message)}</p>`
+    : '';
+
   document.getElementById('app').innerHTML = `
     <div class="app-shell">
       <header class="header panel">
@@ -1117,20 +1213,27 @@ function renderLayout(path, key, pageHtml) {
           <h1>${title}</h1>
           <p>${subtitle}</p>
         </section>
+        ${statusMarkup}
         <section style="margin-top:14px;">${pageHtml}</section>
       </main>
 
       <aside class="right-sidebar panel">${rightSidebar()}</aside>
     </div>
+    ${starterScenarioModalMarkup()}
   `;
 
   attachHeaderActions();
+  attachOnboardingHandlers();
 }
 
 function renderPublicLayout(path, key, pageHtml) {
   const [title, subtitle] = pageTitle(key);
   document.body.classList.toggle('mode-roleplay', state.mode === 'roleplay');
   const showPageHeader = key !== 'landing';
+
+  const statusMarkup = state.statusMessage
+    ? `<p class="status-banner status-${state.statusMessage.tone}" role="status">${escapeHtml(state.statusMessage.message)}</p>`
+    : '';
 
   document.getElementById('app').innerHTML = `
     <div class="public-shell">
@@ -1152,6 +1255,7 @@ function renderPublicLayout(path, key, pageHtml) {
 
       <main class="public-container public-content panel">
         ${showPageHeader ? `<section class="main-header"><h2>${title}</h2><p>${subtitle}</p></section>` : ''}
+        ${statusMarkup}
         <section style="margin-top:${showPageHeader ? '14px' : '0'};">${pageHtml}</section>
       </main>
     </div>
@@ -1175,6 +1279,14 @@ async function render() {
   if (path === '/profile' || path.startsWith('/members/')) {
     await loadProfileForRoute(path);
   }
+  if (path !== '/profile') {
+    state.onboarding.starterModalOpen = false;
+  } else {
+    state.onboarding.starterModalOpen = isFirstArrivalAfterSignup();
+    if (state.onboarding.starterModalOpen) {
+      setStatusMessage('Starter scenario loaded. Begin onboarding to continue.', 'info');
+    }
+  }
 
   const route = routes[path] || (path.startsWith('/members/') ? { key: 'profile', requiresAuth: true } : { key: 'fallback' });
   const pageHtml = {
@@ -1197,40 +1309,81 @@ async function render() {
     renderLayout(path, route.key, pageHtml);
   }
 
-  handleAuthSubmit('login-form', '/auth/login', 'login-feedback', (formData) => ({
-    identifier: String(formData.get('identifier') || ''),
-    password: String(formData.get('password') || ''),
-  }));
+  const loginForm = document.getElementById('login-form');
+  if (loginForm) {
+    loginForm.onsubmit = async (event) => {
+      event.preventDefault();
+      const feedback = document.getElementById('login-feedback');
+      const formData = new FormData(loginForm);
+      const payload = {
+        identifier: String(formData.get('identifier') || ''),
+        password: String(formData.get('password') || ''),
+      };
+      feedback.textContent = 'Submitting...';
+      try {
+        const result = await apiRequest('/auth/login', { method: 'POST', body: JSON.stringify(payload) });
+        setAuthSession(result);
+        feedback.textContent = 'Success.';
+        setStatusMessage('Login successful.', 'success');
+        state.membersLoaded = false;
+        location.hash = '/app';
+      } catch (error) {
+        feedback.textContent = error.message;
+      }
+    };
+  }
 
-  handleAuthSubmit('signup-form', '/auth/register', 'signup-feedback', (formData) => ({
-    legalName: String(formData.get('legalName') || '').trim(),
-    email: String(formData.get('email') || '').trim(),
-    password: String(formData.get('password') || ''),
-    confirmPassword: String(formData.get('confirmPassword') || ''),
-    role: String(formData.get('role') || ''),
-    organizationName: String(formData.get('organizationName') || '').trim(),
-    backupEmail: String(formData.get('backupEmail') || '').trim(),
-  }), (payload) => {
-    if (!payload.legalName) {
-      return 'Legal Name is required.';
-    }
-    if (!payload.email || !isValidEmail(payload.email)) {
-      return 'Enter a valid Primary Email address.';
-    }
-    if (!payload.password || payload.password.length < 8) {
-      return 'Password must be at least 8 characters.';
-    }
-    if (payload.password !== payload.confirmPassword) {
-      return 'Password and Confirm Password must match.';
-    }
-    if (!payload.role) {
-      return 'Please select a role.';
-    }
-    if (payload.backupEmail && !isValidEmail(payload.backupEmail)) {
-      return 'Enter a valid Backup Email Address.';
-    }
-    return '';
-  });
+  const signupForm = document.getElementById('signup-form');
+  if (signupForm) {
+    signupForm.onsubmit = async (event) => {
+      event.preventDefault();
+      const feedback = document.getElementById('signup-feedback');
+      const formData = new FormData(signupForm);
+      const payload = {
+        legalName: String(formData.get('legalName') || '').trim(),
+        email: String(formData.get('email') || '').trim(),
+        password: String(formData.get('password') || ''),
+        confirmPassword: String(formData.get('confirmPassword') || ''),
+        role: String(formData.get('role') || ''),
+        organizationName: String(formData.get('organizationName') || '').trim(),
+        backupEmail: String(formData.get('backupEmail') || '').trim(),
+      };
+
+      const validationError = (() => {
+        if (!payload.legalName) return 'Legal Name is required.';
+        if (!payload.email || !isValidEmail(payload.email)) return 'Enter a valid Primary Email address.';
+        if (!payload.password || payload.password.length < 8) return 'Password must be at least 8 characters.';
+        if (payload.password !== payload.confirmPassword) return 'Password and Confirm Password must match.';
+        if (!payload.role) return 'Please select a role.';
+        if (payload.backupEmail && !isValidEmail(payload.backupEmail)) return 'Enter a valid Backup Email Address.';
+        return '';
+      })();
+      if (validationError) {
+        feedback.textContent = validationError;
+        return;
+      }
+
+      feedback.textContent = 'Submitting...';
+      try {
+        const requestPayload = { ...payload };
+        delete requestPayload.confirmPassword;
+        const result = await apiRequest('/auth/register', {
+          method: 'POST',
+          body: JSON.stringify(requestPayload),
+        });
+        setAuthSession(result);
+        rememberNewUserForOnboarding(result?.user?.id);
+        feedback.textContent = 'Account created successfully.';
+        setStatusMessage('Account created successfully. Redirecting to profile setup…', 'success');
+        state.membersLoaded = false;
+        location.hash = '/profile';
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error.';
+        feedback.textContent = `Account creation failed: ${message}`;
+        setStatusMessage(`Account creation failed: ${message}`, 'error');
+      }
+    };
+  }
 
   attachProfileEditHandler();
   attachArenaHandlers();
