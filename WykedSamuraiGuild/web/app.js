@@ -887,12 +887,16 @@ function profileEditPage() {
 }
 
 function loginPage() {
+  const loginHasError = state.authForms.login.tone === 'error' && Boolean(state.authForms.login.message);
+  const loginFeedbackMessage = loginHasError
+    ? `ERROR: ${state.authForms.login.message}`
+    : (state.authForms.login.message || 'Enter your account email and password to sign in.');
   return `
     <section class="card form-card">
       <h3>Log in</h3>
       <p class="muted">Note: accounts are currently stored in volatile in-memory server storage and may reset when the backend restarts.</p>
       <form id="login-form" class="form-stack">
-        <p id="login-feedback" class="status-banner ${state.authForms.login.message ? `status-${state.authForms.login.tone}` : 'status-info'}" role="alert" aria-live="assertive">${escapeHtml(state.authForms.login.message || 'Enter your account email and password to sign in.')}</p>
+        <p id="login-feedback" class="status-banner ${state.authForms.login.message ? `status-${state.authForms.login.tone}` : 'status-info'}${loginHasError ? ' auth-error-banner' : ''}" role="alert" aria-live="assertive">${escapeHtml(loginFeedbackMessage)}</p>
         <label>Email
           <input name="email" type="email" autocomplete="email" required />
         </label>
@@ -907,13 +911,17 @@ function loginPage() {
 }
 
 function signupPage() {
+  const signupHasError = state.authForms.signup.tone === 'error' && Boolean(state.authForms.signup.message);
+  const signupFeedbackMessage = signupHasError
+    ? `ERROR: ${state.authForms.signup.message}`
+    : (state.authForms.signup.message || 'Complete all required fields to create your account.');
   return `
     <section class="card form-card">
       <h3>Create account</h3>
       <p class="muted">Use your legal identity details so employers and recruiters can verify your profile.</p>
       <p class="muted">Storage note: account records currently use in-memory backend storage for this environment.</p>
       <form id="signup-form" class="form-stack">
-        <p id="signup-feedback" class="status-banner ${state.authForms.signup.message ? `status-${state.authForms.signup.tone}` : 'status-info'}" role="alert" aria-live="assertive">${escapeHtml(state.authForms.signup.message || 'Complete all required fields to create your account.')}</p>
+        <p id="signup-feedback" class="status-banner ${state.authForms.signup.message ? `status-${state.authForms.signup.tone}` : 'status-info'}${signupHasError ? ' auth-error-banner' : ''}" role="alert" aria-live="assertive">${escapeHtml(signupFeedbackMessage)}</p>
         <section class="form-section">
           <h4>Account Identity</h4>
           <label>Legal Name
@@ -1120,13 +1128,7 @@ function applyRouteGuards(path) {
 function getLoginErrorMessage(error) {
   const fallback = 'Unable to sign in right now. Please try again.';
   const message = error instanceof Error ? error.message : '';
-  if (message.toLowerCase().includes('network error')) {
-    return fallback;
-  }
-  if (message.toLowerCase().includes('invalid credentials')) {
-    return 'Invalid email or password.';
-  }
-  return fallback;
+  return message || fallback;
 }
 
 async function handleAuthSubmit(formId, endpoint, feedbackId, mapPayload, validatePayload = null) {
@@ -1736,6 +1738,7 @@ async function render() {
       render();
       try {
         const result = await apiRequest('/auth/login', { method: 'POST', body: JSON.stringify(payload) });
+        console.log('[auth:frontend] login server response', result);
         setAuthSession(result);
         console.log('[auth:frontend] login success', { userId: result?.user?.id, email: result?.user?.email });
         setFormMessage('login', 'Login successful.', 'success');
@@ -1745,6 +1748,7 @@ async function render() {
           location.hash = '/profile';
         }, 200);
       } catch (error) {
+        console.warn('[auth:frontend] login server response error', error);
         console.warn('[auth:frontend] login failure', { identifier: payload.identifier, message: error instanceof Error ? error.message : String(error) });
         const message = getLoginErrorMessage(error);
         setFormMessage('login', message, 'error');
@@ -1803,18 +1807,16 @@ async function render() {
           method: 'POST',
           body: JSON.stringify(requestPayload),
         });
-        setAuthSession(result);
+        console.log('[auth:frontend] signup server response', result);
         console.log('[auth:frontend] signup success', { userId: result?.user?.id, email: result?.user?.email });
-        rememberNewUserForOnboarding(result?.user?.id);
-        setFormMessage('signup', 'Account created successfully.', 'success');
-        setStatusMessage('Account created successfully. Redirecting to profile setup…', 'success');
-        state.membersLoaded = false;
-        location.hash = '/profile';
+        setFormMessage('signup', 'Account created successfully. You can now sign in.', 'success');
+        setStatusMessage('Account created successfully. You can now sign in.', 'success');
+        setTimeout(() => {
+          location.hash = '/login';
+        }, 200);
       } catch (error) {
-        const errorText = error instanceof Error ? error.message : 'Unknown error.';
-        const message = errorText.toLowerCase().includes('already in use')
-          ? 'This email is already in use.'
-          : 'Unable to create account. Please check the form and try again.';
+        console.warn('[auth:frontend] signup server response error', error);
+        const message = error instanceof Error ? error.message : 'Unable to create account. Please check the form and try again.';
         console.warn('[auth:frontend] signup failure', { email: payload.email, message });
         setFormMessage('signup', message, 'error');
         setStatusMessage(message, 'error');

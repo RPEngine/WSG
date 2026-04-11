@@ -207,6 +207,11 @@ body {
   color: #ff6b6b;
 }
 
+.auth-error-banner {
+  color: #ff4d4f;
+  font-weight: 800;
+}
+
 .status-info {
   border-color: var(--ring);
   background: var(--accent-soft);
