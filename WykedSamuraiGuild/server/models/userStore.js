@@ -17,7 +17,11 @@ function publicUser(user) {
     id: user.id,
     username: user.username,
     displayName: user.displayName,
+    legalName: user.legalName,
     email: user.email,
+    role: user.role,
+    organizationName: user.organizationName,
+    backupEmail: user.backupEmail,
     avatarUrl: user.avatarUrl,
     bio: user.bio,
     createdAt: user.createdAt,
@@ -27,13 +31,45 @@ function publicUser(user) {
   };
 }
 
-export function createUser({ username, displayName, email = "", passwordHash, passwordSalt }) {
+function buildUniqueUsername(baseUsername) {
+  const safeBase = (baseUsername || "member").trim() || "member";
+  const normalizedBase = normalizeHandle(safeBase);
+  if (!usersByHandle.has(normalizedBase)) {
+    return safeBase;
+  }
+
+  for (let attempt = 2; attempt < 10_000; attempt += 1) {
+    const candidate = `${safeBase}-${attempt}`;
+    if (!usersByHandle.has(normalizeHandle(candidate))) {
+      return candidate;
+    }
+  }
+
+  return `${safeBase}-${Date.now()}`;
+}
+
+export function createUser({
+  username,
+  displayName,
+  legalName,
+  email = "",
+  role,
+  organizationName = "",
+  backupEmail = "",
+  passwordHash,
+  passwordSalt,
+}) {
   const now = new Date().toISOString();
+  const resolvedUsername = buildUniqueUsername(username.trim());
   const user = {
     id: crypto.randomUUID(),
-    username: username.trim(),
+    username: resolvedUsername,
     displayName: (displayName || username).trim(),
+    legalName: (legalName || displayName || username).trim(),
     email: email.trim(),
+    role: role || "employee_member",
+    organizationName: organizationName.trim(),
+    backupEmail: backupEmail.trim(),
     avatarUrl: "",
     bio: "",
     passwordHash,

@@ -18,28 +18,69 @@ function validatePassword(password) {
   return typeof password === "string" && password.length >= 8;
 }
 
+const VALID_ROLES = new Set(["employee_member", "employer", "recruiter"]);
+
+function slugify(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function deriveUsername({ legalName, email }) {
+  const emailLocalPart = String(email || "").split("@")[0];
+  const legalNameSlug = slugify(legalName);
+  const emailSlug = slugify(emailLocalPart);
+  const base = legalNameSlug || emailSlug || "member";
+  return base.slice(0, 24) || "member";
+}
+
+function validateEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
 export function registerUser(payload = {}) {
-  const username = payload.username?.trim() || "";
-  const displayName = payload.displayName?.trim() || username;
+  const legalName = payload.legalName?.trim() || "";
   const email = payload.email?.trim() || "";
   const password = payload.password || "";
+  const role = payload.role?.trim() || "";
+  const organizationName = payload.organizationName?.trim() || "";
+  const backupEmail = payload.backupEmail?.trim() || "";
+  const username = deriveUsername({ legalName, email });
+  const displayName = legalName;
 
-  if (!username || username.length < 3) {
-    throw new Error("Username must be at least 3 characters.");
+  if (!legalName || legalName.length < 2) {
+    throw new Error("Legal name is required.");
+  }
+  if (!validateEmail(email)) {
+    throw new Error("Primary email must be valid.");
   }
   if (!validatePassword(password)) {
     throw new Error("Password must be at least 8 characters.");
   }
-  if (findUserByIdentifier(username)) {
-    throw new Error("That username is already in use.");
+  if (!VALID_ROLES.has(role)) {
+    throw new Error("A valid role is required.");
   }
-  if (email && findUserByIdentifier(email)) {
+  if (findUserByIdentifier(email)) {
     throw new Error("That email is already in use.");
+  }
+  if (backupEmail && !validateEmail(backupEmail)) {
+    throw new Error("Backup email must be valid.");
   }
 
   const salt = crypto.randomBytes(16).toString("hex");
   const passwordHash = hashPassword(password, salt);
-  const user = createUser({ username, displayName, email, passwordHash, passwordSalt: salt });
+  const user = createUser({
+    username,
+    displayName,
+    legalName,
+    email,
+    role,
+    organizationName,
+    backupEmail,
+    passwordHash,
+    passwordSalt: salt,
+  });
   const sessionToken = createSession(user.id);
 
   return { user, sessionToken };

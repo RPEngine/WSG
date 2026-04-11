@@ -687,23 +687,60 @@ function signupPage() {
   return `
     <section class="card form-card">
       <h3>Create account</h3>
+      <p class="muted">Use your legal identity details so employers and recruiters can verify your profile.</p>
       <form id="signup-form" class="form-stack">
-        <label>Username
-          <input name="username" minlength="3" required />
-        </label>
-        <label>Display name
-          <input name="displayName" required />
-        </label>
-        <label>Email (optional)
-          <input name="email" type="email" />
-        </label>
-        <label>Password
-          <input name="password" type="password" minlength="8" required />
-        </label>
-        <button class="pill-btn" type="submit">Sign up</button>
+        <section class="form-section">
+          <h4>Account Identity</h4>
+          <label>Legal Name
+            <input name="legalName" minlength="2" required />
+          </label>
+          <label>Primary Email
+            <input name="email" type="email" required />
+          </label>
+          <label>Password
+            <input name="password" type="password" minlength="8" required />
+          </label>
+          <label>Confirm Password
+            <input name="confirmPassword" type="password" minlength="8" required />
+          </label>
+        </section>
+        <section class="form-section">
+          <h4>Role</h4>
+          <p class="muted">Select the role that best fits your guild access.</p>
+          <div class="radio-group">
+            <label class="radio-option">
+              <input type="radio" name="role" value="employee_member" required />
+              <span>Employee / Member</span>
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="role" value="employer" />
+              <span>Employer</span>
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="role" value="recruiter" />
+              <span>Recruiter</span>
+            </label>
+          </div>
+        </section>
+        <section class="form-section">
+          <h4>Organization</h4>
+          <label>Organization / Guild Name (optional)
+            <input name="organizationName" />
+          </label>
+        </section>
+        <section class="form-section">
+          <h4>Account Recovery</h4>
+          <label>Backup Email Address
+            <input name="backupEmail" type="email" />
+          </label>
+          <p class="muted">Used for verification codes and account recovery if you cannot access your primary email.</p>
+        </section>
+        <div class="actions">
+          <button class="pill-btn cta-primary" type="submit">Create Account</button>
+        </div>
         <p id="signup-feedback" class="muted"></p>
       </form>
-      <p class="muted">Already have an account? <a href="#/login">Log in.</a></p>
+      <p class="muted">Already have an account? <a href="#/login">Log In</a></p>
     </section>
   `;
 }
@@ -792,7 +829,7 @@ function applyRouteGuards(path) {
   return path;
 }
 
-async function handleAuthSubmit(formId, endpoint, feedbackId, mapPayload) {
+async function handleAuthSubmit(formId, endpoint, feedbackId, mapPayload, validatePayload = null) {
   const form = document.getElementById(formId);
   if (!form) {
     return;
@@ -804,11 +841,21 @@ async function handleAuthSubmit(formId, endpoint, feedbackId, mapPayload) {
     const formData = new FormData(form);
     const payload = mapPayload(formData);
 
+    if (typeof validatePayload === 'function') {
+      const validationError = validatePayload(payload);
+      if (validationError) {
+        feedback.textContent = validationError;
+        return;
+      }
+    }
+
     feedback.textContent = 'Submitting...';
     try {
+      const requestPayload = { ...payload };
+      delete requestPayload.confirmPassword;
       const result = await apiRequest(endpoint, {
         method: 'POST',
-        body: JSON.stringify(payload),
+        body: JSON.stringify(requestPayload),
       });
 
       setAuthSession(result);
@@ -819,6 +866,10 @@ async function handleAuthSubmit(formId, endpoint, feedbackId, mapPayload) {
       feedback.textContent = error.message;
     }
   };
+}
+
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 function attachProfileEditHandler() {
@@ -1151,11 +1202,34 @@ async function render() {
   }));
 
   handleAuthSubmit('signup-form', '/auth/register', 'signup-feedback', (formData) => ({
-    username: String(formData.get('username') || ''),
-    displayName: String(formData.get('displayName') || ''),
-    email: String(formData.get('email') || ''),
+    legalName: String(formData.get('legalName') || '').trim(),
+    email: String(formData.get('email') || '').trim(),
     password: String(formData.get('password') || ''),
-  }));
+    confirmPassword: String(formData.get('confirmPassword') || ''),
+    role: String(formData.get('role') || ''),
+    organizationName: String(formData.get('organizationName') || '').trim(),
+    backupEmail: String(formData.get('backupEmail') || '').trim(),
+  }), (payload) => {
+    if (!payload.legalName) {
+      return 'Legal Name is required.';
+    }
+    if (!payload.email || !isValidEmail(payload.email)) {
+      return 'Enter a valid Primary Email address.';
+    }
+    if (!payload.password || payload.password.length < 8) {
+      return 'Password must be at least 8 characters.';
+    }
+    if (payload.password !== payload.confirmPassword) {
+      return 'Password and Confirm Password must match.';
+    }
+    if (!payload.role) {
+      return 'Please select a role.';
+    }
+    if (payload.backupEmail && !isValidEmail(payload.backupEmail)) {
+      return 'Enter a valid Backup Email Address.';
+    }
+    return '';
+  });
 
   attachProfileEditHandler();
   attachArenaHandlers();
