@@ -14,8 +14,11 @@ function hashPassword(password, salt) {
   return crypto.scryptSync(password, salt, 64).toString("hex");
 }
 
+const PASSWORD_POLICY_MESSAGE = "Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a special character.";
+const PASSWORD_POLICY_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$/;
+
 function validatePassword(password) {
-  return typeof password === "string" && password.length >= 8;
+  return typeof password === "string" && PASSWORD_POLICY_REGEX.test(password);
 }
 
 const VALID_ROLES = new Set(["employee_member", "employer", "recruiter"]);
@@ -100,7 +103,7 @@ export function registerUser(payload = {}) {
     throw new Error("Primary email must be valid.");
   }
   if (!validatePassword(password)) {
-    throw new Error("Password must be at least 8 characters.");
+    throw new Error(PASSWORD_POLICY_MESSAGE);
   }
   if (!VALID_ROLES.has(role)) {
     throw new Error("A valid role is required.");
