@@ -672,6 +672,22 @@ function profilePage() {
       ${card('Saved Trial Results', '<p class="muted">No trial results yet. This section is ready for Phase 3 data binding.</p>')}
       ${card('Recent Activity', '<p class="muted">No recent activity yet. Activity stream scaffolding is in place.</p>')}
     </div>
+    <section class="card" style="margin-top:14px;">
+      <h3>Choose Your Mode</h3>
+      <p class="muted">Switch modes and jump to the area you want to train in next.</p>
+      <div class="grid two" style="margin-top:10px;">
+        <article class="card">
+          <h4 style="margin:0 0 8px;">Professional Mode</h4>
+          <p class="muted">Structured coaching and business-focused simulation flows.</p>
+          <a class="pill-btn mode-nav-btn" href="#/app" data-mode="professional">Enter Professional Mode</a>
+        </article>
+        <article class="card">
+          <h4 style="margin:0 0 8px;">Roleplay Mode</h4>
+          <p class="muted">Narrative-rich simulation for immersive decision practice.</p>
+          <a class="pill-btn mode-nav-btn" href="#/arena" data-mode="roleplay">Enter Roleplay Mode</a>
+        </article>
+      </div>
+    </section>
   `;
 }
 
@@ -709,14 +725,14 @@ function loginPage() {
     <section class="card form-card">
       <h3>Log in</h3>
       <form id="login-form" class="form-stack">
-        <label>Username or email
-          <input name="identifier" required />
+        <label>Email
+          <input name="email" type="email" autocomplete="email" required />
         </label>
         <label>Password
-          <input name="password" type="password" minlength="8" required />
+          <input name="password" type="password" minlength="8" autocomplete="current-password" required />
         </label>
-        <button class="pill-btn" type="submit">Log in</button>
-        <p id="login-feedback" class="muted"></p>
+        <button class="pill-btn" type="submit" id="login-submit-btn">Log In</button>
+        <p id="login-feedback" class="muted" role="status" aria-live="polite"></p>
       </form>
       <p class="muted">New here? <a href="#/signup">Create an account.</a></p>
     </section>
@@ -864,10 +880,22 @@ function applyRouteGuards(path) {
   }
 
   if (known.guestOnly && state.currentUser) {
-    return '/app';
+    return '/profile';
   }
 
   return path;
+}
+
+function getLoginErrorMessage(error) {
+  const fallback = 'Unable to sign in right now. Please try again.';
+  const message = error instanceof Error ? error.message : '';
+  if (message.toLowerCase().includes('network error')) {
+    return fallback;
+  }
+  if (message.toLowerCase().includes('invalid credentials')) {
+    return 'Invalid email or password.';
+  }
+  return fallback;
 }
 
 async function handleAuthSubmit(formId, endpoint, feedbackId, mapPayload, validatePayload = null) {
@@ -1314,21 +1342,42 @@ async function render() {
     loginForm.onsubmit = async (event) => {
       event.preventDefault();
       const feedback = document.getElementById('login-feedback');
+      const submitButton = document.getElementById('login-submit-btn');
       const formData = new FormData(loginForm);
+      const email = String(formData.get('email') || '').trim();
+      const password = String(formData.get('password') || '');
+      if (!email || !password) {
+        feedback.textContent = 'Email and password are required.';
+        return;
+      }
       const payload = {
-        identifier: String(formData.get('identifier') || ''),
-        password: String(formData.get('password') || ''),
+        identifier: email,
+        password,
       };
-      feedback.textContent = 'Submitting...';
+      feedback.textContent = 'Signing in...';
+      setStatusMessage('Signing in...', 'info');
+      if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.textContent = 'Signing in...';
+      }
       try {
         const result = await apiRequest('/auth/login', { method: 'POST', body: JSON.stringify(payload) });
         setAuthSession(result);
-        feedback.textContent = 'Success.';
+        feedback.textContent = 'Login successful.';
         setStatusMessage('Login successful.', 'success');
         state.membersLoaded = false;
-        location.hash = '/app';
+        setTimeout(() => {
+          location.hash = '/profile';
+        }, 200);
       } catch (error) {
-        feedback.textContent = error.message;
+        const message = getLoginErrorMessage(error);
+        feedback.textContent = message;
+        setStatusMessage(message, 'error');
+      } finally {
+        if (submitButton) {
+          submitButton.disabled = false;
+          submitButton.textContent = 'Log In';
+        }
       }
     };
   }
@@ -1386,6 +1435,14 @@ async function render() {
   }
 
   attachProfileEditHandler();
+  document.querySelectorAll('.mode-nav-btn').forEach((button) => {
+    button.addEventListener('click', () => {
+      const nextMode = button.getAttribute('data-mode');
+      if (nextMode === 'professional' || nextMode === 'roleplay') {
+        setMode(nextMode);
+      }
+    });
+  });
   attachArenaHandlers();
   attachHomeChatHandlers();
 }
