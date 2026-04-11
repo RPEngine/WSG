@@ -187,6 +187,29 @@ body {
 .list li { display: flex; justify-content: space-between; gap: 10px; padding: 8px; border-radius: 10px; background: rgba(255,255,255,0.03); }
 .muted { color: var(--text-muted); font-size: 0.9rem; }
 
+.status-banner {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel-soft);
+}
+
+.status-success {
+  border-color: rgba(88, 214, 141, 0.55);
+  background: rgba(88, 214, 141, 0.12);
+}
+
+.status-error {
+  border-color: rgba(255, 123, 123, 0.6);
+  background: rgba(255, 123, 123, 0.12);
+}
+
+.status-info {
+  border-color: var(--ring);
+  background: var(--accent-soft);
+}
+
 .feature {
   border-radius: 14px;
   border: 1px solid var(--ring);
@@ -240,6 +263,23 @@ body {
 
 .landing-footer-cta {
   margin-top: var(--space-4);
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(7, 11, 17, 0.72);
+  display: grid;
+  place-items: center;
+  z-index: 30;
+  padding: 20px;
+}
+
+.onboarding-modal {
+  width: min(100%, 560px);
+  background: var(--panel-strong);
+  border: 1px solid var(--ring);
+  box-shadow: var(--shadow);
 }
 
 @media (max-width: 1100px) {
