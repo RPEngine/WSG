@@ -1078,33 +1078,29 @@ function renderLayout(path, key, pageHtml) {
 function renderPublicLayout(path, key, pageHtml) {
   const [title, subtitle] = pageTitle(key);
   document.body.classList.toggle('mode-roleplay', state.mode === 'roleplay');
+  const showPageHeader = key !== 'landing';
 
   document.getElementById('app').innerHTML = `
     <div class="public-shell">
-      <header class="header panel">
-        <div class="brand">
-          <div class="brand-logo">WS</div>
-          <div>
-            <div class="title">Wyked Samurai</div>
-            <div class="subtitle">Guild Platform Prototype</div>
+      <header class="public-header panel">
+        <div class="public-container public-header-inner">
+          <div class="brand">
+            <div class="brand-logo">WS</div>
+            <div>
+              <div class="title">Wyked Samurai Guild</div>
+              <div class="subtitle">Guild Platform Prototype</div>
+            </div>
           </div>
-        </div>
-        <div class="header-actions">
-          <div class="toggle">
-            <button id="professional-mode" class="${state.mode === 'professional' ? 'active' : ''}">Professional</button>
-            <button id="roleplay-mode" class="${state.mode === 'roleplay' ? 'active' : ''}">Roleplay</button>
+          <div class="header-actions">
+            <a class="pill-btn" href="#/login">Log In</a>
+            <a class="pill-btn" href="#/signup">Sign Up</a>
           </div>
-          <a class="pill-btn" href="#/signup">Sign Up</a>
-          <a class="pill-btn" href="#/login">Log In</a>
         </div>
       </header>
 
-      <main class="public-content panel">
-        <section class="main-header">
-          <h2>${title}</h2>
-          <p>${subtitle}</p>
-        </section>
-        <section style="margin-top:14px;">${pageHtml}</section>
+      <main class="public-container public-content panel">
+        ${showPageHeader ? `<section class="main-header"><h2>${title}</h2><p>${subtitle}</p></section>` : ''}
+        <section style="margin-top:${showPageHeader ? '14px' : '0'};">${pageHtml}</section>
       </main>
     </div>
   `;
