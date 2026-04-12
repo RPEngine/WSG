@@ -632,6 +632,7 @@ function homePage() {
       title: 'Moon Harbor Intercept',
       summary: 'Negotiate a ceasefire between rival fleets before the moonlane trade corridor collapses.',
       timeRemaining: '42m remaining',
+      status: 'Priority Window',
       visual: 'Harbor Mistfront',
       tone: 'harbor',
     },
@@ -639,6 +640,7 @@ function homePage() {
       title: 'Citadel Breach Council',
       summary: 'Lead a cross-cell strategy council while resources are constrained and command pressure escalates.',
       timeRemaining: '1h 12m remaining',
+      status: 'Command Review',
       visual: 'Glass Citadel',
       tone: 'citadel',
     },
@@ -646,6 +648,7 @@ function homePage() {
       title: 'Nightwatch Supply Run',
       summary: 'Stabilize logistics and morale after a surprise disruption during the midnight convoy run.',
       timeRemaining: '23m remaining',
+      status: 'Rapid Response',
       visual: 'Iron Route',
       tone: 'convoy',
     },
@@ -712,6 +715,7 @@ function homePage() {
                   <span>${scenario.visual}</span>
                 </div>
                 <div class="scenario-spotlight-content">
+                  <p class="scenario-spotlight-status">${scenario.status}</p>
                   <h4>${scenario.title}</h4>
                   <p class="muted">${scenario.summary}</p>
                   <div class="scenario-spotlight-meta">
@@ -724,7 +728,7 @@ function homePage() {
           </div>
         </section>
 
-        <section class="card home-section tier-2">
+        <section class="card home-section home-subsection tier-3">
           <div class="section-heading-row home-section-heading">
             <h3>Recent Roleplay</h3>
           </div>
@@ -1882,8 +1886,7 @@ function renderLayout(path, key, pageHtml) {
         </div>
       </header>
 
-      <aside class="left-sidebar panel">
-        <div class="muted">Navigation</div>
+      <aside class="left-sidebar panel ${key === 'home' ? 'home-left-sidebar' : ''}">
         <ul class="nav-list">
           ${navItems.map(([label, target]) => `<li><a href="${linkFor(target)}" class="${path === target ? 'active' : ''}">${label}</a></li>`).join('')}
         </ul>
@@ -1900,7 +1903,7 @@ function renderLayout(path, key, pageHtml) {
         <section style="margin-top:${hideDefaultHeader ? '0' : '14px'};">${pageHtml}</section>
       </main>
 
-      <aside class="right-sidebar panel">${rightSidebar()}</aside>
+      <aside class="right-sidebar panel ${key === 'home' ? 'home-right-sidebar' : ''}">${rightSidebar()}</aside>
     </div>
     ${starterScenarioModalMarkup()}
   `;
