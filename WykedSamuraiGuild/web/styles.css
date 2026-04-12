@@ -24,6 +24,9 @@
   --font-h2: clamp(1.45rem, 2.3vw, 1.8rem);
   --font-body: 1rem;
   --font-small: 0.95rem;
+  --cyan-glow: #63d6e8;
+  --cyan-soft: rgba(99, 214, 232, 0.18);
+  --glass-dark: rgba(8, 17, 28, 0.7);
 }
 
 * { box-sizing: border-box; }
@@ -239,8 +242,9 @@ body {
 }
 
 .cta-primary {
-  background: var(--accent-soft);
-  border-color: var(--ring);
+  background: linear-gradient(140deg, var(--cyan-soft), rgba(99, 214, 232, 0.3));
+  border-color: rgba(121, 225, 245, 0.55);
+  box-shadow: 0 0 18px rgba(99, 214, 232, 0.2);
 }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 
@@ -899,6 +903,275 @@ body {
   gap: 8px;
 }
 
+.home-hero {
+  border: 1px solid rgba(121, 225, 245, 0.34);
+  border-radius: 18px;
+  padding: 34px;
+  background:
+    radial-gradient(circle at 85% 0%, rgba(120, 214, 255, 0.2), transparent 42%),
+    linear-gradient(155deg, rgba(7, 18, 31, 0.92), rgba(6, 12, 22, 0.72));
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+  margin-bottom: 16px;
+}
+
+.home-kicker {
+  margin: 0 0 8px;
+  font-size: 0.75rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cyan-glow);
+  font-weight: 700;
+}
+
+.home-hero h1 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 2.9rem);
+  font-weight: 650;
+}
+
+.home-hero p {
+  margin: 10px 0 0;
+  max-width: 720px;
+  line-height: 1.6;
+  color: #c4d2e4;
+}
+
+.home-body-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1.55fr) minmax(250px, 0.8fr);
+}
+
+.home-main-column,
+.home-support-column {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.home-section,
+.home-support-card {
+  background: linear-gradient(170deg, rgba(14, 23, 34, 0.88), rgba(7, 13, 21, 0.66));
+  border-color: rgba(255, 255, 255, 0.11);
+}
+
+.section-heading-row h3,
+.home-support-card h3,
+.social-rail h3,
+.social-rail h4 {
+  margin: 0 0 10px;
+  font-size: 0.8rem;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: #c7d4e5;
+}
+
+.scenario-card-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.scenario-spotlight-card {
+  display: grid;
+  grid-template-columns: minmax(130px, 180px) minmax(0, 1fr);
+  gap: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 10px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.03), rgba(5, 10, 16, 0.55));
+}
+
+.scenario-spotlight-visual {
+  border-radius: 10px;
+  border: 1px solid rgba(121, 225, 245, 0.28);
+  background: linear-gradient(155deg, rgba(99, 214, 232, 0.16), rgba(8, 17, 26, 0.9));
+  min-height: 86px;
+  display: grid;
+  place-items: end start;
+  padding: 10px;
+}
+
+.scenario-spotlight-visual span {
+  font-size: 0.73rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #d8e8f4;
+}
+
+.scenario-spotlight-content h4 {
+  margin: 0 0 6px;
+  font-size: 1.05rem;
+}
+
+.scenario-spotlight-content .muted {
+  margin: 0;
+}
+
+.scenario-spotlight-meta {
+  margin-top: 9px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+
+.guild-activity-list,
+.support-list,
+.contributors-list,
+.social-list,
+.conversation-compact-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+
+.guild-activity-list li,
+.support-list li,
+.contributors-list li,
+.social-list li,
+.conversation-compact-list li {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.guild-activity-list li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 9px;
+}
+
+.activity-avatar .avatar-md {
+  width: 40px;
+  height: 40px;
+}
+
+.support-list li {
+  padding: 9px;
+}
+
+.support-list li strong {
+  font-size: 0.86rem;
+}
+
+.support-list .muted,
+.contributors-list .muted,
+.conversation-compact-list .muted {
+  margin: 4px 0 0;
+  font-size: 0.78rem;
+}
+
+.contributors-list li,
+.social-list li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: 8px;
+}
+
+.contributors-list .avatar-md,
+.social-list .avatar-md {
+  width: 36px;
+  height: 36px;
+}
+
+.recruiter-teaser .pill-btn {
+  margin-top: 10px;
+  width: fit-content;
+}
+
+.home-chat-inline {
+  margin-top: 14px;
+}
+
+.social-rail {
+  min-height: 100%;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 12px;
+}
+
+.social-rail-block {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 10px;
+  background: linear-gradient(170deg, rgba(13, 22, 32, 0.9), rgba(7, 13, 19, 0.75));
+}
+
+.rail-search {
+  display: grid;
+  gap: 7px;
+}
+
+.rail-search input,
+.active-chat-form input {
+  width: 100%;
+  border-radius: 9px;
+  border: 1px solid rgba(121, 225, 245, 0.28);
+  background: var(--glass-dark);
+  color: var(--text-main);
+  padding: 9px 10px;
+}
+
+.rail-identity {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+  align-items: center;
+}
+
+.rail-online-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #62efb7;
+  box-shadow: 0 0 10px rgba(98, 239, 183, 0.65);
+  margin-left: auto;
+}
+
+.conversation-compact-list li {
+  padding: 9px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.conversation-compact-list li.is-active {
+  border-color: rgba(121, 225, 245, 0.4);
+  background: rgba(99, 214, 232, 0.1);
+}
+
+.active-chat-dock {
+  border: 1px solid rgba(121, 225, 245, 0.4);
+  border-radius: 14px;
+  background: linear-gradient(165deg, rgba(99, 214, 232, 0.16), rgba(9, 16, 27, 0.93));
+  padding: 11px;
+  display: grid;
+  gap: 8px;
+}
+
+.active-chat-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.active-chat-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.tier-1 { box-shadow: 0 28px 54px rgba(0, 0, 0, 0.45); }
+.tier-2 { box-shadow: 0 16px 34px rgba(0, 0, 0, 0.35); }
+.tier-3 { box-shadow: 0 10px 22px rgba(0, 0, 0, 0.26); }
+
 .landing-hero h1 {
   margin: 6px 0 10px;
   max-width: 760px;
@@ -972,5 +1245,9 @@ body {
 
   .workspace-col {
     min-height: auto;
+  }
+
+  .home-body-grid {
+    grid-template-columns: 1fr;
   }
 }
