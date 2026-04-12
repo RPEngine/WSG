@@ -12,6 +12,7 @@
   --accent-glow: rgba(255, 138, 61, 0.34);
   --accent-hover: #FFA15F;
   --accent-focus: rgba(255, 138, 61, 0.5);
+  --accent-border: rgba(255, 138, 61, 0.46);
   --accent-soft: rgba(255, 138, 61, 0.2);
   --ring: var(--accent-focus);
   --border: rgba(255, 255, 255, 0.08);
@@ -48,6 +49,7 @@ body {
   --accent-glow: rgba(255, 138, 61, 0.34);
   --accent-hover: #FFA15F;
   --accent-focus: rgba(255, 138, 61, 0.5);
+  --accent-border: rgba(255, 138, 61, 0.46);
   --accent-soft: rgba(255, 138, 61, 0.2);
   --ring: var(--accent-focus);
 }
@@ -57,6 +59,7 @@ body {
   --accent-glow: rgba(79, 209, 255, 0.36);
   --accent-hover: #7DDEFF;
   --accent-focus: rgba(79, 209, 255, 0.54);
+  --accent-border: rgba(79, 209, 255, 0.5);
   --accent-soft: rgba(79, 209, 255, 0.2);
   --ring: var(--accent-focus);
 }
@@ -126,9 +129,8 @@ body {
 .brand-logo {
   width: 40px; height: 40px; border-radius: 12px;
   display: grid; place-items: center;
-  color: #111; font-weight: 700; background: linear-gradient(135deg, var(--accent), #f8ad6e);
+  color: #111; font-weight: 700; background: linear-gradient(135deg, var(--accent), var(--accent-hover));
 }
-.mode-roleplay .brand-logo { background: linear-gradient(135deg, var(--accent), #7be1ff); }
 
 .title { font-weight: 700; }
 .subtitle { color: var(--text-muted); font-size: 12px; margin-top: 2px; }
@@ -940,12 +942,12 @@ body {
 }
 
 .home-hero {
-  border: 1px solid rgba(121, 225, 245, 0.4);
+  border: 1px solid var(--accent-border);
   border-radius: 20px;
   padding: 50px 40px;
   background:
-    radial-gradient(circle at 85% 12%, rgba(120, 214, 255, 0.24), transparent 40%),
-    radial-gradient(circle at 0% 100%, rgba(70, 95, 150, 0.2), transparent 45%),
+    radial-gradient(circle at 85% 12%, var(--accent-soft), transparent 40%),
+    radial-gradient(circle at 0% 100%, var(--accent-glow), transparent 45%),
     linear-gradient(155deg, rgba(7, 18, 31, 0.94), rgba(6, 12, 22, 0.8));
   box-shadow: 0 28px 64px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.04);
   margin-bottom: 24px;
@@ -961,7 +963,7 @@ body {
   width: 320px;
   height: 320px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(148, 213, 255, 0.32) 0%, rgba(148, 213, 255, 0) 68%);
+  background: radial-gradient(circle, var(--accent-glow) 0%, transparent 68%);
   pointer-events: none;
 }
 
@@ -1106,7 +1108,7 @@ body {
   font-size: 0.68rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #95c5e9;
+  color: var(--accent-hover);
 }
 
 .scenario-spotlight-content h4 {
@@ -1166,7 +1168,7 @@ body {
   font-size: 0.76rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #91b5d4;
+  color: var(--accent-hover);
 }
 
 .support-list li {
@@ -1227,7 +1229,7 @@ body {
 .active-chat-form input {
   width: 100%;
   border-radius: 9px;
-  border: 1px solid var(--ring);
+  border: 1px solid var(--border);
   background: var(--glass-dark);
   color: var(--text-main);
   padding: 9px 10px;
