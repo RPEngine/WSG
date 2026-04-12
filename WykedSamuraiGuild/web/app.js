@@ -124,9 +124,10 @@ const state = {
     error: '',
   },
   shell: {
-    activeUtilityTab: 'connections',
-    selectedConversationId: '',
-    chatPaneState: 'closed',
+    activePaneTab: 'connections',
+    selectedConversation: '',
+    chatOpen: false,
+    chatMinimized: false,
   },
   statusMessage: null,
   onboarding: {
@@ -573,14 +574,15 @@ function getConnectionDisplayName(connection) {
 }
 
 function selectedConnection() {
-  return state.network.connections.find((connection) => connection.id === state.shell.selectedConversationId)
+  return state.network.connections.find((connection) => connection.id === state.shell.selectedConversation)
     || state.network.connections.find((connection) => connection.id === state.directChat.activeConnectionId)
     || null;
 }
 
-function utilityPane() {
+function RightPane() {
   const connections = state.network.connections || [];
-  const selectedConversationId = state.shell.selectedConversationId || state.directChat.activeConnectionId || '';
+  const selectedConversation = state.shell.selectedConversation || state.directChat.activeConnectionId || '';
+  const friendsOnline = connections.filter((connection) => connection.status === 'online').length || Math.min(connections.length, 4);
   const filteredConnections = connections
     .filter((connection) => getConnectionDisplayName(connection).toLowerCase().includes((state.network.searchTerm || '').toLowerCase()));
 
@@ -609,7 +611,7 @@ function utilityPane() {
         : 'Ready for your next briefing.';
       const unreadCount = Number(connection.unreadCount || 0);
       return `
-        <li class="global-conversation-item ${selectedConversationId === connection.id ? 'is-active' : ''}" data-connection-id="${escapeAttr(connection.id)}">
+        <li class="global-conversation-item ${selectedConversation === connection.id ? 'is-active' : ''}" data-connection-id="${escapeAttr(connection.id)}">
           <div>
             <strong>${escapeHtml(getConnectionDisplayName(connection))}</strong>
             <p class="muted">${escapeHtml(preview.slice(0, 64))}</p>
@@ -623,12 +625,13 @@ function utilityPane() {
   return `
     <section class="global-utility-pane">
       <div class="utility-tab-switcher">
-        <button type="button" class="utility-tab-btn ${state.shell.activeUtilityTab === 'connections' ? 'active' : ''}" data-pane-tab="connections">Connections</button>
-        <button type="button" class="utility-tab-btn ${state.shell.activeUtilityTab === 'chat' ? 'active' : ''}" data-pane-tab="chat">Chat</button>
+        <button type="button" class="utility-tab-btn ${state.shell.activePaneTab === 'connections' ? 'active' : ''}" data-pane-tab="connections">Connections</button>
+        <button type="button" class="utility-tab-btn ${state.shell.activePaneTab === 'chat' ? 'active' : ''}" data-pane-tab="chat">Chat</button>
       </div>
-      ${state.shell.activeUtilityTab === 'connections' ? `
+      ${state.shell.activePaneTab === 'connections' ? `
         <div class="social-rail-block">
           <h3>Connections</h3>
+          <p class="muted">Friends online: <strong>${friendsOnline}</strong></p>
           <form id="global-connections-search-form" class="rail-search">
             <input id="global-connections-search-input" type="search" value="${escapeAttr(state.network.searchTerm || '')}" placeholder="Search connections" />
           </form>
@@ -644,15 +647,15 @@ function utilityPane() {
   `;
 }
 
-function globalChatPane() {
-  if (!state.currentUser || state.shell.chatPaneState === 'closed') {
+function ChatDock() {
+  if (!state.currentUser || !state.shell.chatOpen) {
     return '';
   }
   const activeConnection = selectedConnection();
   if (!activeConnection) {
     return '';
   }
-  const isMinimized = state.shell.chatPaneState === 'minimized';
+  const isMinimized = state.shell.chatMinimized;
   const messagesMarkup = (state.directChat.messages || [])
     .map((message) => `
       <article class="message ${message.senderId === state.currentUser?.id ? 'user' : 'system'}">
@@ -681,6 +684,63 @@ function globalChatPane() {
         </form>
       `}
     </section>
+  `;
+}
+
+function LeftNav(path, key) {
+  return `
+    <aside class="left-sidebar panel ${key === 'home' ? 'home-left-sidebar' : ''}">
+      <div class="left-pane-brand">
+        <p class="muted">Command Navigation</p>
+      </div>
+      <ul class="nav-list">
+        ${navItems.map(([label, target]) => `<li><a href="${linkFor(target)}" class="${path === target ? 'active' : ''}">${label}</a></li>`).join('')}
+      </ul>
+    </aside>
+  `;
+}
+
+function MainContent(key, title, subtitle, statusMarkup, pageHtml) {
+  const hideDefaultHeader = key === 'home';
+  return `
+    <main class="main-content panel">
+      ${hideDefaultHeader ? '' : `
+        <section class="main-header">
+          <h1>${title}</h1>
+          <p>${subtitle}</p>
+        </section>
+      `}
+      ${statusMarkup}
+      <section style="margin-top:${hideDefaultHeader ? '0' : '14px'};">${pageHtml}</section>
+    </main>
+  `;
+}
+
+function AppShell(path, key, pageHtml, statusMarkup) {
+  const [title, subtitle] = pageTitle(key);
+  return `
+    <div class="app-shell">
+      <header class="header panel">
+        <div class="brand">
+          <div class="brand-logo">WS</div>
+          <div>
+            <div class="title">Wyked Samurai</div>
+            <div class="subtitle">Guild Platform Prototype</div>
+          </div>
+        </div>
+        <div class="header-actions">
+          <div class="toggle">
+            <button id="professional-mode" class="${state.mode === 'professional' ? 'active' : ''}">Professional</button>
+            <button id="roleplay-mode" class="${state.mode === 'roleplay' ? 'active' : ''}">Roleplay</button>
+          </div>
+          ${state.currentUser ? `<span class="muted">${state.currentUser.displayName}</span><button class="pill-btn" id="logout-btn">Log out</button>` : '<a class="pill-btn" href="#/login">Log in</a>'}
+        </div>
+      </header>
+      ${LeftNav(path, key)}
+      ${MainContent(key, title, subtitle, statusMarkup, pageHtml)}
+      <aside class="right-sidebar panel ${key === 'home' ? 'home-right-sidebar' : ''}">${RightPane()}</aside>
+      ${ChatDock()}
+    </div>
   `;
 }
 
@@ -1425,7 +1485,9 @@ async function loadDirectChat(connectionId) {
   if (!connectionId) {
     state.directChat.messages = [];
     state.directChat.activeConnectionId = '';
-    state.shell.selectedConversationId = '';
+    state.shell.selectedConversation = '';
+    state.shell.chatOpen = false;
+    state.shell.chatMinimized = false;
     return;
   }
   state.directChat.loading = true;
@@ -1433,7 +1495,9 @@ async function loadDirectChat(connectionId) {
   try {
     const data = await apiRequest(`/chats/direct/${connectionId}`);
     state.directChat.activeConnectionId = connectionId;
-    state.shell.selectedConversationId = connectionId;
+    state.shell.selectedConversation = connectionId;
+    state.shell.chatOpen = true;
+    state.shell.chatMinimized = false;
     state.directChat.messages = data.thread?.messages || [];
     setStatusMessage('Direct chat opened.', 'success');
   } catch (error) {
@@ -1644,9 +1708,10 @@ function attachProfileEditHandler() {
     button.addEventListener('click', async () => {
       const connectionId = button.getAttribute('data-connection-id');
       await loadDirectChat(connectionId);
-      state.shell.selectedConversationId = connectionId || '';
-      state.shell.chatPaneState = 'open';
-      state.shell.activeUtilityTab = 'chat';
+      state.shell.selectedConversation = connectionId || '';
+      state.shell.chatOpen = true;
+      state.shell.chatMinimized = false;
+      state.shell.activePaneTab = 'chat';
       render();
     });
   });
@@ -1656,9 +1721,10 @@ function attachProfileEditHandler() {
       const connectionId = button.getAttribute('data-connection-id');
       if (!connectionId) return;
       await loadDirectChat(connectionId);
-      state.shell.selectedConversationId = connectionId;
-      state.shell.chatPaneState = 'open';
-      state.shell.activeUtilityTab = 'chat';
+      state.shell.selectedConversation = connectionId;
+      state.shell.chatOpen = true;
+      state.shell.chatMinimized = false;
+      state.shell.activePaneTab = 'chat';
       render();
     });
   });
@@ -1668,8 +1734,10 @@ function attachProfileEditHandler() {
       const connectionId = item.getAttribute('data-connection-id');
       if (!connectionId) return;
       await loadDirectChat(connectionId);
-      state.shell.selectedConversationId = connectionId;
-      state.shell.chatPaneState = 'open';
+      state.shell.selectedConversation = connectionId;
+      state.shell.chatOpen = true;
+      state.shell.chatMinimized = false;
+      state.shell.activePaneTab = 'chat';
       render();
     });
   });
@@ -1690,7 +1758,7 @@ function attachProfileEditHandler() {
     button.addEventListener('click', () => {
       const nextTab = button.getAttribute('data-pane-tab');
       if (nextTab === 'connections' || nextTab === 'chat') {
-        state.shell.activeUtilityTab = nextTab;
+        state.shell.activePaneTab = nextTab;
         render();
       }
     });
@@ -1743,7 +1811,7 @@ function attachProfileEditHandler() {
   const toggleChatPaneButton = document.getElementById('toggle-chat-pane-btn');
   if (toggleChatPaneButton) {
     toggleChatPaneButton.onclick = () => {
-      state.shell.chatPaneState = state.shell.chatPaneState === 'minimized' ? 'open' : 'minimized';
+      state.shell.chatMinimized = !state.shell.chatMinimized;
       render();
     };
   }
@@ -1751,7 +1819,8 @@ function attachProfileEditHandler() {
   const closeChatPaneButton = document.getElementById('close-chat-pane-btn');
   if (closeChatPaneButton) {
     closeChatPaneButton.onclick = () => {
-      state.shell.chatPaneState = 'closed';
+      state.shell.chatOpen = false;
+      state.shell.chatMinimized = false;
       render();
     };
   }
@@ -2012,56 +2081,14 @@ function applyModeClass() {
 }
 
 function renderLayout(path, key, pageHtml) {
-  const [title, subtitle] = pageTitle(key);
   applyModeClass();
-  const hideDefaultHeader = key === 'home';
 
   const statusMarkup = state.statusMessage
     ? `<p class="status-banner status-${state.statusMessage.tone}" role="status">${escapeHtml(state.statusMessage.message)}</p>`
     : '';
 
   document.getElementById('app').innerHTML = `
-    <div class="app-shell">
-      <header class="header panel">
-        <div class="brand">
-          <div class="brand-logo">WS</div>
-          <div>
-            <div class="title">Wyked Samurai</div>
-            <div class="subtitle">Guild Platform Prototype</div>
-          </div>
-        </div>
-        <div class="header-actions">
-          <div class="toggle">
-            <button id="professional-mode" class="${state.mode === 'professional' ? 'active' : ''}">Professional</button>
-            <button id="roleplay-mode" class="${state.mode === 'roleplay' ? 'active' : ''}">Roleplay</button>
-          </div>
-          ${state.currentUser ? `<span class="muted">${state.currentUser.displayName}</span><button class="pill-btn" id="logout-btn">Log out</button>` : '<a class="pill-btn" href="#/login">Log in</a>'}
-        </div>
-      </header>
-
-      <aside class="left-sidebar panel ${key === 'home' ? 'home-left-sidebar' : ''}">
-        <div class="left-pane-brand">
-          <p class="muted">Command Navigation</p>
-        </div>
-        <ul class="nav-list">
-          ${navItems.map(([label, target]) => `<li><a href="${linkFor(target)}" class="${path === target ? 'active' : ''}">${label}</a></li>`).join('')}
-        </ul>
-      </aside>
-
-      <main class="main-content panel">
-        ${hideDefaultHeader ? '' : `
-          <section class="main-header">
-            <h1>${title}</h1>
-            <p>${subtitle}</p>
-          </section>
-        `}
-        ${statusMarkup}
-        <section style="margin-top:${hideDefaultHeader ? '0' : '14px'};">${pageHtml}</section>
-      </main>
-
-      <aside class="right-sidebar panel ${key === 'home' ? 'home-right-sidebar' : ''}">${utilityPane()}</aside>
-      ${globalChatPane()}
-    </div>
+    ${AppShell(path, key, pageHtml, statusMarkup)}
     ${starterScenarioModalMarkup()}
   `;
 
