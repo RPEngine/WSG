@@ -71,9 +71,11 @@ body {
   grid-template-areas:
     "header header header"
     "left main right";
-  height: 100vh;
+  min-height: 100vh;
   gap: 14px;
   padding: 14px;
+  padding-bottom: 260px;
+  position: relative;
 }
 
 .public-shell {
@@ -167,7 +169,13 @@ body {
 .avatar { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-weight: 600; }
 
 .left-sidebar { grid-area: left; padding: 16px; }
-.right-sidebar { grid-area: right; padding: 16px; overflow: auto; }
+.right-sidebar {
+  grid-area: right;
+  padding: 12px;
+  overflow: auto;
+  background: rgba(33, 40, 50, 0.76);
+  border-color: rgba(255, 255, 255, 0.14);
+}
 .main-content { grid-area: main; padding: 16px; overflow: auto; }
 
 .nav-list { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 8px; }
@@ -178,6 +186,13 @@ body {
 .nav-list a.active, .nav-list a:hover {
   background: var(--accent-soft);
   border-color: var(--ring);
+}
+
+.left-pane-brand .muted {
+  margin: 0;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-size: 0.7rem;
 }
 
 .home-left-sidebar {
@@ -352,6 +367,7 @@ body {
   .app-shell {
     grid-template-columns: 1fr;
     grid-template-areas: "header" "left" "main" "right";
+    padding-bottom: 170px;
   }
   .public-shell {
     gap: var(--space-2);
@@ -373,6 +389,12 @@ body {
   }
   .grid.two { grid-template-columns: 1fr; }
   .header { flex-wrap: wrap; height: auto; padding: 12px; }
+  .global-chat-dock {
+    right: 10px;
+    left: 10px;
+    width: auto;
+    bottom: 10px;
+  }
 }
 
 .form-card {
@@ -1211,6 +1233,94 @@ body {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 10px;
+}
+
+.global-utility-pane {
+  min-height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+}
+
+.utility-tab-switcher {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.utility-tab-btn {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(9, 14, 22, 0.7);
+  color: var(--text-main);
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.utility-tab-btn.active {
+  border-color: var(--ring);
+  background: var(--accent-soft);
+}
+
+.rail-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+
+.rail-actions .pill-btn {
+  padding: 6px 9px;
+  font-size: 0.75rem;
+}
+
+.global-conversation-item {
+  cursor: pointer;
+}
+
+.unread-dot {
+  min-width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--accent);
+  color: #111;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.global-chat-dock {
+  position: fixed;
+  right: 28px;
+  bottom: 18px;
+  width: min(430px, calc(100vw - 40px));
+  border-radius: 14px;
+  border-color: rgba(255, 255, 255, 0.16);
+  background: linear-gradient(170deg, rgba(23, 31, 41, 0.94), rgba(13, 19, 29, 0.95));
+  padding: 10px;
+  z-index: 25;
+  display: grid;
+  gap: 10px;
+}
+
+.global-chat-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.chat-window-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.global-chat-log {
+  min-height: 210px;
+  max-height: 290px;
+}
+
+.global-chat-dock.is-minimized {
+  width: 300px;
 }
 
 .social-rail-block {
