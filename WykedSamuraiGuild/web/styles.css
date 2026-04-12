@@ -424,6 +424,26 @@ body {
   align-items: center;
 }
 
+
+.profile-display-hero {
+  display: grid;
+  gap: 12px;
+}
+
+.profile-display-bio {
+  margin: 0;
+  line-height: 1.6;
+  color: var(--text-main);
+}
+
+.profile-display-grid {
+  grid-template-columns: 1.2fr 1fr;
+}
+
+.profile-edit-section {
+  margin-top: 16px;
+}
+
 .profile-summary-row {
   display: flex;
   align-items: center;
@@ -521,14 +541,35 @@ body {
 
 .trial-card {
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 10px;
-  background: var(--panel-soft);
+  border-radius: 12px;
+  padding: 12px;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.04), rgba(0, 0, 0, 0.2));
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .trial-card.active {
   border-color: var(--ring);
-  background: var(--accent-soft);
+  background: linear-gradient(150deg, var(--accent-soft), rgba(255, 255, 255, 0.02));
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25), inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  transform: translateY(-2px);
+}
+
+.trial-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.trial-state-chip {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border: 1px solid var(--ring);
+  color: var(--text-main);
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: rgba(0, 0, 0, 0.22);
 }
 
 .trial-card h4 {
@@ -620,10 +661,20 @@ body {
 .scenario-hero,
 .recruiter-hero {
   border: 1px solid var(--ring);
-  border-radius: 14px;
+  border-radius: 16px;
   padding: 18px;
   background: linear-gradient(140deg, var(--accent-soft), rgba(255, 255, 255, 0.01));
   margin-bottom: 12px;
+}
+
+.scenario-hero-arena {
+  padding: 24px;
+  background: linear-gradient(145deg, rgba(208, 107, 47, 0.28), rgba(15, 19, 24, 0.5));
+}
+
+.scenario-hero-arena .hero-description {
+  font-size: 1.02rem;
+  line-height: 1.55;
 }
 
 .scenario-hero h3,
@@ -651,7 +702,7 @@ body {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
-  margin-top: 14px;
+  margin-top: 18px;
 }
 
 .hero-metric,
@@ -678,18 +729,36 @@ body {
 }
 
 .scenario-experience-panel {
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 14px;
-  padding: 14px;
-  background: rgba(5, 8, 14, 0.4);
+  padding: 16px;
+  background: linear-gradient(180deg, rgba(5, 8, 14, 0.72), rgba(5, 8, 14, 0.45));
+}
+
+.scenario-panel-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
 }
 
 .scenario-panel-head h4 {
-  margin: 0;
+  margin: 2px 0 0;
+  font-size: 1.12rem;
 }
 
 .scenario-panel-head .muted {
-  margin: 6px 0 10px;
+  margin: 2px 0 10px;
+}
+
+.scenario-prompt {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-main);
+  line-height: 1.5;
 }
 
 .participant-grid {
@@ -699,13 +768,20 @@ body {
 
 .participant-card {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto 1fr auto;
   gap: 10px;
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 9px 10px;
+  padding: 7px 9px;
   background: rgba(255, 255, 255, 0.02);
   align-items: center;
+}
+
+.participant-status {
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
 }
 
 .participant-card p {
@@ -719,6 +795,15 @@ body {
   background: rgba(0, 0, 0, 0.22);
 }
 
+.scenario-chat-rail {
+  background: linear-gradient(170deg, rgba(255, 255, 255, 0.04), rgba(0, 0, 0, 0.34));
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.scenario-chat-rail .conversation-log {
+  background: rgba(6, 9, 15, 0.75);
+}
+
 .messaging-rail-head {
   display: flex;
   justify-content: space-between;
@@ -728,8 +813,29 @@ body {
 
 .candidate-card-stack {
   display: grid;
-  gap: 10px;
+  gap: 12px;
   margin-top: 12px;
+}
+
+.candidate-insight-spotlight {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  padding: 11px;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.04), rgba(0, 0, 0, 0.25));
+}
+
+.candidate-rank {
+  margin-left: auto;
+  font-size: 0.74rem;
+  border: 1px solid var(--ring);
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: var(--accent-soft);
+}
+
+.insight-emphasis {
+  border-color: var(--ring);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.05), var(--accent-soft));
 }
 
 .candidate-insight-card h4 {
@@ -740,14 +846,40 @@ body {
   background: rgba(255, 255, 255, 0.02);
 }
 
+.records-table .list li {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-left: 3px solid var(--ring);
+  border-radius: 10px;
+}
+
 .metric-grid {
   display: grid;
   gap: 8px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.recruiter-metric-grid {
+  gap: 10px;
+}
+
+.recruiter-metric-card {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.04), rgba(0, 0, 0, 0.32));
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.recruiter-metric-card strong {
+  font-size: 1.2rem;
+}
+
 .network-feature-panel {
-  margin-top: 12px;
+  margin-top: 16px;
+}
+
+.network-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
 }
 
 .network-map-placeholder {
