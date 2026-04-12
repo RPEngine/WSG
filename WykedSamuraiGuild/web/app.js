@@ -564,14 +564,69 @@ async function requestHomeAssistantReply(userMessage) {
 }
 
 function rightSidebar() {
-  const networkItems = state.network.connections.slice(0, 5).map((connection) => `<span>${escapeHtml(connection.displayName || connection.username)}</span><span class="muted">Connected</span>`);
+  const onlineConnections = state.network.connections.slice(0, 6);
+  const onlineItems = onlineConnections.length
+    ? onlineConnections.map((connection) => `
+      <li>
+        <div class="rail-identity">
+          ${avatarMarkup(connection, 'md')}
+          <div>
+            <strong>${escapeHtml(connection.displayName || connection.username)}</strong>
+            <p class="muted">${escapeHtml(connection.role || 'Guild Member')}</p>
+          </div>
+        </div>
+        <span class="rail-online-dot" aria-label="Online"></span>
+      </li>
+    `).join('')
+    : '<li><p class="muted">No guildmates online right now.</p></li>';
+
+  const conversationItems = onlineConnections.length
+    ? onlineConnections.slice(0, 4).map((connection, index) => `
+      <li class="${index === 0 ? 'is-active' : ''}">
+        <div>
+          <strong>${escapeHtml(connection.displayName || connection.username)}</strong>
+          <p class="muted">${escapeHtml(index === 0 ? 'Ready for your next briefing?' : 'Standing by in command chat.')}</p>
+        </div>
+        <span class="muted">${index === 0 ? 'Now' : `${index + 6}m`}</span>
+      </li>
+    `).join('')
+    : '<li><p class="muted">No open conversations yet.</p></li>';
+
+  const activeChatName = onlineConnections[0]?.displayName || onlineConnections[0]?.username || 'Guild Channel';
+
   return `
-    ${card('Connections', list(networkItems.length ? networkItems : ['<span>No active connections yet.</span><span class="muted">Build your network</span>']))}
-    ${card('Messaging Presence', '<p class="muted">Direct chats are available in the messaging rail and recruiter console. Scenario chat is in Arena.</p>')}
+    <section class="social-rail">
+      <div class="social-rail-block">
+        <h3>Friends Online</h3>
+        <ul class="social-list">${onlineItems}</ul>
+      </div>
+      <div class="social-rail-block">
+        <label class="rail-search">
+          <span class="muted">Chat Search</span>
+          <input type="search" placeholder="Search conversations" />
+        </label>
+      </div>
+      <div class="social-rail-block">
+        <h4>Conversations</h4>
+        <ul class="conversation-compact-list">${conversationItems}</ul>
+      </div>
+      <section class="active-chat-dock">
+        <div class="active-chat-head">
+          <strong>${escapeHtml(activeChatName)}</strong>
+          <span class="muted">Active</span>
+        </div>
+        <p class="muted">Moon gate is clear. Ready to move when you are.</p>
+        <form class="active-chat-form">
+          <input type="text" value="" placeholder="Send a quick reply..." />
+          <button class="pill-btn cta-primary" type="button">Send</button>
+        </form>
+      </section>
+    </section>
   `;
 }
 
 function homePage() {
+  const displayName = state.currentUser?.displayName || 'Guild Member';
   const chatMessages = state.homeChat.messages
     .map(
       (message) => `
@@ -582,25 +637,137 @@ function homePage() {
       `
     )
     .join('');
+  const scenarioCards = [
+    {
+      title: 'Moon Harbor Intercept',
+      summary: 'Negotiate a ceasefire between two rival fleets before the trade corridor collapses.',
+      timeRemaining: '42m remaining',
+      visual: 'Fogline Harbor',
+    },
+    {
+      title: 'Citadel Breach Council',
+      summary: 'Lead a cross-cell strategy session while resources are constrained and pressure escalates.',
+      timeRemaining: '1h 12m remaining',
+      visual: 'Glass Citadel',
+    },
+    {
+      title: 'Nightwatch Supply Run',
+      summary: 'Stabilize logistics and morale after a surprise disruption during the midnight convoy.',
+      timeRemaining: '23m remaining',
+      visual: 'Iron Route',
+    },
+  ];
+
+  const activitySeed = state.network.connections.slice(0, 4);
+  const activityFeed = activitySeed.length
+    ? activitySeed.map((connection, index) => `
+      <li>
+        <div class="activity-avatar">${avatarMarkup(connection, 'md')}</div>
+        <div>
+          <strong>${escapeHtml(connection.displayName || connection.username)}</strong>
+          <p class="muted">${escapeHtml(connection.role || 'Guild Member')} coordinated a tactical response in the Night Forum.</p>
+        </div>
+        <span class="muted">${index === 0 ? '8m' : `${(index + 1) * 11}m`}</span>
+      </li>
+    `).join('')
+    : `
+      <li>
+        <div class="activity-avatar"><div class="avatar-md avatar-fallback">WS</div></div>
+        <div>
+          <strong>Guild Chronicle</strong>
+          <p class="muted">No recent activity yet. Coordinate your first mission to light up the feed.</p>
+        </div>
+        <span class="muted">Now</span>
+      </li>
+    `;
+
+  const contributors = (state.network.connections.length ? state.network.connections : [{ displayName: 'Penny Carter', role: 'Strategist' }, { displayName: 'Kai Ren', role: 'Scout Lead' }, { displayName: 'Mira Sol', role: 'Mediator' }])
+    .slice(0, 4)
+    .map((connection) => `
+      <li>
+        ${avatarMarkup(connection, 'md')}
+        <div>
+          <strong>${escapeHtml(connection.displayName || connection.username)}</strong>
+          <p class="muted">${escapeHtml(connection.role || 'Specialist')}</p>
+        </div>
+      </li>
+    `).join('');
 
   return `
-    <div class="grid two">
-      ${card('Recommended Scenarios', list(['Shadow Market Negotiation', 'Supply Chain Siege', 'Cross-Guild Accord'].map((s) => `<span>${s}</span><span class="muted">Match 92%</span>`)))}
-      ${card('Recent Roleplay', list(['Moonlit reconnaissance thread', 'Dojo council session', 'Nexus summit debrief'].map((s) => `<span>${s}</span><span class="muted">12m ago</span>`)))}
-    </div>
-
-    <section class="card home-chat-panel" style="margin-top:14px;">
-      <h3>AI Chat</h3>
-      <p class="muted">Ask for coaching, roleplay prompts, or tactical recommendations.</p>
-      <div id="home-chat-log" class="conversation-log home-chat-log">
-        ${chatMessages || '<p class="muted">No messages yet. Send one to begin.</p>'}
-      </div>
-      <form id="home-chat-form" class="arena-input" style="margin-top:10px;">
-        <input id="home-chat-input" name="message" placeholder="Type your message..." ${state.homeChat.pending ? 'disabled' : ''} />
-        <button class="pill-btn" type="submit" ${state.homeChat.pending ? 'disabled' : ''}>${state.homeChat.pending ? 'Sending...' : 'Send'}</button>
-      </form>
-      ${state.homeChat.error ? `<p class="muted" style="color:#ff7b7b;margin-top:8px;" role="alert">${escapeHtml(state.homeChat.error)}</p>` : ''}
+    <section class="home-hero tier-1">
+      <p class="home-kicker">Guild Command</p>
+      <h1>Welcome, ${escapeHtml(displayName)}</h1>
+      <p>Your moonlit operations hub is aligned. Review active scenarios, track guild momentum, and deploy your next move with focus.</p>
     </section>
+
+    <section class="home-body-grid">
+      <div class="home-main-column">
+        <section class="card home-section tier-2">
+          <div class="section-heading-row">
+            <h3>Recommended Scenarios</h3>
+          </div>
+          <div class="scenario-card-stack">
+            ${scenarioCards.map((scenario) => `
+              <article class="scenario-spotlight-card">
+                <div class="scenario-spotlight-visual">
+                  <span>${scenario.visual}</span>
+                </div>
+                <div class="scenario-spotlight-content">
+                  <h4>${scenario.title}</h4>
+                  <p class="muted">${scenario.summary}</p>
+                  <div class="scenario-spotlight-meta">
+                    <span class="muted">${scenario.timeRemaining}</span>
+                    <button class="pill-btn cta-primary" type="button">Enter</button>
+                  </div>
+                </div>
+              </article>
+            `).join('')}
+          </div>
+        </section>
+
+        <section class="card home-section tier-2">
+          <div class="section-heading-row">
+            <h3>Recent Guild Activity</h3>
+          </div>
+          <ul class="guild-activity-list">${activityFeed}</ul>
+        </section>
+      </div>
+
+      <aside class="home-support-column">
+        <section class="card home-support-card tier-3">
+          <h3>Guild Updates</h3>
+          <ul class="support-list">
+            <li><strong>Moon Council Briefing</strong><p class="muted">Strategic alignment at 21:00 UTC. Keep notes concise.</p></li>
+            <li><strong>Ops Signal</strong><p class="muted">Harbor patrol coverage has shifted to east perimeter.</p></li>
+            <li><strong>Lore Dispatch</strong><p class="muted">New archive snippets added for the Glass Frontier chapter.</p></li>
+          </ul>
+        </section>
+        <section class="card home-support-card tier-3">
+          <h3>Top Contributors</h3>
+          <ul class="contributors-list">${contributors}</ul>
+        </section>
+        <section class="card home-support-card recruiter-teaser tier-3">
+          <h3>Recruiter HQ</h3>
+          <p class="muted">Review candidate signal quality and move high-potential talent to your short list.</p>
+          <a class="pill-btn" href="${linkFor('/recruiter-console')}">Open Recruiter Console</a>
+        </section>
+      </aside>
+    </section>
+
+    <div class="home-chat-inline">
+      <section class="card home-chat-panel tier-2">
+        <h3>Strategic AI Relay</h3>
+        <p class="muted">Request concise guidance for your next mission thread.</p>
+        <div id="home-chat-log" class="conversation-log home-chat-log">
+          ${chatMessages || '<p class="muted">No messages yet. Send one to begin.</p>'}
+        </div>
+        <form id="home-chat-form" class="arena-input" style="margin-top:10px;">
+          <input id="home-chat-input" name="message" placeholder="Type your message..." ${state.homeChat.pending ? 'disabled' : ''} />
+          <button class="pill-btn cta-primary" type="submit" ${state.homeChat.pending ? 'disabled' : ''}>${state.homeChat.pending ? 'Sending...' : 'Send'}</button>
+        </form>
+        ${state.homeChat.error ? `<p class="muted" style="color:#ff7b7b;margin-top:8px;" role="alert">${escapeHtml(state.homeChat.error)}</p>` : ''}
+      </section>
+    </div>
   `;
 }
 
@@ -1706,6 +1873,7 @@ function setMode(nextMode) {
 function renderLayout(path, key, pageHtml) {
   const [title, subtitle] = pageTitle(key);
   document.body.classList.toggle('mode-roleplay', state.mode === 'roleplay');
+  const hideDefaultHeader = key === 'home';
 
   const statusMarkup = state.statusMessage
     ? `<p class="status-banner status-${state.statusMessage.tone}" role="status">${escapeHtml(state.statusMessage.message)}</p>`
@@ -1738,12 +1906,14 @@ function renderLayout(path, key, pageHtml) {
       </aside>
 
       <main class="main-content panel">
-        <section class="main-header">
-          <h1>${title}</h1>
-          <p>${subtitle}</p>
-        </section>
+        ${hideDefaultHeader ? '' : `
+          <section class="main-header">
+            <h1>${title}</h1>
+            <p>${subtitle}</p>
+          </section>
+        `}
         ${statusMarkup}
-        <section style="margin-top:14px;">${pageHtml}</section>
+        <section style="margin-top:${hideDefaultHeader ? '0' : '14px'};">${pageHtml}</section>
       </main>
 
       <aside class="right-sidebar panel">${rightSidebar()}</aside>
