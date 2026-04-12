@@ -1,4 +1,5 @@
-import { getUserFromSessionToken } from "../services/authService.js";
+import { getSessionWithUser } from "../models/userStore.js";
+import { getUserFromSessionToken, isRecentAuth } from "../services/authService.js";
 
 export async function requireAuth(req, res, next) {
   const authHeader = req.headers.authorization || "";
@@ -12,5 +13,28 @@ export async function requireAuth(req, res, next) {
 
   console.log("[auth] requireAuth success", { userId: user.id, email: user.email });
   req.user = user;
+  req.sessionToken = sessionToken;
+  return next();
+}
+
+export async function requireRecentReauth(req, res, next) {
+  const authHeader = req.headers.authorization || "";
+  const sessionToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+  if (!sessionToken) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const session = await getSessionWithUser(sessionToken);
+  if (!session) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  if (!isRecentAuth(session)) {
+    return res.status(403).json({
+      error: "Re-authentication required for this action.",
+      reauth_required: true,
+    });
+  }
+
   return next();
 }

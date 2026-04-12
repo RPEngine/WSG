@@ -1464,15 +1464,9 @@ async function handleGoogleCredentialResponse(response, formName) {
   try {
     const result = await apiRequest('/auth/google', {
       method: 'POST',
-      body: JSON.stringify({ credential }),
+      body: JSON.stringify({ idToken: credential }),
     });
-    setAuthSession(result);
-    setFormMessage(formName, 'Google sign-in successful.', 'success');
-    setStatusMessage('Google sign-in successful.', 'success');
-    state.membersLoaded = false;
-    setTimeout(() => {
-      location.hash = '/profile';
-    }, 200);
+    await finalizeSignInResult(result, formName);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to sign in with Google right now.';
     setFormMessage(formName, message, 'error');
@@ -1481,6 +1475,31 @@ async function handleGoogleCredentialResponse(response, formName) {
     state.authForms[formName].loading = false;
     render();
   }
+}
+
+async function finalizeSignInResult(result, formName) {
+  if (result?.mfa_required) {
+    const code = window.prompt('Enter your MFA code to finish sign-in:') || '';
+    const mfaResult = await apiRequest('/auth/mfa/verify', {
+      method: 'POST',
+      body: JSON.stringify({
+        mfa_challenge_token: result?.mfa_challenge_token,
+        code,
+      }),
+    });
+    setAuthSession(mfaResult);
+    setFormMessage(formName, 'MFA verified. Login successful.', 'success');
+    setStatusMessage('MFA verified. Login successful.', 'success');
+  } else {
+    setAuthSession(result);
+    setFormMessage(formName, 'Login successful.', 'success');
+    setStatusMessage('Login successful.', 'success');
+  }
+
+  state.membersLoaded = false;
+  setTimeout(() => {
+    location.hash = '/profile';
+  }, 200);
 }
 
 function initializeGoogleAuth(routeKey) {
@@ -2322,14 +2341,8 @@ async function render() {
       try {
         const result = await apiRequest('/auth/login', { method: 'POST', body: JSON.stringify(payload) });
         console.log('[auth:frontend] login server response', result);
-        setAuthSession(result);
+        await finalizeSignInResult(result, 'login');
         console.log('[auth:frontend] login success', { userId: result?.user?.id, email: result?.user?.email });
-        setFormMessage('login', 'Login successful.', 'success');
-        setStatusMessage('Login successful.', 'success');
-        state.membersLoaded = false;
-        setTimeout(() => {
-          location.hash = '/profile';
-        }, 200);
       } catch (error) {
         console.warn('[auth:frontend] login server response error', error);
         console.warn('[auth:frontend] login failure', { identifier: payload.identifier, message: error instanceof Error ? error.message : String(error) });
