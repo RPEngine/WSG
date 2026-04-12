@@ -123,6 +123,11 @@ const state = {
     pending: false,
     error: '',
   },
+  shell: {
+    activeUtilityTab: 'connections',
+    selectedConversationId: '',
+    chatPaneState: 'closed',
+  },
   statusMessage: null,
   onboarding: {
     starterModalOpen: false,
@@ -563,64 +568,118 @@ async function requestHomeAssistantReply(userMessage) {
   return content;
 }
 
-function rightSidebar() {
-  const onlineConnections = state.network.connections.slice(0, 6);
-  const onlineItems = onlineConnections.length
-    ? onlineConnections.map((connection) => `
+function getConnectionDisplayName(connection) {
+  return connection?.displayName || connection?.username || 'Guild Member';
+}
+
+function selectedConnection() {
+  return state.network.connections.find((connection) => connection.id === state.shell.selectedConversationId)
+    || state.network.connections.find((connection) => connection.id === state.directChat.activeConnectionId)
+    || null;
+}
+
+function utilityPane() {
+  const connections = state.network.connections || [];
+  const selectedConversationId = state.shell.selectedConversationId || state.directChat.activeConnectionId || '';
+  const filteredConnections = connections
+    .filter((connection) => getConnectionDisplayName(connection).toLowerCase().includes((state.network.searchTerm || '').toLowerCase()));
+
+  const connectionItems = filteredConnections.length
+    ? filteredConnections.map((connection) => `
       <li>
         <div class="rail-identity">
           ${avatarMarkup(connection, 'md')}
           <div>
-            <strong>${escapeHtml(connection.displayName || connection.username)}</strong>
+            <strong>${escapeHtml(getConnectionDisplayName(connection))}</strong>
             <p class="muted">${escapeHtml(connection.role || 'Guild Member')}</p>
           </div>
         </div>
-        <span class="rail-online-dot" aria-label="Online"></span>
-      </li>
-    `).join('')
-    : '<li><p class="muted">No guildmates online right now.</p></li>';
-
-  const conversationItems = onlineConnections.length
-    ? onlineConnections.slice(0, 4).map((connection, index) => `
-      <li class="${index === 0 ? 'is-active' : ''}">
-        <div>
-          <strong>${escapeHtml(connection.displayName || connection.username)}</strong>
-          <p class="muted">${escapeHtml(index === 0 ? 'Ready for your next briefing?' : 'Standing by in command chat.')}</p>
+        <div class="rail-actions">
+          <button class="pill-btn open-global-chat-btn" data-connection-id="${escapeAttr(connection.id)}">Message</button>
+          <a class="pill-btn" href="${linkFor(`/members/${connection.id}`)}">View Profile</a>
         </div>
-        <span class="muted">${index === 0 ? 'Now' : `${index + 6}m`}</span>
       </li>
     `).join('')
-    : '<li><p class="muted">No open conversations yet.</p></li>';
+    : '<li><p class="muted">No matching connections.</p></li>';
 
-  const activeChatName = onlineConnections[0]?.displayName || onlineConnections[0]?.username || 'Guild Channel';
+  const conversationItems = connections.length
+    ? connections.map((connection) => {
+      const preview = connection.id === state.directChat.activeConnectionId && state.directChat.messages.length
+        ? state.directChat.messages[state.directChat.messages.length - 1].content
+        : 'Ready for your next briefing.';
+      const unreadCount = Number(connection.unreadCount || 0);
+      return `
+        <li class="global-conversation-item ${selectedConversationId === connection.id ? 'is-active' : ''}" data-connection-id="${escapeAttr(connection.id)}">
+          <div>
+            <strong>${escapeHtml(getConnectionDisplayName(connection))}</strong>
+            <p class="muted">${escapeHtml(preview.slice(0, 64))}</p>
+          </div>
+          ${unreadCount ? `<span class="unread-dot">${unreadCount}</span>` : ''}
+        </li>
+      `;
+    }).join('')
+    : '<li><p class="muted">No active conversations yet.</p></li>';
 
   return `
-    <section class="social-rail">
-      <div class="social-rail-block">
-        <h3>Friends Online</h3>
-        <ul class="social-list">${onlineItems}</ul>
+    <section class="global-utility-pane">
+      <div class="utility-tab-switcher">
+        <button type="button" class="utility-tab-btn ${state.shell.activeUtilityTab === 'connections' ? 'active' : ''}" data-pane-tab="connections">Connections</button>
+        <button type="button" class="utility-tab-btn ${state.shell.activeUtilityTab === 'chat' ? 'active' : ''}" data-pane-tab="chat">Chat</button>
       </div>
-      <div class="social-rail-block">
-        <label class="rail-search">
-          <span class="muted">Chat Search</span>
-          <input type="search" placeholder="Search conversations" />
-        </label>
-      </div>
-      <div class="social-rail-block">
-        <h4>Conversations</h4>
-        <ul class="conversation-compact-list">${conversationItems}</ul>
-      </div>
-      <section class="active-chat-dock">
-        <div class="active-chat-head">
-          <strong>${escapeHtml(activeChatName)}</strong>
-          <span class="muted">Active</span>
+      ${state.shell.activeUtilityTab === 'connections' ? `
+        <div class="social-rail-block">
+          <h3>Connections</h3>
+          <form id="global-connections-search-form" class="rail-search">
+            <input id="global-connections-search-input" type="search" value="${escapeAttr(state.network.searchTerm || '')}" placeholder="Search connections" />
+          </form>
+          <ul class="social-list">${connectionItems}</ul>
         </div>
-        <p class="muted">Moon gate is clear. Ready to move when you are.</p>
-        <form class="active-chat-form">
-          <input type="text" value="" placeholder="Send a quick reply..." />
-          <button class="pill-btn cta-primary" type="button">Send</button>
+      ` : `
+        <div class="social-rail-block">
+          <h3>Conversations</h3>
+          <ul class="conversation-compact-list">${conversationItems}</ul>
+        </div>
+      `}
+    </section>
+  `;
+}
+
+function globalChatPane() {
+  if (!state.currentUser || state.shell.chatPaneState === 'closed') {
+    return '';
+  }
+  const activeConnection = selectedConnection();
+  if (!activeConnection) {
+    return '';
+  }
+  const isMinimized = state.shell.chatPaneState === 'minimized';
+  const messagesMarkup = (state.directChat.messages || [])
+    .map((message) => `
+      <article class="message ${message.senderId === state.currentUser?.id ? 'user' : 'system'}">
+        <div class="message-label">${message.senderId === state.currentUser?.id ? 'You' : escapeHtml(getConnectionDisplayName(activeConnection))}</div>
+        <p>${escapeHtml(message.content)}</p>
+      </article>
+    `).join('');
+
+  return `
+    <section class="global-chat-dock panel ${isMinimized ? 'is-minimized' : ''}">
+      <header class="global-chat-head">
+        <div class="rail-identity">
+          ${avatarMarkup(activeConnection, 'md')}
+          <strong>${escapeHtml(getConnectionDisplayName(activeConnection))}</strong>
+        </div>
+        <div class="chat-window-actions">
+          <button class="icon-btn" type="button" id="toggle-chat-pane-btn">${isMinimized ? '▢' : '—'}</button>
+          <button class="icon-btn" type="button" id="close-chat-pane-btn">×</button>
+        </div>
+      </header>
+      ${isMinimized ? '' : `
+        <div class="conversation-log global-chat-log">${messagesMarkup || '<p class="muted">No messages yet.</p>'}</div>
+        <form id="global-chat-form" class="active-chat-form">
+          <input id="global-chat-input" type="text" placeholder="Send a quick reply..." />
+          <button class="pill-btn cta-primary" type="submit">Send</button>
         </form>
-      </section>
+      `}
     </section>
   `;
 }
@@ -1366,6 +1425,7 @@ async function loadDirectChat(connectionId) {
   if (!connectionId) {
     state.directChat.messages = [];
     state.directChat.activeConnectionId = '';
+    state.shell.selectedConversationId = '';
     return;
   }
   state.directChat.loading = true;
@@ -1373,6 +1433,7 @@ async function loadDirectChat(connectionId) {
   try {
     const data = await apiRequest(`/chats/direct/${connectionId}`);
     state.directChat.activeConnectionId = connectionId;
+    state.shell.selectedConversationId = connectionId;
     state.directChat.messages = data.thread?.messages || [];
     setStatusMessage('Direct chat opened.', 'success');
   } catch (error) {
@@ -1583,7 +1644,55 @@ function attachProfileEditHandler() {
     button.addEventListener('click', async () => {
       const connectionId = button.getAttribute('data-connection-id');
       await loadDirectChat(connectionId);
+      state.shell.selectedConversationId = connectionId || '';
+      state.shell.chatPaneState = 'open';
+      state.shell.activeUtilityTab = 'chat';
       render();
+    });
+  });
+
+  document.querySelectorAll('.open-global-chat-btn').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const connectionId = button.getAttribute('data-connection-id');
+      if (!connectionId) return;
+      await loadDirectChat(connectionId);
+      state.shell.selectedConversationId = connectionId;
+      state.shell.chatPaneState = 'open';
+      state.shell.activeUtilityTab = 'chat';
+      render();
+    });
+  });
+
+  document.querySelectorAll('.global-conversation-item').forEach((item) => {
+    item.addEventListener('click', async () => {
+      const connectionId = item.getAttribute('data-connection-id');
+      if (!connectionId) return;
+      await loadDirectChat(connectionId);
+      state.shell.selectedConversationId = connectionId;
+      state.shell.chatPaneState = 'open';
+      render();
+    });
+  });
+
+  const globalConnectionsSearchForm = document.getElementById('global-connections-search-form');
+  if (globalConnectionsSearchForm) {
+    globalConnectionsSearchForm.onsubmit = (event) => event.preventDefault();
+  }
+  const globalConnectionsSearchInput = document.getElementById('global-connections-search-input');
+  if (globalConnectionsSearchInput) {
+    globalConnectionsSearchInput.oninput = () => {
+      state.network.searchTerm = String(globalConnectionsSearchInput.value || '').trim();
+      render();
+    };
+  }
+
+  document.querySelectorAll('.utility-tab-btn').forEach((button) => {
+    button.addEventListener('click', () => {
+      const nextTab = button.getAttribute('data-pane-tab');
+      if (nextTab === 'connections' || nextTab === 'chat') {
+        state.shell.activeUtilityTab = nextTab;
+        render();
+      }
     });
   });
 
@@ -1606,6 +1715,44 @@ function attachProfileEditHandler() {
       } catch (error) {
         setStatusMessage(error instanceof Error ? error.message : 'Chat unavailable.', 'error');
       }
+    };
+  }
+
+  const globalChatForm = document.getElementById('global-chat-form');
+  if (globalChatForm) {
+    globalChatForm.onsubmit = async (event) => {
+      event.preventDefault();
+      if (!state.directChat.activeConnectionId) return;
+      const input = document.getElementById('global-chat-input');
+      const content = String(input?.value || '').trim();
+      if (!content) return;
+      try {
+        await apiRequest(`/chats/direct/${state.directChat.activeConnectionId}/messages`, {
+          method: 'POST',
+          body: JSON.stringify({ content }),
+        });
+        if (input) input.value = '';
+        await loadDirectChat(state.directChat.activeConnectionId);
+        render();
+      } catch (error) {
+        setStatusMessage(error instanceof Error ? error.message : 'Chat unavailable.', 'error');
+      }
+    };
+  }
+
+  const toggleChatPaneButton = document.getElementById('toggle-chat-pane-btn');
+  if (toggleChatPaneButton) {
+    toggleChatPaneButton.onclick = () => {
+      state.shell.chatPaneState = state.shell.chatPaneState === 'minimized' ? 'open' : 'minimized';
+      render();
+    };
+  }
+
+  const closeChatPaneButton = document.getElementById('close-chat-pane-btn');
+  if (closeChatPaneButton) {
+    closeChatPaneButton.onclick = () => {
+      state.shell.chatPaneState = 'closed';
+      render();
     };
   }
 
@@ -1893,6 +2040,9 @@ function renderLayout(path, key, pageHtml) {
       </header>
 
       <aside class="left-sidebar panel ${key === 'home' ? 'home-left-sidebar' : ''}">
+        <div class="left-pane-brand">
+          <p class="muted">Command Navigation</p>
+        </div>
         <ul class="nav-list">
           ${navItems.map(([label, target]) => `<li><a href="${linkFor(target)}" class="${path === target ? 'active' : ''}">${label}</a></li>`).join('')}
         </ul>
@@ -1909,7 +2059,8 @@ function renderLayout(path, key, pageHtml) {
         <section style="margin-top:${hideDefaultHeader ? '0' : '14px'};">${pageHtml}</section>
       </main>
 
-      <aside class="right-sidebar panel ${key === 'home' ? 'home-right-sidebar' : ''}">${rightSidebar()}</aside>
+      <aside class="right-sidebar panel ${key === 'home' ? 'home-right-sidebar' : ''}">${utilityPane()}</aside>
+      ${globalChatPane()}
     </div>
     ${starterScenarioModalMarkup()}
   `;
@@ -1971,7 +2122,8 @@ async function render() {
   if (path === '/profile' || path.startsWith('/members/')) {
     await loadProfileForRoute(path);
   }
-  if (['/profile', '/arena', '/recruiter-console', '/profile/direct-chat'].includes(path)) {
+  const isPublicRoute = ['/', '/login', '/signup'].includes(path);
+  if (state.currentUser && !isPublicRoute) {
     await loadConnections();
   }
   if (path === '/recruiter-console' || path === '/members') {
