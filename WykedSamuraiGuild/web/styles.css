@@ -442,6 +442,21 @@ body {
   align-content: start;
 }
 
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.skill-tag {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--ring);
+  background: var(--accent-soft);
+  font-size: 0.82rem;
+}
+
 .compact-list li {
   align-items: center;
 }
@@ -474,17 +489,17 @@ body {
 }
 
 .arena-layout {
+  grid-template-columns: 280px minmax(0, 1fr) 320px;
+}
+
+.workspace-layout {
   display: grid;
   gap: 12px;
-  grid-template-columns: 300px minmax(0, 1fr) 280px;
+  grid-template-columns: 260px minmax(0, 1fr) 320px;
 }
 
-.arena-panel {
+.workspace-col {
   min-height: 620px;
-}
-
-.arena-trials,
-.arena-status {
   overflow: auto;
 }
 
@@ -640,11 +655,11 @@ body {
 }
 
 @media (max-width: 1400px) {
-  .arena-layout {
+  .workspace-layout {
     grid-template-columns: 260px minmax(0, 1fr);
   }
 
-  .arena-status {
+  .workspace-layout .workspace-col:last-child {
     grid-column: 1 / -1;
     min-height: auto;
   }
@@ -655,11 +670,11 @@ body {
     grid-template-columns: 1fr;
   }
 
-  .arena-layout {
+  .workspace-layout {
     grid-template-columns: 1fr;
   }
 
-  .arena-panel {
+  .workspace-col {
     min-height: auto;
   }
 }

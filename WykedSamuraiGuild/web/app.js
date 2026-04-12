@@ -452,10 +452,10 @@ function pageTitle(key) {
     arena: ['Trial Arena', 'Run starter leadership Trials and prepare for live simulation loops.'],
     guild: ['Guild World', 'Story streams, locations, and social immersion in one space.'],
     members: ['Guild Members', 'Discover member profiles and current contribution footprint.'],
-    profile: ['Profile Hub', 'Your authenticated command center for profile, modes, network, and chat.'],
-    directChat: ['Direct Chat', 'One-to-one chat with your Connections.'],
-    scenarioChat: ['Scenario Chat', 'Guided roleplay communications tied to a scenario.'],
-    areaChat: ['Area Chat', 'Shared roleplay room chat for your current area.'],
+    profile: ['Profile Hub', 'Identity-focused profile details, activity snapshot, and quick connection actions.'],
+    directChat: ['Direct Chat', 'Messaging now lives in dedicated collaboration rails outside Profile Hub.'],
+    scenarioChat: ['Scenario Chat', 'Scenario messaging for active Arena sessions.'],
+    areaChat: ['Area Chat', 'Shared location-based roleplay chat stream.'],
     login: ['Log In', 'Access your guild account.'],
     signup: ['Create Account', 'Join Wyked Samurai Guild.'],
     recruiter: ['Recruiter Console', 'Talent intelligence for strategic hiring conversations.'],
@@ -474,6 +474,66 @@ function escapeHtml(value) {
 
 function getActiveTrial() {
   return STARTER_TRIALS.find((trial) => trial.id === state.arena.activeTrialId) || null;
+}
+
+function splitSkills(skills) {
+  if (Array.isArray(skills)) {
+    return skills.filter(Boolean);
+  }
+  if (typeof skills === 'string') {
+    return skills.split(',').map((item) => item.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+function layoutColumns({ className = '', left = '', center = '', right = '' }) {
+  return `
+    <section class="workspace-layout ${className}">
+      <aside class="workspace-col card">${left}</aside>
+      <section class="workspace-col card">${center}</section>
+      <aside class="workspace-col card">${right}</aside>
+    </section>
+  `;
+}
+
+function messagingRail({ title = 'Messaging Rail', description = '', includeAreaChat = false }) {
+  const connectionRows = state.network.connections.length
+    ? state.network.connections.slice(0, 8).map((connection) => `
+      <li>
+        <div>
+          <strong>${escapeHtml(connection.displayName || connection.username)}</strong>
+          <p class="muted" style="margin:4px 0 0;">${escapeHtml(connection.role || 'member')}</p>
+        </div>
+        <button class="pill-btn open-direct-chat-btn" data-connection-id="${escapeAttr(connection.id)}">Message</button>
+      </li>
+    `).join('')
+    : '<li><span class="muted">No connections yet.</span></li>';
+
+  const directChatMessages = state.directChat.messages
+    .map((message) => `
+      <article class="message ${message.senderId === state.currentUser?.id ? 'user' : 'system'}">
+        <div class="message-label">${message.senderId === state.currentUser?.id ? 'You' : 'Connection'}</div>
+        <p>${escapeHtml(message.content)}</p>
+      </article>
+    `).join('');
+
+  return `
+    <h3>${title}</h3>
+    ${description ? `<p class="muted">${escapeHtml(description)}</p>` : ''}
+    <h4>Connections</h4>
+    <ul class="list compact-list">${connectionRows}</ul>
+    <h4 style="margin-top:12px;">Direct Messaging</h4>
+    <div id="direct-chat-log" class="conversation-log home-chat-log">
+      ${state.directChat.activeConnectionId
+    ? (directChatMessages || '<p class="muted">No messages yet.</p>')
+    : '<p class="muted">Select a connection to start messaging.</p>'}
+    </div>
+    <form id="direct-chat-form" class="arena-input" style="margin-top:10px;">
+      <input id="direct-chat-input" placeholder="Type a direct message..." ${state.directChat.activeConnectionId ? '' : 'disabled'} />
+      <button class="pill-btn" type="submit" ${state.directChat.activeConnectionId ? '' : 'disabled'}>Send</button>
+    </form>
+    ${includeAreaChat ? '<a class="pill-btn" href="#/profile/area-chat" style="margin-top:10px;display:inline-flex;">Open Area Chat Route</a>' : ''}
+  `;
 }
 
 
@@ -511,7 +571,7 @@ function rightSidebar() {
   const networkItems = state.network.connections.slice(0, 5).map((connection) => `<span>${escapeHtml(connection.displayName || connection.username)}</span><span class="muted">Connected</span>`);
   return `
     ${card('Connections', list(networkItems.length ? networkItems : ['<span>No active connections yet.</span><span class="muted">Build your network</span>']))}
-    ${card('Messaging Presence', '<p class="muted">Direct chats are available from Profile Hub. Roleplay channels are in Scenario/Area chat.</p>')}
+    ${card('Messaging Presence', '<p class="muted">Direct chats are available in the messaging rail and recruiter console. Scenario chat is in Arena.</p>')}
     ${card('AI Connection', '<button id="check-ai-connection" class="pill-btn">Check Hugging Face</button><p id="ai-connection-result" class="muted" style="margin-top:8px;">Waiting for check.</p>')}
   `;
 }
@@ -591,63 +651,79 @@ function arenaPage() {
     )
     .join('');
 
-  return `
-    <section class="arena-layout">
-      <aside class="arena-panel arena-trials card">
-        <h3>Starter Trial Library</h3>
-        <p class="muted">Select one of five starter Trials to initialize the Arena session.</p>
-        <div class="trial-list">
-          ${STARTER_TRIALS.map(
-            (trial) => `
-              <article class="trial-card ${trial.id === state.arena.activeTrialId ? 'active' : ''}">
-                <h4>${trial.title}</h4>
-                <p class="muted">${trial.description}</p>
-                <div class="trial-meta">
-                  <span>${trial.category}</span>
-                  <span>${trial.difficulty}</span>
-                </div>
-                <button class="pill-btn start-trial-btn" data-trial-id="${trial.id}">
-                  ${trial.id === state.arena.activeTrialId ? 'Restart Trial' : 'Start Trial'}
-                </button>
-              </article>
-            `
-          ).join('')}
-        </div>
-      </aside>
+  const scenarioMessages = (state.scenarioChat.messages || [])
+    .map((message) => `
+      <article class="message ${message.senderId === state.currentUser?.id ? 'user' : 'system'}">
+        <div class="message-label">${message.senderId === state.currentUser?.id ? 'You' : 'Participant'}</div>
+        <p>${escapeHtml(message.content)}</p>
+      </article>
+    `).join('');
 
-      <section class="arena-panel arena-conversation card">
-        <h3>Conversation Console</h3>
-        ${
-          hasActiveTrial
-            ? `<div id="arena-conversation-log" class="conversation-log">${chatMessages}</div>`
-            : '<div class="arena-empty"><h4>No Trial active</h4><p class="muted">Choose a starter Trial from the left panel to begin.</p></div>'
-        }
-        <form id="arena-input-form" class="arena-input">
-          <input id="arena-input" name="message" placeholder="${hasActiveTrial ? 'Enter your response to the Trial...' : 'Start a Trial to enable messaging'}" ${hasActiveTrial ? '' : 'disabled'} />
-          <button id="arena-send-btn" class="pill-btn" type="submit" ${(hasActiveTrial && !state.arena.pending) ? '' : 'disabled'}>${state.arena.pending ? 'Sending...' : 'Send'}</button>
-        </form>
-        ${state.arena.error ? `<p class="muted" style="color:#ff7b7b;margin-top:8px;" role="alert">${escapeHtml(state.arena.error)}</p>` : ''}
-      </section>
-
-      <aside class="arena-panel arena-status card">
-        <h3>Trial Status</h3>
-        ${
-          hasActiveTrial
-            ? `
-              <ul class="status-list">
-                <li><span class="muted">Title</span><strong>${activeTrial.title}</strong></li>
-                <li><span class="muted">Category</span><strong>${activeTrial.category}</strong></li>
-                <li><span class="muted">Difficulty</span><strong>${activeTrial.difficulty}</strong></li>
-                <li><span class="muted">Suggested Role</span><strong>${activeTrial.suggestedRole || 'Unspecified'}</strong></li>
-                <li><span class="muted">Pressure State</span><strong>Stable (placeholder)</strong></li>
-                <li><span class="muted">NPCs</span><strong>Stakeholder A, Stakeholder B (placeholder)</strong></li>
-              </ul>
-            `
-            : '<p class="muted">No active Trial yet. Status details will populate after you start one.</p>'
-        }
-      </aside>
-    </section>
-  `;
+  return layoutColumns({
+    className: 'arena-layout',
+    left: `
+      <h3>Starter Trial Library</h3>
+      <p class="muted">Left navigation for selecting Trial scenarios.</p>
+      <div class="trial-list">
+        ${STARTER_TRIALS.map(
+          (trial) => `
+            <article class="trial-card ${trial.id === state.arena.activeTrialId ? 'active' : ''}">
+              <h4>${trial.title}</h4>
+              <p class="muted">${trial.description}</p>
+              <div class="trial-meta">
+                <span>${trial.category}</span>
+                <span>${trial.difficulty}</span>
+              </div>
+              <button class="pill-btn start-trial-btn" data-trial-id="${trial.id}">
+                ${trial.id === state.arena.activeTrialId ? 'Restart Trial' : 'Start Trial'}
+              </button>
+            </article>
+          `
+        ).join('')}
+      </div>
+    `,
+    center: `
+      <h3>Scenario Briefing</h3>
+      <p class="muted">${state.mode === 'roleplay' ? 'Roleplay mode: immersive scenario lane.' : 'Professional mode: structured scenario lane.'}</p>
+      ${hasActiveTrial ? `<article class="feature"><h4 style="margin:0 0 6px;">${activeTrial.title}</h4><p style="margin:0;">${activeTrial.description}</p></article>` : ''}
+      ${
+  hasActiveTrial
+    ? `<div id="arena-conversation-log" class="conversation-log">${chatMessages}</div>`
+    : '<div class="arena-empty"><h4>No Trial active</h4><p class="muted">Choose a starter Trial from the left panel to begin.</p></div>'
+}
+      <form id="arena-input-form" class="arena-input">
+        <input id="arena-input" name="message" placeholder="${hasActiveTrial ? 'Enter your response to the Trial...' : 'Start a Trial to enable messaging'}" ${hasActiveTrial ? '' : 'disabled'} />
+        <button id="arena-send-btn" class="pill-btn" type="submit" ${(hasActiveTrial && !state.arena.pending) ? '' : 'disabled'}>${state.arena.pending ? 'Sending...' : 'Send'}</button>
+      </form>
+      ${state.arena.error ? `<p class="muted" style="color:#ff7b7b;margin-top:8px;" role="alert">${escapeHtml(state.arena.error)}</p>` : ''}
+    `,
+    right: `
+      <h3>Participants + Scenario Chat</h3>
+      <ul class="list compact-list">
+        ${(state.network.connections || []).slice(0, 6).map((connection) => `<li><span>${escapeHtml(connection.displayName || connection.username)}</span><span class="muted">${escapeHtml(connection.role || 'member')}</span></li>`).join('') || '<li><span class="muted">No participants connected.</span></li>'}
+      </ul>
+      <h4 style="margin-top:12px;">Scenario Chat</h4>
+      <div class="conversation-log home-chat-log">${scenarioMessages || '<p class="muted">No scenario chat messages yet.</p>'}</div>
+      <form id="scenario-chat-form" class="arena-input" style="margin-top:10px;">
+        <input id="scenario-chat-input" placeholder="Message participants..." />
+        <button class="pill-btn" type="submit">Send</button>
+      </form>
+      <h4 style="margin-top:14px;">Scenario Status</h4>
+      ${
+  hasActiveTrial
+    ? `
+            <ul class="status-list">
+              <li><span class="muted">Title</span><strong>${activeTrial.title}</strong></li>
+              <li><span class="muted">Category</span><strong>${activeTrial.category}</strong></li>
+              <li><span class="muted">Difficulty</span><strong>${activeTrial.difficulty}</strong></li>
+              <li><span class="muted">Suggested Role</span><strong>${activeTrial.suggestedRole || 'Unspecified'}</strong></li>
+              <li><span class="muted">Pressure State</span><strong>Stable (placeholder)</strong></li>
+            </ul>
+          `
+    : '<p class="muted">No active Trial yet. Status details will populate after you start one.</p>'
+}
+    `,
+  });
 }
 
 function guildPage() {
@@ -697,45 +773,10 @@ function profilePage() {
     return card('Profile Hub', '<p class="muted">Please log in first.</p>');
   }
 
-  const recruiterVisible = profile.role === 'recruiter' || profile.role === 'employer';
-  const connectionRows = state.network.connections.length
-    ? state.network.connections.map((connection) => `
-        <li>
-          <div>
-            <strong>${escapeHtml(connection.displayName || connection.username)}</strong>
-            <p class="muted" style="margin:4px 0 0;">${escapeHtml(connection.role || 'member')} · ${escapeHtml(connection.organizationName || 'No guild listed')}</p>
-          </div>
-          <div class="actions">
-            <button class="pill-btn open-direct-chat-btn" data-connection-id="${escapeAttr(connection.id)}">Chat</button>
-            <button class="pill-btn remove-connection-btn" data-connection-id="${escapeAttr(connection.id)}">Remove Connection</button>
-          </div>
-        </li>
-      `).join('')
-    : '<li><span class="muted">No Connections yet. Search members and add your first connection.</span></li>';
-
-  const candidateRows = state.network.results.length
-    ? state.network.results.map((member) => `
-        <li>
-          <div>
-            <strong>${escapeHtml(member.displayName || member.username)}</strong>
-            <p class="muted" style="margin:4px 0 0;">${escapeHtml(member.role || 'member')} · ${escapeHtml(member.organizationName || 'No guild listed')}</p>
-          </div>
-          <div class="actions">
-            ${member.isConnected
-    ? '<span class="muted">Connected</span>'
-    : `<button class="pill-btn add-connection-btn" data-connection-id="${escapeAttr(member.id)}">Add Connection</button>`}
-          </div>
-        </li>
-      `).join('')
-    : '<li><span class="muted">Search for users by name, role, or guild to build your network.</span></li>';
-
-  const directChatMessages = state.directChat.messages
-    .map((message) => `
-      <article class="message ${message.senderId === state.currentUser?.id ? 'user' : 'system'}">
-        <div class="message-label">${message.senderId === state.currentUser?.id ? 'You' : 'Connection'}</div>
-        <p>${escapeHtml(message.content)}</p>
-      </article>
-    `).join('');
+  const skills = splitSkills(profile.skillsInterests);
+  const connectionPreview = state.network.connections.length
+    ? state.network.connections.slice(0, 4).map((connection) => `<li><span>${escapeHtml(connection.displayName || connection.username)}</span><span class="muted">${escapeHtml(connection.role || 'member')}</span></li>`).join('')
+    : '<li><span class="muted">No connections yet.</span></li>';
 
   return `
     <section class="feature profile-head profile-hub-head">
@@ -747,81 +788,58 @@ function profilePage() {
           <p class="muted" style="margin:0;">${escapeHtml(profile.role || 'member')} · ${escapeHtml(profile.organizationName || 'Independent')}</p>
         </div>
       </div>
-      <div class="actions"></div>
+      <div class="actions">
+        <a class="pill-btn" href="#/recruiter-console">Message</a>
+        <a class="pill-btn" href="#/members">Connect</a>
+      </div>
     </section>
     <section class="profile-hub-grid" style="margin-top:14px;">
       <div class="profile-hub-col">
         <section class="card">
-          <h3>Profile Setup</h3>
+          <h3>Identity</h3>
           <form id="profile-hub-form" class="form-stack">
             <p id="profile-hub-feedback" class="status-banner ${state.profileHub.message ? `status-${state.profileHub.tone}` : 'status-info'}" role="alert" aria-live="assertive">${escapeHtml(state.profileHub.message || 'Update and save your profile details here.')}</p>
-            <label>Legal Name<input name="legalName" value="${escapeAttr(profile.legalName || '')}" required /></label>
             <label>Display Name<input name="displayName" value="${escapeAttr(profile.displayName || '')}" required /></label>
-            <label>Email<input type="email" name="email" value="${escapeAttr(profile.email || '')}" required /></label>
-            <label>Role
+            <label>Role / Title
               <select name="role">
                 <option value="employee_member" ${profile.role === 'employee_member' ? 'selected' : ''}>Employee / Member</option>
                 <option value="employer" ${profile.role === 'employer' ? 'selected' : ''}>Employer</option>
                 <option value="recruiter" ${profile.role === 'recruiter' ? 'selected' : ''}>Recruiter</option>
               </select>
             </label>
-            <label>Organization / Guild Name<input name="organizationName" value="${escapeAttr(profile.organizationName || '')}" /></label>
+            <label>Organization<input name="organizationName" value="${escapeAttr(profile.organizationName || '')}" /></label>
             <label>Bio / About<textarea name="bio" rows="4" maxlength="500">${escapeHtml(profile.bio || '')}</textarea></label>
-            <label>Skills / Interests (comma-separated)<input name="skillsInterests" value="${escapeAttr((profile.skillsInterests || []).join(', '))}" /></label>
+            <label>Skills Tags (comma-separated)<input name="skillsInterests" value="${escapeAttr((profile.skillsInterests || []).join(', '))}" /></label>
             <button class="pill-btn" id="save-profile-hub-btn" type="submit" ${state.profileHub.saving ? 'disabled' : ''}>${state.profileHub.saving ? 'Saving Profile...' : 'Save Profile'}</button>
           </form>
-          <p class="muted">Trials completed: ${profile.trialCount} · Last active: ${formatDate(profile.lastActiveAt)}</p>
-        </section>
-        <section class="card">
-          <h3>Choose Your Mode</h3>
-          <div class="grid two">
-            <a class="pill-btn mode-nav-btn" href="#/app" data-mode="professional">Professional Mode</a>
-            <a class="pill-btn mode-nav-btn" href="#/arena" data-mode="roleplay">Roleplay Mode</a>
-            ${recruiterVisible ? '<a class="pill-btn" href="#/recruiter-console">Recruiter / Employer Mode</a>' : ''}
-          </div>
         </section>
       </div>
       <div class="profile-hub-col">
         <section class="card">
-          <h3>Connections Network</h3>
-          <form id="connection-search-form" class="actions" style="margin-bottom:10px;">
-            <input id="connection-search-input" placeholder="Search members..." value="${escapeAttr(state.network.searchTerm)}" />
-            <button class="pill-btn" type="submit">Search Network</button>
-          </form>
-          <h4>Browse Members</h4>
-          <ul class="list compact-list">${candidateRows}</ul>
-          <h4 style="margin-top:12px;">Current Connections</h4>
-          <ul class="list compact-list">${connectionRows}</ul>
+          <h3>Profile Snapshot</h3>
+          <p class="muted">Organization: ${escapeHtml(profile.organizationName || 'Independent')}</p>
+          <p class="muted">Role: ${escapeHtml(profile.role || 'member')}</p>
+          <p class="muted">Trials completed: ${profile.trialCount}</p>
+          <p class="muted">Last active: ${formatDate(profile.lastActiveAt)}</p>
+          <div class="tag-list">
+            ${skills.length ? skills.map((skill) => `<span class="skill-tag">${escapeHtml(skill)}</span>`).join('') : '<span class="muted">No skills tags added yet.</span>'}
+          </div>
         </section>
         <section class="card">
-          <h3>Direct Chat</h3>
-          <p class="muted">Select a connection to open chat.</p>
-          <div id="direct-chat-log" class="conversation-log home-chat-log">
-            ${state.directChat.activeConnectionId
-    ? (directChatMessages || '<p class="muted">No messages yet in this conversation.</p>')
-    : '<p class="muted">No conversation selected.</p>'}
-          </div>
-          <form id="direct-chat-form" class="arena-input" style="margin-top:10px;">
-            <input id="direct-chat-input" placeholder="Type a direct message..." ${state.directChat.activeConnectionId ? '' : 'disabled'} />
-            <button class="pill-btn" type="submit" ${state.directChat.activeConnectionId ? '' : 'disabled'}>Send</button>
-          </form>
+          <h3>Connections Preview</h3>
+          <ul class="list compact-list">${connectionPreview}</ul>
         </section>
       </div>
       <div class="profile-hub-col">
         <section class="card">
-          <h3>Roleplay Communications</h3>
-          <p class="muted">Choose your roleplay communication channel.</p>
-          <div class="actions">
-            <a class="pill-btn" href="#/profile/scenario-chat" id="open-scenario-chat">Scenario Chat</a>
-            <a class="pill-btn" href="#/profile/area-chat" id="open-area-chat">Area Chat</a>
-          </div>
-          <p class="muted" style="margin-top:10px;">Scenario Chat is tied to guided RP trials. Area Chat is tied to shared rooms.</p>
-        </section>
-        <section class="card">
-          <h3>Status Panel</h3>
+          <h3>Profile Stats</h3>
           <p class="muted">Joined: ${formatDate(profile.createdAt)}</p>
           <p class="muted">Updated: ${formatDate(profile.updatedAt)}</p>
-          <p class="muted">Connection count: ${state.network.connections.length}</p>
+          <p class="muted">Connections: ${state.network.connections.length}</p>
+        </section>
+        <section class="card">
+          <h3>Mode Styling</h3>
+          <p class="muted">Professional and Roleplay modes share structure but use different visual themes.</p>
         </section>
       </div>
     </section>
@@ -852,20 +870,19 @@ function roleplayChannelPage(type) {
         <button class="pill-btn" type="submit">Send</button>
       </form>
       <div class="actions" style="margin-top:10px;">
-        <a class="pill-btn" href="#/profile">Back to Profile Hub</a>
+        <a class="pill-btn" href="#/arena">Back to Arena Workspace</a>
       </div>
     </section>
   `;
 }
 
 function directChatPage() {
-  return `
-    <section class="card">
-      <h3>Direct Chat</h3>
-      <p class="muted">Use the Profile Hub Connections section to select a user and open direct chat.</p>
-      <a class="pill-btn" href="#/profile">Back to Profile Hub</a>
-    </section>
-  `;
+  return layoutColumns({
+    className: 'recruiter-layout',
+    left: `<h3>Messaging Entry</h3><p class="muted">Direct messaging has moved out of Profile Hub.</p>`,
+    center: `<h3>Conversation Context</h3><p class="muted">Select a connection from the right messaging rail.</p>`,
+    right: messagingRail({ title: 'Right-side Messaging Rail', description: 'Direct chat and network actions.' }),
+  });
 }
 
 function scenarioChatPage() {
@@ -980,7 +997,37 @@ function signupPage() {
 }
 
 function recruiterPage() {
-  return card('Recruiter Console', '<p class="muted">Recruiter workflows are intentionally out of scope for this phase.</p>');
+  const profile = state.currentUser || {};
+  const insightsList = [
+    `Primary role fit: ${profile.role || 'member'}`,
+    `Organization: ${profile.organizationName || 'Independent'}`,
+    `Active connections: ${state.network.connections.length}`,
+  ];
+
+  return layoutColumns({
+    className: 'recruiter-layout',
+    left: `
+      <h3>Console Navigation</h3>
+      <ul class="list compact-list">
+        <li><span>Candidate Insights</span><span class="muted">Section</span></li>
+        <li><span>Recent Performance</span><span class="muted">Section</span></li>
+        <li><span>Participation Analytics</span><span class="muted">Section</span></li>
+        <li><span>Scenario Intelligence</span><span class="muted">Section</span></li>
+        <li><span>Guild Network Map</span><span class="muted">Section</span></li>
+      </ul>
+    `,
+    center: `
+      <h3>Recruiter Intelligence Core</h3>
+      <div class="grid two" style="margin-top:10px;">
+        ${card('Candidate Insights', list(insightsList.map((item) => `<span>${escapeHtml(item)}</span><span class="muted">Insight</span>`)))}
+        ${card('Recent Performance', list(['Trial execution consistency', 'Communication clarity trend', 'Stakeholder response quality'].map((item) => `<span>${item}</span><span class="muted">7d</span>`)))}
+        ${card('Participation Analytics', list(['Scenario participation depth', 'Team-thread contribution', 'Response latency profile'].map((item) => `<span>${item}</span><span class="muted">Metric</span>`)))}
+        ${card('Scenario Intelligence', list(['Top pressure scenarios', 'Risk behavior heatmap', 'Coaching recommendation stack'].map((item) => `<span>${item}</span><span class="muted">AI</span>`)))}
+      </div>
+      ${card('Guild Network Map', '<p class="muted">Network topology preview: member clusters, connectors, and high-trust nodes (prototype visualization placeholder).</p>')}
+    `,
+    right: messagingRail({ title: 'Messaging + Network Panel', description: 'Recruiter communications and relationship activity.', includeAreaChat: true }),
+  });
 }
 
 function fallbackPage() {
@@ -1188,13 +1235,13 @@ function attachProfileEditHandler() {
       if (state.profileHub.saving) return;
       const formData = new FormData(profileHubForm);
       const payload = {
-        legalName: String(formData.get('legalName') || ''),
-        displayName: String(formData.get('displayName') || ''),
-        email: String(formData.get('email') || ''),
-        role: String(formData.get('role') || ''),
-        organizationName: String(formData.get('organizationName') || ''),
-        bio: String(formData.get('bio') || ''),
-        skillsInterests: String(formData.get('skillsInterests') || ''),
+        legalName: String(formData.get('legalName') || state.currentUser?.legalName || ''),
+        displayName: String(formData.get('displayName') || state.currentUser?.displayName || ''),
+        email: String(formData.get('email') || state.currentUser?.email || ''),
+        role: String(formData.get('role') || state.currentUser?.role || ''),
+        organizationName: String(formData.get('organizationName') || state.currentUser?.organizationName || ''),
+        bio: String(formData.get('bio') || state.currentUser?.bio || ''),
+        skillsInterests: String(formData.get('skillsInterests') || (state.currentUser?.skillsInterests || []).join(', ')),
       };
       state.profileHub.saving = true;
       setProfileHubMessage('Saving profile...', 'info');
@@ -1681,11 +1728,13 @@ async function render() {
   if (path === '/profile' || path.startsWith('/members/')) {
     await loadProfileForRoute(path);
   }
-  if (path === '/profile') {
+  if (['/profile', '/arena', '/recruiter-console', '/profile/direct-chat'].includes(path)) {
     await loadConnections();
-    await searchConnectionCandidates(state.network.searchTerm || '');
   }
-  if (path === '/profile/scenario-chat') {
+  if (path === '/recruiter-console' || path === '/members') {
+    await ensureMembersLoaded();
+  }
+  if (path === '/arena' || path === '/profile/scenario-chat') {
     await loadScenarioChat();
   }
   if (path === '/profile/area-chat') {
