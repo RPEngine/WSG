@@ -44,7 +44,9 @@ export async function createUser({
   role,
   organizationName = "",
   backupEmail = "",
-  passwordHash,
+  passwordHash = null,
+  authProvider = "local",
+  providerSubject = "",
 }) {
   const userId = crypto.randomUUID();
   const profileId = crypto.randomUUID();
@@ -53,10 +55,10 @@ export async function createUser({
   try {
     await client.query("BEGIN");
     const userInsert = await client.query(
-      `INSERT INTO users (id, legal_name, email, password_hash, role, organization_name, backup_email)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO users (id, legal_name, email, password_hash, role, organization_name, backup_email, auth_provider, provider_subject)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
-      [userId, legalName.trim(), email.trim(), passwordHash, role, organizationName.trim(), backupEmail.trim()],
+      [userId, legalName.trim(), email.trim().toLowerCase(), passwordHash, role, organizationName.trim(), backupEmail.trim(), authProvider, providerSubject],
     );
 
     await client.query(

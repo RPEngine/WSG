@@ -146,6 +146,9 @@ const ONBOARDING_NEW_USER_KEY = 'wsg-onboarding-new-user';
 const STARTER_SCENARIO_SEEN_PREFIX = 'wsg-starter-seen';
 const PASSWORD_POLICY_MESSAGE = 'Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a special character.';
 const PASSWORD_POLICY_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$/;
+const GOOGLE_CLIENT_ID_META_KEY = 'wsg-google-client-id';
+
+let googleInitialized = false;
 
 function linkFor(path) {
   return `#${path}`;
@@ -1269,6 +1272,8 @@ function loginPage() {
           <input name="password" type="password" autocomplete="current-password" required />
         </label>
         <button class="pill-btn" type="submit" id="login-submit-btn" ${state.authForms.login.loading ? 'disabled' : ''}>${state.authForms.login.loading ? 'Signing in...' : 'Log In'}</button>
+        <p class="muted" style="margin:8px 0 4px;">or</p>
+        <div id="google-login-button" aria-label="Continue with Google"></div>
       </form>
       <p class="muted">New here? <a href="#/signup">Create an account.</a></p>
     </section>
@@ -1338,6 +1343,8 @@ function signupPage() {
         <div class="actions">
           <button class="pill-btn cta-primary" type="submit" id="signup-submit-btn" ${state.authForms.signup.loading ? 'disabled' : ''}>${state.authForms.signup.loading ? 'Creating Account...' : 'Create Account'}</button>
         </div>
+        <p class="muted" style="margin:8px 0 4px;">or</p>
+        <div id="google-signup-button" aria-label="Continue with Google"></div>
       </form>
       <p class="muted">Already have an account? <a href="#/login">Log In</a></p>
     </section>
@@ -1415,6 +1422,97 @@ function recruiterPage() {
 
 function fallbackPage() {
   return card('Coming Soon', '<p class="muted">This route currently uses a placeholder shell to preserve navigation continuity.</p>');
+}
+
+function resolveGoogleClientId() {
+  const configuredMeta = document
+    .querySelector(`meta[name="${GOOGLE_CLIENT_ID_META_KEY}"]`)
+    ?.getAttribute('content');
+  return (configuredMeta || window.WSG_GOOGLE_CLIENT_ID || '').trim();
+}
+
+function renderGoogleButton(containerId) {
+  const google = window.google;
+  const container = document.getElementById(containerId);
+  if (!google?.accounts?.id || !container) {
+    return;
+  }
+  container.innerHTML = '';
+  google.accounts.id.renderButton(container, {
+    theme: 'outline',
+    size: 'large',
+    width: 320,
+    text: 'continue_with',
+    shape: 'pill',
+  });
+}
+
+async function handleGoogleCredentialResponse(response, formName) {
+  const credential = String(response?.credential || '').trim();
+  if (!credential) {
+    const message = 'Google sign-in did not return a valid credential.';
+    setFormMessage(formName, message, 'error');
+    setStatusMessage(message, 'error');
+    render();
+    return;
+  }
+
+  state.authForms[formName].loading = true;
+  setFormMessage(formName, 'Signing in with Google...', 'info');
+  setStatusMessage('Signing in with Google...', 'info');
+  render();
+  try {
+    const result = await apiRequest('/auth/google', {
+      method: 'POST',
+      body: JSON.stringify({ credential }),
+    });
+    setAuthSession(result);
+    setFormMessage(formName, 'Google sign-in successful.', 'success');
+    setStatusMessage('Google sign-in successful.', 'success');
+    state.membersLoaded = false;
+    setTimeout(() => {
+      location.hash = '/profile';
+    }, 200);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to sign in with Google right now.';
+    setFormMessage(formName, message, 'error');
+    setStatusMessage(message, 'error');
+  } finally {
+    state.authForms[formName].loading = false;
+    render();
+  }
+}
+
+function initializeGoogleAuth(routeKey) {
+  if (routeKey !== 'login' && routeKey !== 'signup') {
+    return;
+  }
+
+  const google = window.google;
+  if (!google?.accounts?.id) {
+    return;
+  }
+
+  const clientId = resolveGoogleClientId();
+  if (!clientId) {
+    return;
+  }
+
+  if (!googleInitialized) {
+    google.accounts.id.initialize({
+      client_id: clientId,
+      callback: (response) => {
+        const formName = location.hash === '#/signup' ? 'signup' : 'login';
+        handleGoogleCredentialResponse(response, formName);
+      },
+      auto_select: false,
+      cancel_on_tap_outside: true,
+    });
+    googleInitialized = true;
+  }
+
+  renderGoogleButton('google-login-button');
+  renderGoogleButton('google-signup-button');
 }
 
 function setAuthSession({ sessionToken, user }) {
@@ -2194,6 +2292,7 @@ async function render() {
   } else {
     renderLayout(path, route.key, pageHtml);
   }
+  initializeGoogleAuth(route.key);
 
   const loginForm = document.getElementById('login-form');
   if (loginForm) {

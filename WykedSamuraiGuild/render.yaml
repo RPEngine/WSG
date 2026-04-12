@@ -5,6 +5,9 @@ services:
     rootDir: server
     buildCommand: npm install
     startCommand: npm start
+    envVars:
+      - key: GOOGLE_CLIENT_ID
+        sync: false
 
   - type: static
     name: wyked-samurai-frontend

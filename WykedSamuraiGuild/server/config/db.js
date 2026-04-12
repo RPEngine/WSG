@@ -24,13 +24,30 @@ export async function initializeDatabase() {
       id UUID PRIMARY KEY,
       legal_name TEXT NOT NULL,
       email TEXT UNIQUE NOT NULL,
-      password_hash TEXT NOT NULL,
+      password_hash TEXT,
       role TEXT NOT NULL,
       organization_name TEXT NOT NULL DEFAULT '',
       backup_email TEXT NOT NULL DEFAULT '',
+      auth_provider TEXT NOT NULL DEFAULT 'local',
+      provider_subject TEXT NOT NULL DEFAULT '',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+  `);
+
+  await pool.query(`
+    ALTER TABLE users
+    ALTER COLUMN password_hash DROP NOT NULL;
+  `);
+
+  await pool.query(`
+    ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS auth_provider TEXT NOT NULL DEFAULT 'local';
+  `);
+
+  await pool.query(`
+    ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS provider_subject TEXT NOT NULL DEFAULT '';
   `);
 
   await pool.query(`
