@@ -627,34 +627,27 @@ function rightSidebar() {
 
 function homePage() {
   const displayName = state.currentUser?.displayName || 'Guild Member';
-  const chatMessages = state.homeChat.messages
-    .map(
-      (message) => `
-        <article class="message ${message.type}">
-          <div class="message-label">${message.type === 'user' ? 'You' : 'WSG AI'}</div>
-          <p>${escapeHtml(message.content)}</p>
-        </article>
-      `
-    )
-    .join('');
   const scenarioCards = [
     {
       title: 'Moon Harbor Intercept',
-      summary: 'Negotiate a ceasefire between two rival fleets before the trade corridor collapses.',
+      summary: 'Negotiate a ceasefire between rival fleets before the moonlane trade corridor collapses.',
       timeRemaining: '42m remaining',
-      visual: 'Fogline Harbor',
+      visual: 'Harbor Mistfront',
+      tone: 'harbor',
     },
     {
       title: 'Citadel Breach Council',
-      summary: 'Lead a cross-cell strategy session while resources are constrained and pressure escalates.',
+      summary: 'Lead a cross-cell strategy council while resources are constrained and command pressure escalates.',
       timeRemaining: '1h 12m remaining',
       visual: 'Glass Citadel',
+      tone: 'citadel',
     },
     {
       title: 'Nightwatch Supply Run',
-      summary: 'Stabilize logistics and morale after a surprise disruption during the midnight convoy.',
+      summary: 'Stabilize logistics and morale after a surprise disruption during the midnight convoy run.',
       timeRemaining: '23m remaining',
       visual: 'Iron Route',
+      tone: 'convoy',
     },
   ];
 
@@ -665,7 +658,8 @@ function homePage() {
         <div class="activity-avatar">${avatarMarkup(connection, 'md')}</div>
         <div>
           <strong>${escapeHtml(connection.displayName || connection.username)}</strong>
-          <p class="muted">${escapeHtml(connection.role || 'Guild Member')} coordinated a tactical response in the Night Forum.</p>
+          <p class="activity-role">${escapeHtml(connection.role || 'Guild Member')}</p>
+          <p class="muted">Shared a mission recap from the Night Forum and tagged the squad for follow-up.</p>
         </div>
         <span class="muted">${index === 0 ? '8m' : `${(index + 1) * 11}m`}</span>
       </li>
@@ -675,7 +669,8 @@ function homePage() {
         <div class="activity-avatar"><div class="avatar-md avatar-fallback">WS</div></div>
         <div>
           <strong>Guild Chronicle</strong>
-          <p class="muted">No recent activity yet. Coordinate your first mission to light up the feed.</p>
+          <p class="activity-role">Archivist Node</p>
+          <p class="muted">No recent roleplay updates yet. Enter a scenario to ignite the chronicle.</p>
         </div>
         <span class="muted">Now</span>
       </li>
@@ -695,21 +690,25 @@ function homePage() {
 
   return `
     <section class="home-hero tier-1">
-      <p class="home-kicker">Guild Command</p>
+      <p class="home-kicker">Moonlit Command</p>
       <h1>Welcome, ${escapeHtml(displayName)}</h1>
-      <p>Your moonlit operations hub is aligned. Review active scenarios, track guild momentum, and deploy your next move with focus.</p>
+      <p>Your watch begins under the silver moon. Track active operations, gather guild intel, and deploy where your presence shifts the story.</p>
+      <div class="home-hero-actions">
+        <button class="pill-btn cta-primary" type="button">Enter Mission Queue</button>
+        <a class="pill-btn home-secondary-action" href="${linkFor('/guild-world')}">Review Guild World</a>
+      </div>
     </section>
 
     <section class="home-body-grid">
       <div class="home-main-column">
         <section class="card home-section tier-2">
-          <div class="section-heading-row">
+          <div class="section-heading-row home-section-heading">
             <h3>Recommended Scenarios</h3>
           </div>
           <div class="scenario-card-stack">
             ${scenarioCards.map((scenario) => `
               <article class="scenario-spotlight-card">
-                <div class="scenario-spotlight-visual">
+                <div class="scenario-spotlight-visual is-${scenario.tone}">
                   <span>${scenario.visual}</span>
                 </div>
                 <div class="scenario-spotlight-content">
@@ -726,8 +725,8 @@ function homePage() {
         </section>
 
         <section class="card home-section tier-2">
-          <div class="section-heading-row">
-            <h3>Recent Guild Activity</h3>
+          <div class="section-heading-row home-section-heading">
+            <h3>Recent Roleplay</h3>
           </div>
           <ul class="guild-activity-list">${activityFeed}</ul>
         </section>
@@ -737,9 +736,9 @@ function homePage() {
         <section class="card home-support-card tier-3">
           <h3>Guild Updates</h3>
           <ul class="support-list">
-            <li><strong>Moon Council Briefing</strong><p class="muted">Strategic alignment at 21:00 UTC. Keep notes concise.</p></li>
-            <li><strong>Ops Signal</strong><p class="muted">Harbor patrol coverage has shifted to east perimeter.</p></li>
-            <li><strong>Lore Dispatch</strong><p class="muted">New archive snippets added for the Glass Frontier chapter.</p></li>
+            <li><strong>Moon Council Briefing</strong><p class="muted">Council alignment begins at 21:00 UTC.</p></li>
+            <li><strong>Ops Signal</strong><p class="muted">Harbor patrol shifted toward the east perimeter.</p></li>
+            <li><strong>Lore Dispatch</strong><p class="muted">Glass Frontier archive was expanded tonight.</p></li>
           </ul>
         </section>
         <section class="card home-support-card tier-3">
@@ -748,26 +747,11 @@ function homePage() {
         </section>
         <section class="card home-support-card recruiter-teaser tier-3">
           <h3>Recruiter HQ</h3>
-          <p class="muted">Review candidate signal quality and move high-potential talent to your short list.</p>
+          <p class="muted">Audit candidate signal quality and elevate high-potential operatives to shortlist.</p>
           <a class="pill-btn" href="${linkFor('/recruiter-console')}">Open Recruiter Console</a>
         </section>
       </aside>
     </section>
-
-    <div class="home-chat-inline">
-      <section class="card home-chat-panel tier-2">
-        <h3>Strategic AI Relay</h3>
-        <p class="muted">Request concise guidance for your next mission thread.</p>
-        <div id="home-chat-log" class="conversation-log home-chat-log">
-          ${chatMessages || '<p class="muted">No messages yet. Send one to begin.</p>'}
-        </div>
-        <form id="home-chat-form" class="arena-input" style="margin-top:10px;">
-          <input id="home-chat-input" name="message" placeholder="Type your message..." ${state.homeChat.pending ? 'disabled' : ''} />
-          <button class="pill-btn cta-primary" type="submit" ${state.homeChat.pending ? 'disabled' : ''}>${state.homeChat.pending ? 'Sending...' : 'Send'}</button>
-        </form>
-        ${state.homeChat.error ? `<p class="muted" style="color:#ff7b7b;margin-top:8px;" role="alert">${escapeHtml(state.homeChat.error)}</p>` : ''}
-      </section>
-    </div>
   `;
 }
 
