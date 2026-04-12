@@ -1,4 +1,5 @@
 import bcrypt from "bcrypt";
+import { OAuth2Client } from "google-auth-library";
 import {
   createSession,
   createUser,
@@ -12,6 +13,9 @@ import {
 
 const PASSWORD_POLICY_MESSAGE = "Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a special character.";
 const PASSWORD_POLICY_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$/;
+const GOOGLE_ISSUERS = new Set(["accounts.google.com", "https://accounts.google.com"]);
+const GOOGLE_CLIENT_ID = String(process.env.GOOGLE_CLIENT_ID || "").trim();
+const googleOauthClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
 
 function validatePassword(password) {
   return typeof password === "string" && PASSWORD_POLICY_REGEX.test(password);
@@ -110,9 +114,65 @@ export async function loginUser(payload = {}) {
 
   const user = await findUserByIdentifier(identifier);
   if (!user) throw new Error("Invalid credentials.");
+  if (!user.password_hash) {
+    throw new Error("This account uses Google sign-in. Continue with Google to access it.");
+  }
 
   const isValidPassword = await bcrypt.compare(password, user.password_hash);
   if (!isValidPassword) throw new Error("Invalid credentials.");
+
+  await touchLastActiveAt(user.id);
+  const sessionToken = await createSession(user.id);
+  return { user: await toPublicUser(user), sessionToken };
+}
+
+export async function authenticateWithGoogle(payload = {}) {
+  const credential = String(payload.credential || "").trim();
+
+  if (!GOOGLE_CLIENT_ID || !googleOauthClient) {
+    throw new Error("Google sign-in is not configured on the server.");
+  }
+
+  if (!credential) {
+    throw new Error("Google credential is required.");
+  }
+
+  let ticket;
+  try {
+    ticket = await googleOauthClient.verifyIdToken({
+      idToken: credential,
+      audience: GOOGLE_CLIENT_ID,
+    });
+  } catch {
+    throw new Error("Invalid Google credential.");
+  }
+
+  const verifiedPayload = ticket.getPayload() || {};
+  const issuer = String(verifiedPayload.iss || "");
+  const audience = String(verifiedPayload.aud || "");
+  const email = String(verifiedPayload.email || "").trim().toLowerCase();
+  const emailVerified = verifiedPayload.email_verified === true;
+  const fullName = String(verifiedPayload.name || "").trim();
+  const subject = String(verifiedPayload.sub || "").trim();
+
+  if (!GOOGLE_ISSUERS.has(issuer)) throw new Error("Invalid Google token issuer.");
+  if (audience !== GOOGLE_CLIENT_ID) throw new Error("Google token audience mismatch.");
+  if (!email || !validateEmail(email)) throw new Error("Google account email is invalid.");
+  if (!emailVerified) throw new Error("Google account email must be verified.");
+  if (!subject) throw new Error("Google account identifier is missing.");
+
+  const existingUser = await findUserByIdentifier(email);
+  const user = existingUser || await createUser({
+    displayName: fullName || email.split("@")[0] || "Guild Member",
+    legalName: fullName || email.split("@")[0] || "Guild Member",
+    email,
+    role: "employee_member",
+    organizationName: "",
+    backupEmail: "",
+    passwordHash: null,
+    authProvider: "google",
+    providerSubject: subject,
+  });
 
   await touchLastActiveAt(user.id);
   const sessionToken = await createSession(user.id);

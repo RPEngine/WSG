@@ -31,6 +31,7 @@ The backend health route is:
 
 Backend (`/server`):
 - `PORT` (Render supplies this automatically).
+- `GOOGLE_CLIENT_ID` (required for Google Sign-In token verification).
 - `HUGGINGFACE_API_TOKEN` (primary Hugging Face token variable).
 - `HUGGING_FACE_API_TOKEN` (legacy-compatible Hugging Face token variable).
 - `WSG_HF_API_TOKEN` (legacy-compatible Hugging Face token variable).
@@ -40,6 +41,7 @@ Backend (`/server`):
 - `WSG_FRONTEND_ORIGIN` (optional explicit frontend origin(s) for CORS allowlist; supports comma-separated values).
 
 Frontend (`/web`):
+- Configure Google Sign-In by setting `<meta name="wsg-google-client-id" content="YOUR_GOOGLE_CLIENT_ID">` in `web/index.html` (or set `window.WSG_GOOGLE_CLIENT_ID` before `app.js` loads).
 - Render deployments default to `https://wsg-7hmk.onrender.com` unless overridden.
 - Production-safe override order on Render:
   1. `<meta name="wsg-backend-base-url" content="">`

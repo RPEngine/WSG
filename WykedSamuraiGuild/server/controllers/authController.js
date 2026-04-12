@@ -1,4 +1,5 @@
 import {
+  authenticateWithGoogle,
   getUserFromSessionToken,
   loginUser,
   logoutUser,
@@ -58,6 +59,28 @@ export async function login(req, res) {
       error: error.message || "Unable to login.",
     });
     return res.status(401).json({ error: error.message || "Unable to login." });
+  }
+}
+
+export async function googleAuth(req, res) {
+  const hasCredential = Boolean(req.body?.credential);
+  console.log("[auth] google auth request received", {
+    hasCredential,
+    fields: Object.keys(req.body || {}),
+  });
+  try {
+    const result = await authenticateWithGoogle(req.body || {});
+    console.log("[auth] google auth success", {
+      userId: result?.user?.id,
+      email: result?.user?.email,
+    });
+    return res.json(result);
+  } catch (error) {
+    console.warn("[auth] google auth failure", {
+      hasCredential,
+      error: error.message || "Unable to authenticate with Google.",
+    });
+    return res.status(401).json({ error: error.message || "Unable to authenticate with Google." });
   }
 }
 
