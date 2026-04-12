@@ -436,6 +436,13 @@ body {
   gap: 14px;
 }
 
+.profile-identity-overview {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 14px;
+}
+
 .profile-hub-col {
   display: grid;
   gap: 14px;
@@ -490,6 +497,10 @@ body {
 
 .arena-layout {
   grid-template-columns: 280px minmax(0, 1fr) 320px;
+}
+
+.recruiter-layout {
+  grid-template-columns: 290px minmax(0, 1fr) 340px;
 }
 
 .workspace-layout {
@@ -606,6 +617,150 @@ body {
   color: var(--text-main);
 }
 
+.scenario-hero,
+.recruiter-hero {
+  border: 1px solid var(--ring);
+  border-radius: 14px;
+  padding: 18px;
+  background: linear-gradient(140deg, var(--accent-soft), rgba(255, 255, 255, 0.01));
+  margin-bottom: 12px;
+}
+
+.scenario-hero h3,
+.recruiter-hero h3 {
+  margin: 0 0 8px;
+  font-size: 1.35rem;
+}
+
+.scenario-hero p,
+.recruiter-hero p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.hero-kicker {
+  margin: 0 0 8px;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.hero-meta {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.hero-metric,
+.metric-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.2);
+  display: grid;
+  gap: 4px;
+}
+
+.hero-metric span,
+.metric-card span {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.hero-metric strong,
+.metric-card strong {
+  font-size: 1rem;
+}
+
+.scenario-experience-panel {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  background: rgba(5, 8, 14, 0.4);
+}
+
+.scenario-panel-head h4 {
+  margin: 0;
+}
+
+.scenario-panel-head .muted {
+  margin: 6px 0 10px;
+}
+
+.participant-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.participant-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 9px 10px;
+  background: rgba(255, 255, 255, 0.02);
+  align-items: center;
+}
+
+.participant-card p {
+  margin: 3px 0 0;
+}
+
+.messaging-rail {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.messaging-rail-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+
+.candidate-card-stack {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.candidate-insight-card h4 {
+  margin: 0 0 8px;
+}
+
+.activity-records li {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.metric-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.network-feature-panel {
+  margin-top: 12px;
+}
+
+.network-map-placeholder {
+  margin-top: 10px;
+  min-height: 160px;
+  border: 1px dashed var(--ring);
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.02), transparent);
+}
+
 
 .home-chat-panel {
   display: grid;
@@ -668,6 +823,15 @@ body {
 @media (max-width: 980px) {
   .profile-hub-grid {
     grid-template-columns: 1fr;
+  }
+
+  .profile-identity-overview {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hero-meta,
+  .metric-grid {
+    grid-template-columns: 1fr 1fr;
   }
 
   .workspace-layout {
