@@ -3,10 +3,12 @@ import {
   getUserFromSessionToken,
   loginUser,
   logoutUser,
+  reauthenticateSession,
   registerUser,
+  verifyMfaChallenge,
 } from "../services/authService.js";
 
-function tokenFromRequest(req) {
+export function tokenFromRequest(req) {
   const authHeader = req.headers.authorization || "";
   if (authHeader.startsWith("Bearer ")) {
     return authHeader.slice(7);
@@ -47,7 +49,10 @@ export async function login(req, res) {
     fields: Object.keys(req.body || {}),
   });
   try {
-    const result = await loginUser(req.body || {});
+    const result = await loginUser({
+      ...(req.body || {}),
+      sessionToken: tokenFromRequest(req),
+    });
     console.log("[auth] login success", {
       userId: result?.user?.id,
       email: result?.user?.email,
@@ -69,7 +74,10 @@ export async function googleAuth(req, res) {
     fields: Object.keys(req.body || {}),
   });
   try {
-    const result = await authenticateWithGoogle(req.body || {});
+    const result = await authenticateWithGoogle({
+      ...(req.body || {}),
+      sessionToken: tokenFromRequest(req),
+    });
     console.log("[auth] google auth success", {
       userId: result?.user?.id,
       email: result?.user?.email,
@@ -81,6 +89,30 @@ export async function googleAuth(req, res) {
       error: error.message || "Unable to authenticate with Google.",
     });
     return res.status(401).json({ error: error.message || "Unable to authenticate with Google." });
+  }
+}
+
+export async function verifyMfa(req, res) {
+  try {
+    const result = await verifyMfaChallenge({
+      ...(req.body || {}),
+      sessionToken: tokenFromRequest(req),
+    });
+    return res.json(result);
+  } catch (error) {
+    return res.status(401).json({ error: error.message || "Unable to verify MFA code." });
+  }
+}
+
+export async function reauth(req, res) {
+  try {
+    const result = await reauthenticateSession({
+      ...(req.body || {}),
+      sessionToken: tokenFromRequest(req),
+    });
+    return res.json(result);
+  } catch (error) {
+    return res.status(401).json({ error: error.message || "Unable to re-authenticate session." });
   }
 }
 
