@@ -1855,12 +1855,18 @@ function attachHomeChatHandlers() {
 function setMode(nextMode) {
   state.mode = nextMode;
   localStorage.setItem('wsg-mode', state.mode);
+  applyModeClass();
   render();
+}
+
+function applyModeClass() {
+  document.body.classList.remove('mode-professional', 'mode-roleplay');
+  document.body.classList.add(state.mode === 'roleplay' ? 'mode-roleplay' : 'mode-professional');
 }
 
 function renderLayout(path, key, pageHtml) {
   const [title, subtitle] = pageTitle(key);
-  document.body.classList.toggle('mode-roleplay', state.mode === 'roleplay');
+  applyModeClass();
   const hideDefaultHeader = key === 'home';
 
   const statusMarkup = state.statusMessage
@@ -1914,7 +1920,7 @@ function renderLayout(path, key, pageHtml) {
 
 function renderPublicLayout(path, key, pageHtml) {
   const [title, subtitle] = pageTitle(key);
-  document.body.classList.toggle('mode-roleplay', state.mode === 'roleplay');
+  applyModeClass();
   const showPageHeader = key !== 'landing';
 
   const statusMarkup = state.statusMessage
@@ -2142,6 +2148,7 @@ async function render() {
 
 window.addEventListener('hashchange', render);
 window.addEventListener('DOMContentLoaded', async () => {
+  applyModeClass();
   const resolvedApiBaseUrl = resolveApiBaseUrl();
   console.log('[wsg] Resolved API base URL:', resolvedApiBaseUrl || '(same-origin)');
   await bootstrapAuth();
