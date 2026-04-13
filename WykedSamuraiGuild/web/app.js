@@ -747,6 +747,14 @@ function MainContent(key, title, subtitle, statusMarkup, pageHtml) {
   `;
 }
 
+function SiteFooter() {
+  return `
+    <footer class="site-footer" role="contentinfo">
+      © 2022 Wyked Samurai Guild (WSG). All rights reserved.
+    </footer>
+  `;
+}
+
 function AppShell(path, key, pageHtml, statusMarkup) {
   const [title, subtitle] = pageTitle(key);
   return `
@@ -2020,6 +2028,7 @@ function renderLayout(path, key, pageHtml) {
   document.getElementById('app').innerHTML = `
     ${AppShell(path, key, pageHtml, statusMarkup)}
     ${starterScenarioModalMarkup()}
+    ${SiteFooter()}
   `;
 
   attachHeaderActions();
@@ -2058,6 +2067,7 @@ function renderPublicLayout(path, key, pageHtml) {
         ${statusMarkup}
         <section style="margin-top:${showPageHeader ? '14px' : '0'};">${pageHtml}</section>
       </main>
+      ${SiteFooter()}
     </div>
   `;
 
