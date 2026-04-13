@@ -17,7 +17,9 @@ const navItems = [
   ['Home', '/app'],
   ['Arena', '/arena'],
   ['Guild', '/guild-world'],
+  ['World RP', '/guild-world'],
   ['Members', '/members'],
+  ['Discussions', '/profile/scenario-chat'],
   ['Profile Hub', '/profile'],
   ['Recruiter Console', '/recruiter-console'],
 ];
@@ -452,6 +454,46 @@ function card(title, body) {
   return `<section class="card"><h3>${title}</h3>${body}</section>`;
 }
 
+function GlowCard({ title, body, className = '' }) {
+  return `<section class="card glow-card ${className}"><h3>${escapeHtml(title)}</h3>${body}</section>`;
+}
+
+function ScenarioCard({ title, summary, status, timeRemaining, tone = 'harbor' }) {
+  return `
+    <article class="scenario-spotlight-card">
+      <div class="scenario-spotlight-visual is-${tone}">
+        <span>${escapeHtml(status)}</span>
+      </div>
+      <div class="scenario-spotlight-content">
+        <p class="scenario-spotlight-status">${escapeHtml(status)}</p>
+        <h4>${escapeHtml(title)}</h4>
+        <p class="muted">${escapeHtml(summary)}</p>
+        <div class="scenario-spotlight-meta">
+          <span class="muted">${escapeHtml(timeRemaining)}</span>
+          <button class="pill-btn cta-primary" type="button">Enter</button>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function MemberCard(member) {
+  return `
+    <article class="card member-row">
+      <div>${avatarMarkup(member)}</div>
+      <div>
+        <h3 style="margin:0;">${escapeHtml(member.displayName)}</h3>
+        <p class="muted" style="margin:4px 0;">@${escapeHtml(member.username)}</p>
+        <p>${member.bio ? escapeHtml(member.bio) : '<span class="muted">No bio yet.</span>'}</p>
+      </div>
+      <div class="member-meta">
+        <span>Trials completed: <strong>${escapeHtml(member.trialCount || 0)}</strong></span>
+        <a class="pill-btn" href="#/members/${escapeAttr(member.id)}">View profile</a>
+      </div>
+    </article>
+  `;
+}
+
 function list(items) {
   return `<ul class="list">${items.map((i) => `<li>${i}</li>`).join('')}</ul>`;
 }
@@ -610,7 +652,7 @@ function selectedConnection() {
     || null;
 }
 
-function RightPane() {
+function SocialSidebar() {
   const connections = state.network.connections || [];
   const selectedConversation = state.shell.selectedConversation || state.directChat.activeConnectionId || '';
   const friendsOnline = connections.filter((connection) => connection.status === 'online').length || Math.min(connections.length, 4);
@@ -718,11 +760,17 @@ function ChatDock() {
   `;
 }
 
-function LeftNav(path, key) {
+function Sidebar(path, key) {
   return `
     <aside class="left-sidebar panel ${key === 'home' ? 'home-left-sidebar' : ''}">
       <div class="left-pane-brand">
-        <p class="muted">Command Navigation</p>
+        <div class="guild-lockup">
+          <div class="brand-logo samurai-mark">侍</div>
+          <div>
+            <p class="lockup-title">Wyked Samurai</p>
+            <p class="muted">Command Menu</p>
+          </div>
+        </div>
       </div>
       <ul class="nav-list">
         ${navItems.map(([label, target]) => `<li><a href="${linkFor(target)}" class="${path === target ? 'active' : ''}">${label}</a></li>`).join('')}
@@ -731,15 +779,23 @@ function LeftNav(path, key) {
   `;
 }
 
+function PageHero({ title, subtitle, kicker = 'Nexus Command' }) {
+  return `
+    <section class="page-hero panel">
+      <div class="moon-orb"></div>
+      <p class="hero-kicker">${escapeHtml(kicker)}</p>
+      <h1>${escapeHtml(title)}</h1>
+      <p>${escapeHtml(subtitle)}</p>
+    </section>
+  `;
+}
+
 function MainContent(key, title, subtitle, statusMarkup, pageHtml) {
   const hideDefaultHeader = key === 'home';
   return `
     <main class="main-content panel">
       ${hideDefaultHeader ? '' : `
-        <section class="main-header">
-          <h1>${title}</h1>
-          <p>${subtitle}</p>
-        </section>
+        ${PageHero({ title, subtitle, kicker: key === 'recruiter' ? 'Recruiter Intelligence' : 'Guild Nexus' })}
       `}
       ${statusMarkup}
       <section style="margin-top:${hideDefaultHeader ? '0' : '14px'};">${pageHtml}</section>
@@ -755,29 +811,36 @@ function SiteFooter() {
   `;
 }
 
+function Header() {
+  return `
+    <header class="header panel">
+      <div class="brand">
+        <div class="brand-logo samurai-mark">侍</div>
+        <div>
+          <div class="title">Wyked Samurai Guild</div>
+          <div class="subtitle">Strategic Guild Network • Nebula Nexus</div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <div class="toggle">
+          <button id="professional-mode" class="${state.mode === 'professional' ? 'active' : ''}">Professional</button>
+          <button id="roleplay-mode" class="${state.mode === 'roleplay' ? 'active' : ''}">Roleplay</button>
+        </div>
+        <button class="icon-btn" title="Notifications" aria-label="notifications">✦</button>
+        ${state.currentUser ? `<span class="muted">${state.currentUser.displayName}</span>${avatarMarkup(state.currentUser, 'md')}<button class="pill-btn" id="logout-btn">Log out</button>` : '<a class="pill-btn" href="#/login">Log in</a>'}
+      </div>
+    </header>
+  `;
+}
+
 function AppShell(path, key, pageHtml, statusMarkup) {
   const [title, subtitle] = pageTitle(key);
   return `
     <div class="app-shell">
-      <header class="header panel">
-        <div class="brand">
-          <div class="brand-logo">WS</div>
-          <div>
-            <div class="title">Wyked Samurai</div>
-            <div class="subtitle">Guild Platform Prototype</div>
-          </div>
-        </div>
-        <div class="header-actions">
-          <div class="toggle">
-            <button id="professional-mode" class="${state.mode === 'professional' ? 'active' : ''}">Professional</button>
-            <button id="roleplay-mode" class="${state.mode === 'roleplay' ? 'active' : ''}">Roleplay</button>
-          </div>
-          ${state.currentUser ? `<span class="muted">${state.currentUser.displayName}</span><button class="pill-btn" id="logout-btn">Log out</button>` : '<a class="pill-btn" href="#/login">Log in</a>'}
-        </div>
-      </header>
-      ${LeftNav(path, key)}
+      ${Header()}
+      ${Sidebar(path, key)}
       ${MainContent(key, title, subtitle, statusMarkup, pageHtml)}
-      <aside class="right-sidebar panel ${key === 'home' ? 'home-right-sidebar' : ''}">${RightPane()}</aside>
+      <aside class="right-sidebar panel ${key === 'home' ? 'home-right-sidebar' : ''}">${SocialSidebar()}</aside>
       ${ChatDock()}
     </div>
   `;
@@ -867,22 +930,7 @@ function homePage() {
             <h3>Recommended Scenarios</h3>
           </div>
           <div class="scenario-card-stack">
-            ${scenarioCards.map((scenario) => `
-              <article class="scenario-spotlight-card">
-                <div class="scenario-spotlight-visual is-${scenario.tone}">
-                  <span>${scenario.visual}</span>
-                </div>
-                <div class="scenario-spotlight-content">
-                  <p class="scenario-spotlight-status">${scenario.status}</p>
-                  <h4>${scenario.title}</h4>
-                  <p class="muted">${scenario.summary}</p>
-                  <div class="scenario-spotlight-meta">
-                    <span class="muted">${scenario.timeRemaining}</span>
-                    <button class="pill-btn cta-primary" type="button">Enter</button>
-                  </div>
-                </div>
-              </article>
-            `).join('')}
+            ${scenarioCards.map((scenario) => ScenarioCard(scenario)).join('')}
           </div>
         </section>
 
@@ -895,23 +943,30 @@ function homePage() {
       </div>
 
       <aside class="home-support-column">
-        <section class="card home-support-card tier-3">
-          <h3>Guild Updates</h3>
+        ${GlowCard({
+    title: 'Guild Updates',
+    className: 'home-support-card tier-3',
+    body: `
           <ul class="support-list">
             <li><strong>Moon Council Briefing</strong><p class="muted">Council alignment begins at 21:00 UTC.</p></li>
             <li><strong>Ops Signal</strong><p class="muted">Harbor patrol shifted toward the east perimeter.</p></li>
             <li><strong>Lore Dispatch</strong><p class="muted">Glass Frontier archive was expanded tonight.</p></li>
           </ul>
-        </section>
-        <section class="card home-support-card tier-3">
-          <h3>Top Contributors</h3>
-          <ul class="contributors-list">${contributors}</ul>
-        </section>
-        <section class="card home-support-card recruiter-teaser tier-3">
-          <h3>Recruiter HQ</h3>
-          <p class="muted">Audit candidate signal quality and elevate high-potential operatives to shortlist.</p>
-          <a class="pill-btn" href="${linkFor('/recruiter-console')}">Open Recruiter Console</a>
-        </section>
+    `,
+  })}
+        ${GlowCard({
+    title: 'Top Contributors',
+    className: 'home-support-card tier-3',
+    body: `<ul class="contributors-list">${contributors}</ul>`,
+  })}
+        ${GlowCard({
+    title: 'Recruiter HQ',
+    className: 'home-support-card recruiter-teaser tier-3',
+    body: `
+      <p class="muted">Audit candidate signal quality and elevate high-potential operatives to shortlist.</p>
+      <a class="pill-btn" href="${linkFor('/recruiter-console')}">Open Recruiter Console</a>
+    `,
+  })}
       </aside>
     </section>
   `;
@@ -1101,9 +1156,28 @@ function arenaPage() {
 
 function guildPage() {
   return `
+    <section class="scenario-hero guild-hero">
+      <p class="hero-kicker">World RP</p>
+      <h3>Living World Nexus</h3>
+      <p class="hero-description">Follow roleplay dispatches, jump into featured locations, and track recent story beats across the guild world.</p>
+    </section>
     <div class="grid two">
-      ${card('Roleplay Feed', list(['"Mist over Kagemori as scouts return."', '"Alliance envoy arrives at moon gate."', '"Campfire confessions in the cedar court."'].map((s) => `<span>${s}</span><span class="muted">Story</span>`)))}
-      ${card('Featured Locations', list(['Moonfall Harbor', 'Cinder Dojo', 'Glass Pine Ridge'].map((s) => `<span>${s}</span><span class="muted">Live scene</span>`)))}
+      ${GlowCard({
+    title: 'Roleplay Feed',
+    body: list(['"Mist over Kagemori as scouts return."', '"Alliance envoy arrives at moon gate."', '"Campfire confessions in the cedar court."'].map((s) => `<span>${s}</span><span class="muted">Story</span>`)),
+  })}
+      ${GlowCard({
+    title: 'Featured Locations',
+    body: list(['Moonfall Harbor', 'Cinder Dojo', 'Glass Pine Ridge'].map((s) => `<span>${s}</span><span class="muted">Live scene</span>`)),
+  })}
+      ${GlowCard({
+    title: 'Recent Stories',
+    body: list(['The Ridge Oath renewed at dusk.', 'Sentinel lanterns relit across the harbor.', 'An envoy requested aid from the Iron Route.'].map((s) => `<span>${s}</span><span class="muted">Chronicle</span>`)),
+  })}
+      ${GlowCard({
+    title: 'Social Presence',
+    body: '<p class="muted">Use the right sidebar to see friends online, launch chats, and coordinate ongoing world scenes.</p>',
+  })}
     </div>
   `;
 }
@@ -1120,21 +1194,7 @@ function membersPage() {
   return `
     <div class="member-list">
       ${state.members
-        .map(
-          (member) => `
-            <article class="card member-row">
-              <div>${avatarMarkup(member)}</div>
-              <div>
-                <h3 style="margin:0;">${member.displayName}</h3>
-                <p class="muted" style="margin:4px 0;">@${member.username}</p>
-                <p>${member.bio || '<span class="muted">No bio yet.</span>'}</p>
-              </div>
-              <div class="member-meta">
-                <span>Trials completed: <strong>${member.trialCount}</strong></span>
-                <a class="pill-btn" href="#/members/${member.id}">View profile</a>
-              </div>
-            </article>`
-        )
+        .map((member) => MemberCard(member))
         .join('')}
     </div>
   `;
@@ -1175,6 +1235,15 @@ function profilePage() {
       <div class="tag-list">
         ${skillsList.length ? skillsList.map((skill) => `<span class="skill-tag">${escapeHtml(skill)}</span>`).join('') : '<span class="muted">No skills listed yet.</span>'}
       </div>
+    </section>
+    <section class="card" style="margin-top:12px;">
+      <div class="tabs">
+        <button class="active" type="button">Overview</button>
+        <button type="button">Arena Contributions</button>
+        <button type="button">Guild Activity</button>
+        <button type="button">Connections</button>
+      </div>
+      <p class="muted" style="margin-top:10px;">Profile insights and contribution history panels are currently placeholder content backed by live account data above.</p>
     </section>
 
     <section class="card profile-edit-section">
@@ -2270,10 +2339,10 @@ function renderPublicLayout(path, key, pageHtml) {
       <header class="public-header panel">
         <div class="public-container public-header-inner">
           <div class="brand">
-            <div class="brand-logo">WS</div>
+            <div class="brand-logo samurai-mark">侍</div>
             <div>
               <div class="title">Wyked Samurai Guild</div>
-              <div class="subtitle">Guild Platform Prototype</div>
+              <div class="subtitle">Strategic Guild Network • Nebula Nexus</div>
             </div>
           </div>
           <div class="header-actions">
