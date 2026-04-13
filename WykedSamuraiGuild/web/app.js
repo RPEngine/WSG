@@ -2006,6 +2006,69 @@ function attachHomeChatHandlers() {
   }
 }
 
+function attachHeaderActions() {
+  const professionalModeButton = document.getElementById('professional-mode');
+  if (professionalModeButton) {
+    professionalModeButton.onclick = () => setMode('professional');
+  }
+
+  const roleplayModeButton = document.getElementById('roleplay-mode');
+  if (roleplayModeButton) {
+    roleplayModeButton.onclick = () => setMode('roleplay');
+  }
+
+  const logoutButton = document.getElementById('logout-btn');
+  if (logoutButton) {
+    logoutButton.onclick = () => {
+      clearAuthSession();
+      setStatusMessage('Signed out successfully.', 'success');
+      location.hash = '/login';
+    };
+  }
+}
+
+// Backward-compatible alias for older render code that still references the previous symbol name.
+const attachedHeaderActions = attachHeaderActions;
+
+function starterScenarioModalMarkup() {
+  if (!state.onboarding.starterModalOpen) {
+    return '';
+  }
+
+  return `
+    <div class="modal-backdrop" id="starter-scenario-modal" role="dialog" aria-modal="true" aria-labelledby="starter-scenario-title">
+      <section class="panel" style="max-width:560px;margin:8vh auto;padding:20px;">
+        <h3 id="starter-scenario-title">Starter Scenario Ready</h3>
+        <p class="muted">Your onboarding scenario is loaded. Start in the Trial Arena to complete your first guided challenge.</p>
+        <div class="header-actions" style="justify-content:flex-end;">
+          <button class="pill-btn" type="button" id="dismiss-starter-scenario-btn">Later</button>
+          <button class="pill-btn cta-primary" type="button" id="open-starter-scenario-btn">Open Trial Arena</button>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function attachOnboardingHandlers() {
+  const dismissButton = document.getElementById('dismiss-starter-scenario-btn');
+  if (dismissButton) {
+    dismissButton.onclick = () => {
+      markStarterScenarioSeen();
+      state.onboarding.starterModalOpen = false;
+      render();
+    };
+  }
+
+  const openButton = document.getElementById('open-starter-scenario-btn');
+  if (openButton) {
+    openButton.onclick = () => {
+      markStarterScenarioSeen();
+      state.onboarding.starterModalOpen = false;
+      location.hash = '/arena';
+    };
+  }
+}
+
 function setMode(nextMode) {
   state.mode = nextMode;
   localStorage.setItem('wsg-mode', state.mode);
