@@ -1,11 +1,13 @@
 import {
   addConnection,
   findUserById,
+  getProfileLayer,
   listUsers,
   removeConnection,
   toPublicUser,
   updateUserHubProfile,
   updateUserProfile,
+  upsertProfileLayer,
 } from "../models/userStore.js";
 import {
   addChannelMessage,
@@ -15,11 +17,96 @@ import {
 } from "../models/chatStore.js";
 
 const VALID_ROLES = new Set(["employee_member", "employer", "recruiter"]);
+const VALID_LAYER_KEYS = new Set(["free", "professional", "roleplay"]);
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function getUnlockedLayers(accessTier = "free") {
+  switch (accessTier) {
+    case "guild":
+      return ["free", "professional", "roleplay"];
+    case "professional":
+      return ["free", "professional"];
+    case "roleplay":
+      return ["free", "roleplay"];
+    case "free":
+    default:
+      return ["free"];
+  }
+}
+
+function assertLayerAccess(user, layerKey) {
+  if (!VALID_LAYER_KEYS.has(layerKey)) {
+    throw new Error("Invalid profile layer.");
+  }
+  const unlocked = new Set(getUnlockedLayers(user?.accessTier || "free"));
+  if (!unlocked.has(layerKey)) {
+    throw new Error("This profile layer is locked for your current tier.");
+  }
+}
 
 export async function getOwnProfile(userId) {
   const user = await findUserById(userId);
   return toPublicUser(user);
+}
+
+export async function listOwnProfileLayers(userId) {
+  const user = await getOwnProfile(userId);
+  if (!user) return null;
+  return {
+    accessTier: user.accessTier,
+    subscriptionStatus: user.subscriptionStatus,
+    availableLayers: user.availableLayers,
+    lockedLayers: user.lockedLayers,
+    layers: user.layers,
+  };
+}
+
+export async function getOwnProfileLayer(userId, layerKey) {
+  const user = await getOwnProfile(userId);
+  if (!user) return null;
+  assertLayerAccess(user, layerKey);
+  return user.layers?.[layerKey] || null;
+}
+
+export async function updateOwnProfileLayer(userId, layerKey, payload = {}) {
+  const user = await getOwnProfile(userId);
+  if (!user) return null;
+  assertLayerAccess(user, layerKey);
+
+  const displayName = String(payload.displayName || "").trim();
+  const headline = String(payload.headline || "").trim();
+  const bio = String(payload.bio || "").trim();
+  const skills = String(payload.skills || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  if (!displayName) throw new Error("Display name is required.");
+  if (displayName.length > 60) throw new Error("Display name must be 60 characters or less.");
+  if (headline.length > 120) throw new Error("Headline must be 120 characters or less.");
+  if (bio.length > 800) throw new Error("Bio must be 800 characters or less.");
+
+  await upsertProfileLayer(userId, layerKey, {
+    displayName,
+    headline,
+    bio,
+    skills,
+    themeMode: String(payload.themeMode || "").trim(),
+    isPublic: payload.isPublic === true,
+  });
+
+  return getOwnProfile(userId);
+}
+
+export async function activateOwnProfileLayer(userId, layerKey) {
+  const user = await getOwnProfile(userId);
+  if (!user) return null;
+  assertLayerAccess(user, layerKey);
+  const layer = await getProfileLayer(userId, layerKey);
+  if (!layer) {
+    throw new Error("Layer is available but no profile data exists yet.");
+  }
+  return { activeLayer: layerKey, layer };
 }
 
 export async function saveOwnProfile(userId, payload = {}) {
@@ -45,30 +132,19 @@ export async function saveOwnProfile(userId, payload = {}) {
 
 export async function saveOwnHubProfile(userId, payload = {}) {
   const legalName = String(payload.legalName || "").trim();
-  const displayName = String(payload.displayName || "").trim();
   const email = String(payload.email || "").trim();
   const role = String(payload.role || "").trim();
   const organizationName = String(payload.organizationName || "").trim();
-  const bio = String(payload.bio || "").trim();
-  const skillsInterests = String(payload.skillsInterests || "")
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
 
   if (!legalName || legalName.length < 2) throw new Error("Legal Name is required.");
-  if (!displayName || displayName.length < 2) throw new Error("Display Name is required.");
   if (!email || !EMAIL_REGEX.test(email)) throw new Error("Email must be valid.");
   if (!VALID_ROLES.has(role)) throw new Error("Role must be one of employee_member, employer, or recruiter.");
-  if (bio.length > 500) throw new Error("Bio must be 500 characters or less.");
 
   return updateUserHubProfile(userId, {
     legalName,
-    displayName,
     email,
     role,
     organizationName,
-    bio,
-    skillsInterests,
   });
 }
 

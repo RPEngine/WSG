@@ -1,12 +1,15 @@
 import {
+  activateOwnProfileLayer,
   addOwnConnection,
   getAreaChatStream,
   getDirectConversation,
   getMemberProfile,
   getMembers,
   getOwnProfile,
+  getOwnProfileLayer,
   getScenarioChatStream,
   listConnectionProfiles,
+  listOwnProfileLayers,
   postAreaChatMessage,
   postDirectConversationMessage,
   postScenarioChatMessage,
@@ -14,6 +17,7 @@ import {
   saveOwnProfile,
   saveOwnHubProfile,
   searchMembersForConnections,
+  updateOwnProfileLayer,
 } from "../services/profileService.js";
 
 export async function getMyProfile(req, res) {
@@ -21,6 +25,38 @@ export async function getMyProfile(req, res) {
   const profile = await getOwnProfile(req.user.id);
   console.log("[profile] profile fetch success", { userId: profile?.id, email: profile?.email });
   return res.json({ profile });
+}
+
+export async function getMyProfileLayers(req, res) {
+  const result = await listOwnProfileLayers(req.user.id);
+  return res.json(result || { accessTier: "free", subscriptionStatus: "inactive", availableLayers: ["free"], lockedLayers: ["professional", "roleplay"], layers: {} });
+}
+
+export async function getMyProfileLayer(req, res) {
+  try {
+    const layer = await getOwnProfileLayer(req.user.id, String(req.params.layerKey || ""));
+    return res.json({ layer });
+  } catch (error) {
+    return res.status(403).json({ error: error.message || "Unable to fetch profile layer." });
+  }
+}
+
+export async function patchMyProfileLayer(req, res) {
+  try {
+    const profile = await updateOwnProfileLayer(req.user.id, String(req.params.layerKey || ""), req.body || {});
+    return res.json({ profile });
+  } catch (error) {
+    return res.status(400).json({ error: error.message || "Unable to update profile layer." });
+  }
+}
+
+export async function activateMyProfileLayer(req, res) {
+  try {
+    const result = await activateOwnProfileLayer(req.user.id, String(req.params.layerKey || ""));
+    return res.json(result);
+  } catch (error) {
+    return res.status(403).json({ error: error.message || "Unable to activate profile layer." });
+  }
 }
 
 export async function updateMyProfile(req, res) {
