@@ -44,9 +44,29 @@ function assertLayerAccess(user, layerKey) {
   }
 }
 
+function toProfileMeResponse(user) {
+  if (!user) return null;
+  const {
+    availableLayers = [],
+    lockedLayers = [],
+    layers = {},
+    ...userInfo
+  } = user;
+  return {
+    user: userInfo,
+    availableLayers,
+    lockedLayers,
+    layers,
+  };
+}
+
 export async function getOwnProfile(userId) {
   const user = await findUserById(userId);
   return toPublicUser(user);
+}
+
+export async function getOwnProfileMe(userId) {
+  return toProfileMeResponse(await getOwnProfile(userId));
 }
 
 export async function listOwnProfileLayers(userId) {

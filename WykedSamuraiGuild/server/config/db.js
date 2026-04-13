@@ -94,8 +94,24 @@ export async function initializeDatabase() {
       is_public BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT profile_layers_layer_key_check CHECK (layer_key IN ('free', 'professional', 'roleplay')),
       UNIQUE(user_id, layer_key)
     );
+  `);
+
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'profile_layers_layer_key_check'
+      ) THEN
+        ALTER TABLE profile_layers
+          ADD CONSTRAINT profile_layers_layer_key_check
+          CHECK (layer_key IN ('free', 'professional', 'roleplay'));
+      END IF;
+    END $$;
   `);
 
   await pool.query(`
