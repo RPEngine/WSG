@@ -826,7 +826,7 @@ function Header() {
           <button id="professional-mode" class="${state.mode === 'professional' ? 'active' : ''}">Professional</button>
           <button id="roleplay-mode" class="${state.mode === 'roleplay' ? 'active' : ''}">Roleplay</button>
         </div>
-        <button class="icon-btn" title="Notifications" aria-label="notifications">✦</button>
+        <button class="icon-btn" title="Notifications" aria-label="notifications">◉</button>
         ${state.currentUser ? `<span class="muted">${state.currentUser.displayName}</span>${avatarMarkup(state.currentUser, 'md')}<button class="pill-btn" id="logout-btn">Log out</button>` : '<a class="pill-btn" href="#/login">Log in</a>'}
       </div>
     </header>
@@ -1221,23 +1221,30 @@ function profilePage() {
   const layerSkillsLabel = activeLayer === 'free' ? 'Basic Tags' : 'Tags / Skills';
 
   return `
-    <section class="feature profile-display-hero">
+    <section class="feature profile-display-hero guild-identity-hero">
+      <div class="nebula-halo"></div>
       <div class="profile-summary-row">
         ${avatarMarkup(profile, 'lg')}
         <div>
-          <p class="hero-kicker">Guild Profile</p>
+          <p class="hero-kicker">Guild Identity Page</p>
           <h3 style="margin:0;">${escapeHtml(activeData.displayName || profile.displayName || profile.username)}</h3>
           <p class="muted" style="margin:4px 0;">@${escapeHtml(profile.username)}</p>
           <p class="muted" style="margin:0;">Tier: ${escapeHtml(profile.accessTier || 'free')} · Subscription: ${escapeHtml(profile.subscriptionStatus || 'inactive')}</p>
         </div>
       </div>
       <p class="profile-display-bio">${escapeHtml(activeData.bio || 'No profile story published yet for this layer.')}</p>
-      <div class="tag-list">
+      <div class="tag-list profile-tag-list">
         ${skillsList.length ? skillsList.map((skill) => `<span class="skill-tag">${escapeHtml(skill)}</span>`).join('') : '<span class="muted">No skills listed yet.</span>'}
       </div>
+      <div class="profile-progress-grid">
+        <article class="profile-progression-card"><span>Current Layer</span><strong>${escapeHtml(PROFILE_LAYER_META[activeLayer]?.label || activeLayer)}</strong></article>
+        <article class="profile-progression-card"><span>Unlocked Layers</span><strong>${state.availableLayers.length}</strong></article>
+        <article class="profile-progression-card"><span>Connections</span><strong>${state.network.connections.length}</strong></article>
+      </div>
     </section>
-    <section class="card" style="margin-top:12px;">
-      <div class="tabs">
+
+    <section class="card profile-tabs-card" style="margin-top:12px;">
+      <div class="tabs profile-tabs">
         <button class="active" type="button">Overview</button>
         <button type="button">Arena Contributions</button>
         <button type="button">Guild Activity</button>
@@ -1249,7 +1256,7 @@ function profilePage() {
     <section class="card profile-edit-section">
       <h3>Profile Layers</h3>
       <p class="muted">Edit each unlocked layer independently. Locked layers show upgrade messaging only for now.</p>
-      <div id="profile-layer-tabs" class="actions" style="margin-bottom:10px;">${tabMarkup}</div>
+      <div id="profile-layer-tabs" class="actions profile-layer-actions" style="margin-bottom:10px;">${tabMarkup}</div>
       ${isLayerLocked ? `
         <div class="status-banner status-info">
           <strong>${escapeHtml(PROFILE_LAYER_META[activeLayer]?.label || activeLayer)} layer is locked.</strong>
