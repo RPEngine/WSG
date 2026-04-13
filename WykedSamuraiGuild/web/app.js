@@ -2006,6 +2006,164 @@ function attachHomeChatHandlers() {
   }
 }
 
+
+function attachChatPaneHandlers() {
+  document.querySelectorAll('[data-pane-tab]').forEach((button) => {
+    button.onclick = () => {
+      const nextTab = String(button.getAttribute('data-pane-tab') || 'connections');
+      if (nextTab !== 'connections' && nextTab !== 'chat') {
+        return;
+      }
+      state.shell.activePaneTab = nextTab;
+      render();
+    };
+  });
+
+  const searchForm = document.getElementById('global-connections-search-form');
+  if (searchForm) {
+    searchForm.onsubmit = async (event) => {
+      event.preventDefault();
+      const searchInput = document.getElementById('global-connections-search-input');
+      const query = String(searchInput?.value || '').trim();
+      state.network.searchTerm = query;
+      await searchConnectionCandidates(query);
+      state.network.connections = state.network.results.length ? state.network.results : [];
+      render();
+    };
+  }
+
+  const openDirectChat = async (connectionId) => {
+    if (!connectionId || state.directChat.pending) {
+      return;
+    }
+    await loadDirectChat(connectionId);
+    state.shell.activePaneTab = 'chat';
+    render();
+  };
+
+  document.querySelectorAll('.open-direct-chat-btn, .open-global-chat-btn, .global-conversation-item').forEach((button) => {
+    button.onclick = async () => {
+      const connectionId = button.getAttribute('data-connection-id');
+      await openDirectChat(connectionId);
+    };
+  });
+
+  const sendDirectMessage = async (inputId) => {
+    const input = document.getElementById(inputId);
+    const content = String(input?.value || '').trim();
+    if (!content || !state.directChat.activeConnectionId || state.directChat.pending) {
+      return;
+    }
+
+    state.directChat.pending = true;
+    state.directChat.error = '';
+    render();
+    try {
+      const data = await apiRequest(`/chats/direct/${state.directChat.activeConnectionId}`, {
+        method: 'POST',
+        body: JSON.stringify({ content }),
+      });
+      state.directChat.messages = data.thread?.messages || [];
+      if (input) {
+        input.value = '';
+      }
+    } catch (error) {
+      state.directChat.error = error instanceof Error ? error.message : 'Unable to send message.';
+      setStatusMessage(state.directChat.error, 'error');
+    } finally {
+      state.directChat.pending = false;
+      render();
+    }
+  };
+
+  const directChatForm = document.getElementById('direct-chat-form');
+  if (directChatForm) {
+    directChatForm.onsubmit = async (event) => {
+      event.preventDefault();
+      await sendDirectMessage('direct-chat-input');
+    };
+  }
+
+  const globalChatForm = document.getElementById('global-chat-form');
+  if (globalChatForm) {
+    globalChatForm.onsubmit = async (event) => {
+      event.preventDefault();
+      await sendDirectMessage('global-chat-input');
+    };
+  }
+
+  const toggleChatPaneButton = document.getElementById('toggle-chat-pane-btn');
+  if (toggleChatPaneButton) {
+    toggleChatPaneButton.onclick = () => {
+      state.shell.chatMinimized = !state.shell.chatMinimized;
+      render();
+    };
+  }
+
+  const closeChatPaneButton = document.getElementById('close-chat-pane-btn');
+  if (closeChatPaneButton) {
+    closeChatPaneButton.onclick = () => {
+      state.shell.chatOpen = false;
+      state.shell.chatMinimized = false;
+      render();
+    };
+  }
+
+  const scenarioChatForm = document.getElementById('scenario-chat-form');
+  if (scenarioChatForm) {
+    scenarioChatForm.onsubmit = async (event) => {
+      event.preventDefault();
+      const input = document.getElementById('scenario-chat-input');
+      const content = String(input?.value || '').trim();
+      if (!content || state.scenarioChat.pending) {
+        return;
+      }
+      state.scenarioChat.pending = true;
+      render();
+      try {
+        const data = await apiRequest('/chats/scenario', {
+          method: 'POST',
+          body: JSON.stringify({ scenarioId: state.scenarioChat.scenarioId, content }),
+        });
+        state.scenarioChat.messages = data.thread?.messages || [];
+        if (input) {
+          input.value = '';
+        }
+      } finally {
+        state.scenarioChat.pending = false;
+        render();
+      }
+    };
+  }
+
+  const areaChatForm = document.getElementById('area-chat-form');
+  if (areaChatForm) {
+    areaChatForm.onsubmit = async (event) => {
+      event.preventDefault();
+      const input = document.getElementById('area-chat-input');
+      const content = String(input?.value || '').trim();
+      if (!content || state.areaChat.pending) {
+        return;
+      }
+      state.areaChat.pending = true;
+      render();
+      try {
+        const data = await apiRequest('/chats/area', {
+          method: 'POST',
+          body: JSON.stringify({ areaId: state.areaChat.areaId, content }),
+        });
+        state.areaChat.messages = data.thread?.messages || [];
+        if (input) {
+          input.value = '';
+        }
+      } finally {
+        state.areaChat.pending = false;
+        render();
+      }
+    };
+  }
+}
+
 function attachHeaderActions() {
   const professionalModeButton = document.getElementById('professional-mode');
   if (professionalModeButton) {
@@ -2320,6 +2478,7 @@ async function render() {
   });
   attachArenaHandlers();
   attachHomeChatHandlers();
+  attachChatPaneHandlers();
   console.log('[wsg] render complete');
 }
 
