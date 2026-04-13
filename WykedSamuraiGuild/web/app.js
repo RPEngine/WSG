@@ -72,6 +72,19 @@ const STARTER_TRIALS = [
   },
 ];
 
+const BRAND_ASSETS = Object.freeze({
+  logo: 'assets/branding/wyked-samurai-guild-logo-design.png',
+  hero: 'assets/branding/wyked-samurai-under-the-glowing-moon.png',
+});
+
+function guildBrandMark({ compact = false, className = '' } = {}) {
+  return `
+    <div class="guild-brand-mark ${compact ? 'is-compact' : ''} ${className}">
+      <img src="${BRAND_ASSETS.logo}" alt="Wyked Samurai Guild logo" loading="eager" decoding="async" />
+    </div>
+  `;
+}
+
 
 const PROFILE_LAYER_META = {
   free: { label: 'Free', hint: 'Basic guild identity' },
@@ -765,7 +778,7 @@ function Sidebar(path, key) {
     <aside class="left-sidebar panel ${key === 'home' ? 'home-left-sidebar' : ''}">
       <div class="left-pane-brand">
         <div class="guild-lockup">
-          <div class="brand-logo samurai-mark">侍</div>
+          ${guildBrandMark({ compact: true, className: 'sidebar-brand-mark' })}
           <div>
             <p class="lockup-title">Wyked Samurai</p>
             <p class="muted">Command Menu</p>
@@ -815,7 +828,7 @@ function Header() {
   return `
     <header class="header panel">
       <div class="brand">
-        <div class="brand-logo samurai-mark">侍</div>
+        ${guildBrandMark({ className: 'header-brand-mark' })}
         <div>
           <div class="title">Wyked Samurai Guild</div>
           <div class="subtitle">Strategic Guild Network • Nebula Nexus</div>
@@ -1222,6 +1235,7 @@ function profilePage() {
 
   return `
     <section class="feature profile-display-hero guild-identity-hero">
+      <img class="profile-hero-image" src="${BRAND_ASSETS.hero}" alt="Moonlit samurai hero art" loading="eager" decoding="async" />
       <div class="nebula-halo"></div>
       <div class="profile-summary-row">
         ${avatarMarkup(profile, 'lg')}
@@ -2346,7 +2360,7 @@ function renderPublicLayout(path, key, pageHtml) {
       <header class="public-header panel">
         <div class="public-container public-header-inner">
           <div class="brand">
-            <div class="brand-logo samurai-mark">侍</div>
+            ${guildBrandMark({ className: 'header-brand-mark' })}
             <div>
               <div class="title">Wyked Samurai Guild</div>
               <div class="subtitle">Strategic Guild Network • Nebula Nexus</div>
