@@ -70,12 +70,24 @@ const STARTER_TRIALS = [
   },
 ];
 
+
+const PROFILE_LAYER_META = {
+  free: { label: 'Free', hint: 'Basic guild identity' },
+  professional: { label: 'Professional', hint: 'Career-facing profile layer' },
+  roleplay: { label: 'Roleplay', hint: 'In-world RP persona layer' },
+};
+const PROFILE_LAYER_ORDER = ['free', 'professional', 'roleplay'];
+
 const state = {
   mode: localStorage.getItem('wsg-mode') || 'professional',
   authToken: localStorage.getItem('wsg-auth-token') || '',
   currentUser: null,
   members: [],
   activeProfile: null,
+  activeLayer: 'free',
+  availableLayers: ['free'],
+  lockedLayers: ['professional', 'roleplay'],
+  layers: {},
   profileHub: {
     saving: false,
     message: '',
@@ -1110,10 +1122,19 @@ function profilePage() {
     return card('Profile Hub', '<p class="muted">Please log in first.</p>');
   }
 
-  const skills = splitSkills(profile.skillsInterests);
-  const connectionPreview = state.network.connections.length
-    ? state.network.connections.slice(0, 4).map((connection) => `<li><span>${escapeHtml(connection.displayName || connection.username)}</span><span class="muted">${escapeHtml(connection.role || 'member')}</span></li>`).join('')
-    : '<li><span class="muted">No connections yet.</span></li>';
+  const activeLayer = state.activeLayer || 'free';
+  const activeData = state.layers?.[activeLayer] || {};
+  const tabMarkup = PROFILE_LAYER_ORDER.map((layerKey) => {
+    const meta = PROFILE_LAYER_META[layerKey];
+    const isLocked = state.lockedLayers.includes(layerKey);
+    const isActive = activeLayer === layerKey;
+    return `<button type="button" class="pill-btn ${isActive ? 'active' : ''}" data-layer-tab="${layerKey}" ${isLocked ? 'disabled title="Upgrade to unlock"' : ''}>${meta.label}${isLocked ? ' 🔒' : ''}</button>`;
+  }).join('');
+
+  const isLayerLocked = state.lockedLayers.includes(activeLayer);
+  const skillsList = Array.isArray(activeData.skills) ? activeData.skills : [];
+  const layerBioLabel = activeLayer === 'professional' ? 'Professional Bio' : activeLayer === 'roleplay' ? 'Roleplay Bio' : 'Short Bio';
+  const layerSkillsLabel = activeLayer === 'free' ? 'Basic Tags' : 'Tags / Skills';
 
   return `
     <section class="feature profile-display-hero">
@@ -1121,66 +1142,45 @@ function profilePage() {
         ${avatarMarkup(profile, 'lg')}
         <div>
           <p class="hero-kicker">Guild Profile</p>
-          <h3 style="margin:0;">${escapeHtml(profile.displayName)}</h3>
+          <h3 style="margin:0;">${escapeHtml(activeData.displayName || profile.displayName || profile.username)}</h3>
           <p class="muted" style="margin:4px 0;">@${escapeHtml(profile.username)}</p>
-          <p class="muted" style="margin:0;">${escapeHtml(profile.role || 'member')} · ${escapeHtml(profile.organizationName || 'Independent')}</p>
+          <p class="muted" style="margin:0;">Tier: ${escapeHtml(profile.accessTier || 'free')} · Subscription: ${escapeHtml(profile.subscriptionStatus || 'inactive')}</p>
         </div>
       </div>
-      <p class="profile-display-bio">${escapeHtml(profile.bio || 'No profile story published yet.')}</p>
+      <p class="profile-display-bio">${escapeHtml(activeData.bio || 'No profile story published yet for this layer.')}</p>
       <div class="tag-list">
-        ${skills.length ? skills.map((skill) => `<span class="skill-tag">${escapeHtml(skill)}</span>`).join('') : '<span class="muted">No skills listed yet.</span>'}
-      </div>
-      <div class="actions">
-        <a class="pill-btn" href="#/recruiter-console">Message</a>
-        <a class="pill-btn" href="#/members">Connect</a>
+        ${skillsList.length ? skillsList.map((skill) => `<span class="skill-tag">${escapeHtml(skill)}</span>`).join('') : '<span class="muted">No skills listed yet.</span>'}
       </div>
     </section>
-    <section class="profile-identity-overview">
-      <article class="metric-card">
-        <span>Trials Completed</span>
-        <strong>${profile.trialCount || 0}</strong>
-      </article>
-      <article class="metric-card">
-        <span>Connections</span>
-        <strong>${state.network.connections.length}</strong>
-      </article>
-      <article class="metric-card">
-        <span>Guild Since</span>
-        <strong>${new Date(profile.createdAt || Date.now()).toLocaleDateString()}</strong>
-      </article>
-      <article class="metric-card">
-        <span>Last Active</span>
-        <strong>${new Date(profile.lastActiveAt || Date.now()).toLocaleDateString()}</strong>
-      </article>
-    </section>
-    <section class="profile-hub-grid profile-display-grid" style="margin-top:14px;">
-      <div class="profile-hub-col">
-        <section class="card">
-          <h3>Profile Snapshot</h3>
-          <p class="muted">Name: ${escapeHtml(profile.displayName || profile.username || 'Unknown')}</p>
-          <p class="muted">Title / Role: ${escapeHtml(profile.role || 'member')}</p>
-          <p class="muted">Organization: ${escapeHtml(profile.organizationName || 'Independent')}</p>
-          <p class="muted">Bio length: ${(profile.bio || '').length} chars</p>
-        </section>
-      </div>
-      <div class="profile-hub-col">
-        <section class="card">
-          <h3>Connections Preview</h3>
-          <ul class="list compact-list">${connectionPreview}</ul>
-        </section>
-        <section class="card">
-          <h3>Account Timeline</h3>
-          <p class="muted">Joined: ${formatDate(profile.createdAt)}</p>
-          <p class="muted">Updated: ${formatDate(profile.updatedAt)}</p>
-        </section>
-      </div>
-    </section>
+
     <section class="card profile-edit-section">
-      <h3>Edit Profile</h3>
-      <p class="muted">Update account details below. Public profile display remains above.</p>
+      <h3>Profile Layers</h3>
+      <p class="muted">Edit each unlocked layer independently. Locked layers show upgrade messaging only for now.</p>
+      <div id="profile-layer-tabs" class="actions" style="margin-bottom:10px;">${tabMarkup}</div>
+      ${isLayerLocked ? `
+        <div class="status-banner status-info">
+          <strong>${escapeHtml(PROFILE_LAYER_META[activeLayer]?.label || activeLayer)} layer is locked.</strong>
+          <p style="margin:6px 0 0;">Upgrade your access tier to unlock this layer. Payment flow is not implemented yet.</p>
+        </div>
+      ` : `
+      <form id="profile-layer-form" class="form-stack">
+        <input type="hidden" name="layerKey" value="${escapeAttr(activeLayer)}" />
+        <label>Display Name<input name="displayName" value="${escapeAttr(activeData.displayName || '')}" required maxlength="60" /></label>
+        ${(activeLayer === 'professional' || activeLayer === 'roleplay') ? `<label>Headline<input name="headline" value="${escapeAttr(activeData.headline || '')}" maxlength="120" /></label>` : ''}
+        <label>${layerBioLabel}<textarea name="bio" rows="4" maxlength="800">${escapeHtml(activeData.bio || '')}</textarea></label>
+        <label>${layerSkillsLabel} (comma-separated)<input name="skills" value="${escapeAttr((skillsList || []).join(', '))}" /></label>
+        <button class="pill-btn" id="save-profile-layer-btn" type="submit" ${state.profileHub.saving ? 'disabled' : ''}>${state.profileHub.saving ? 'Saving Layer...' : 'Save Active Layer'}</button>
+      </form>
+      `}
+    </section>
+
+    <section class="card profile-edit-section" style="margin-top:12px;">
+      <h3>Account Settings</h3>
+      <p class="muted">Account settings stay global to your user account (not per layer).</p>
       <form id="profile-hub-form" class="form-stack">
         <p id="profile-hub-feedback" class="status-banner ${state.profileHub.message ? `status-${state.profileHub.tone}` : 'status-info'}" role="alert" aria-live="assertive">${escapeHtml(state.profileHub.message || 'Make updates and save when ready.')}</p>
-        <label>Display Name<input name="displayName" value="${escapeAttr(profile.displayName || '')}" required /></label>
+        <label>Legal Name<input name="legalName" value="${escapeAttr(profile.legalName || '')}" required /></label>
+        <label>Email<input name="email" value="${escapeAttr(profile.email || '')}" required /></label>
         <label>Role / Title
           <select name="role">
             <option value="employee_member" ${profile.role === 'employee_member' ? 'selected' : ''}>Employee / Member</option>
@@ -1189,9 +1189,7 @@ function profilePage() {
           </select>
         </label>
         <label>Organization<input name="organizationName" value="${escapeAttr(profile.organizationName || '')}" /></label>
-        <label>Bio / About<textarea name="bio" rows="4" maxlength="500">${escapeHtml(profile.bio || '')}</textarea></label>
-        <label>Skills Tags (comma-separated)<input name="skillsInterests" value="${escapeAttr((profile.skillsInterests || []).join(', '))}" /></label>
-        <button class="pill-btn" id="save-profile-hub-btn" type="submit" ${state.profileHub.saving ? 'disabled' : ''}>${state.profileHub.saving ? 'Saving Profile...' : 'Save Profile'}</button>
+        <button class="pill-btn" id="save-profile-hub-btn" type="submit" ${state.profileHub.saving ? 'disabled' : ''}>${state.profileHub.saving ? 'Saving Account...' : 'Save Account Settings'}</button>
       </form>
     </section>
   `;
@@ -1537,6 +1535,10 @@ function initializeGoogleAuth(routeKey) {
 function setAuthSession({ sessionToken, user }) {
   state.authToken = sessionToken;
   state.currentUser = user;
+  state.layers = user?.layers || {};
+  state.availableLayers = user?.availableLayers || ['free'];
+  state.lockedLayers = user?.lockedLayers || ['professional', 'roleplay'];
+  state.activeLayer = state.availableLayers.includes(state.activeLayer) ? state.activeLayer : (state.availableLayers[0] || 'free');
   localStorage.setItem('wsg-auth-token', sessionToken);
   console.log('[auth:frontend] session token saved', {
     hasSessionToken: Boolean(sessionToken),
@@ -1548,6 +1550,10 @@ function setAuthSession({ sessionToken, user }) {
 function clearAuthSession() {
   state.authToken = '';
   state.currentUser = null;
+  state.layers = {};
+  state.availableLayers = ['free'];
+  state.lockedLayers = ['professional', 'roleplay'];
+  state.activeLayer = 'free';
   localStorage.removeItem('wsg-auth-token');
 }
 
@@ -1559,6 +1565,10 @@ async function bootstrapAuth() {
   try {
     const data = await apiRequest('/auth/me');
     state.currentUser = data.user;
+    state.layers = data.user?.layers || {};
+    state.availableLayers = data.user?.availableLayers || ['free'];
+    state.lockedLayers = data.user?.lockedLayers || ['professional', 'roleplay'];
+    state.activeLayer = state.availableLayers.includes(state.activeLayer) ? state.activeLayer : (state.availableLayers[0] || 'free');
     console.log('[auth:frontend] bootstrap /auth/me success', { userId: data?.user?.id, email: data?.user?.email });
   } catch {
     console.warn('[auth:frontend] bootstrap /auth/me failed, clearing local auth session');
@@ -1638,10 +1648,17 @@ async function loadAreaChat() {
 async function loadProfileForRoute(path) {
   if (path === '/profile') {
     state.activeProfile = state.currentUser;
+    state.layers = state.currentUser?.layers || {};
+    state.availableLayers = state.currentUser?.availableLayers || ['free'];
+    state.lockedLayers = state.currentUser?.lockedLayers || ['professional', 'roleplay'];
+    if (!state.availableLayers.includes(state.activeLayer)) {
+      state.activeLayer = state.availableLayers[0] || 'free';
+    }
     console.log('[profile:frontend] profile route load success', {
       path,
       hasCurrentUser: Boolean(state.currentUser),
       userId: state.currentUser?.id || null,
+      activeLayer: state.activeLayer,
     });
     return;
   }
@@ -1733,6 +1750,57 @@ function isStrongPassword(password) {
 }
 
 function attachProfileEditHandler() {
+  const layerTabs = document.getElementById('profile-layer-tabs');
+  if (layerTabs) {
+    layerTabs.querySelectorAll('[data-layer-tab]').forEach((button) => {
+      button.onclick = async () => {
+        const nextLayer = String(button.getAttribute('data-layer-tab') || 'free');
+        if (state.lockedLayers.includes(nextLayer)) return;
+        state.activeLayer = nextLayer;
+        try {
+          await apiRequest(`/profile/layers/${nextLayer}/activate`, { method: 'POST' });
+        } catch {
+          // no-op placeholder until server-side active-layer persistence is introduced
+        }
+        render();
+      };
+    });
+  }
+
+  const layerForm = document.getElementById('profile-layer-form');
+  if (layerForm) {
+    layerForm.onsubmit = async (event) => {
+      event.preventDefault();
+      if (state.profileHub.saving) return;
+      const formData = new FormData(layerForm);
+      const layerKey = String(formData.get('layerKey') || state.activeLayer || 'free');
+      const payload = {
+        displayName: String(formData.get('displayName') || ''),
+        headline: String(formData.get('headline') || ''),
+        bio: String(formData.get('bio') || ''),
+        skills: String(formData.get('skills') || ''),
+      };
+
+      state.profileHub.saving = true;
+      setProfileHubMessage('Saving profile layer...', 'info');
+      render();
+      try {
+        const result = await apiRequest(`/profile/layers/${layerKey}`, { method: 'PATCH', body: JSON.stringify(payload) });
+        state.currentUser = result.profile;
+        state.activeProfile = result.profile;
+        state.layers = result.profile?.layers || {};
+        state.availableLayers = result.profile?.availableLayers || ['free'];
+        state.lockedLayers = result.profile?.lockedLayers || ['professional', 'roleplay'];
+        setProfileHubMessage('Profile layer saved successfully.', 'success');
+      } catch (error) {
+        setProfileHubMessage(error instanceof Error ? error.message : 'Unable to save profile layer right now.', 'error');
+      } finally {
+        state.profileHub.saving = false;
+        render();
+      }
+    };
+  }
+
   const saveButton = document.getElementById('save-profile-hub-btn');
   const profileHubForm = document.getElementById('profile-hub-form');
   if (saveButton && profileHubForm) {
@@ -1742,29 +1810,24 @@ function attachProfileEditHandler() {
       const formData = new FormData(profileHubForm);
       const payload = {
         legalName: String(formData.get('legalName') || state.currentUser?.legalName || ''),
-        displayName: String(formData.get('displayName') || state.currentUser?.displayName || ''),
         email: String(formData.get('email') || state.currentUser?.email || ''),
         role: String(formData.get('role') || state.currentUser?.role || ''),
         organizationName: String(formData.get('organizationName') || state.currentUser?.organizationName || ''),
-        bio: String(formData.get('bio') || state.currentUser?.bio || ''),
-        skillsInterests: String(formData.get('skillsInterests') || (state.currentUser?.skillsInterests || []).join(', ')),
       };
       state.profileHub.saving = true;
-      setProfileHubMessage('Saving profile...', 'info');
+      setProfileHubMessage('Saving account settings...', 'info');
       render();
       try {
         const result = await apiRequest('/profile/hub', { method: 'PATCH', body: JSON.stringify(payload) });
         state.currentUser = result.profile;
         state.activeProfile = result.profile;
-        console.log('[profile:frontend] profile save success', { userId: result?.profile?.id, email: result?.profile?.email });
-        setProfileHubMessage('Profile saved successfully.', 'success');
-        setStatusMessage('Profile saved successfully.', 'success');
+        state.layers = result.profile?.layers || {};
+        state.availableLayers = result.profile?.availableLayers || ['free'];
+        state.lockedLayers = result.profile?.lockedLayers || ['professional', 'roleplay'];
+        setProfileHubMessage('Account settings saved successfully.', 'success');
+        setStatusMessage('Account settings saved successfully.', 'success');
       } catch (error) {
-        const message = 'Unable to save profile right now.';
-        console.warn('[profile:frontend] profile save failure', {
-          userId: state.currentUser?.id,
-          error: error instanceof Error ? error.message : String(error),
-        });
+        const message = error instanceof Error ? error.message : 'Unable to save account settings right now.';
         setProfileHubMessage(message, 'error');
         setStatusMessage(message, 'error');
       } finally {
@@ -1784,279 +1847,6 @@ function attachProfileEditHandler() {
       render();
     };
   }
-
-  document.querySelectorAll('.add-connection-btn').forEach((button) => {
-    button.addEventListener('click', async () => {
-      const connectionId = button.getAttribute('data-connection-id');
-      if (!connectionId) return;
-      try {
-        await apiRequest(`/connections/${connectionId}`, { method: 'POST' });
-        await loadConnections();
-        await searchConnectionCandidates(state.network.searchTerm);
-        setStatusMessage('Connection added.', 'success');
-        render();
-      } catch (error) {
-        setStatusMessage(error instanceof Error ? error.message : 'Failed to add connection.', 'error');
-      }
-    });
-  });
-
-  document.querySelectorAll('.remove-connection-btn').forEach((button) => {
-    button.addEventListener('click', async () => {
-      const connectionId = button.getAttribute('data-connection-id');
-      if (!connectionId) return;
-      try {
-        await apiRequest(`/connections/${connectionId}`, { method: 'DELETE' });
-        await loadConnections();
-        await searchConnectionCandidates(state.network.searchTerm);
-        if (state.directChat.activeConnectionId === connectionId) {
-          state.directChat.activeConnectionId = '';
-          state.directChat.messages = [];
-        }
-        setStatusMessage('Connection removed.', 'success');
-        render();
-      } catch (error) {
-        setStatusMessage(error instanceof Error ? error.message : 'Failed to remove connection.', 'error');
-      }
-    });
-  });
-
-  document.querySelectorAll('.open-direct-chat-btn').forEach((button) => {
-    button.addEventListener('click', async () => {
-      const connectionId = button.getAttribute('data-connection-id');
-      await loadDirectChat(connectionId);
-      state.shell.selectedConversation = connectionId || '';
-      state.shell.chatOpen = true;
-      state.shell.chatMinimized = false;
-      state.shell.activePaneTab = 'chat';
-      render();
-    });
-  });
-
-  document.querySelectorAll('.open-global-chat-btn').forEach((button) => {
-    button.addEventListener('click', async () => {
-      const connectionId = button.getAttribute('data-connection-id');
-      if (!connectionId) return;
-      await loadDirectChat(connectionId);
-      state.shell.selectedConversation = connectionId;
-      state.shell.chatOpen = true;
-      state.shell.chatMinimized = false;
-      state.shell.activePaneTab = 'chat';
-      render();
-    });
-  });
-
-  document.querySelectorAll('.global-conversation-item').forEach((item) => {
-    item.addEventListener('click', async () => {
-      const connectionId = item.getAttribute('data-connection-id');
-      if (!connectionId) return;
-      await loadDirectChat(connectionId);
-      state.shell.selectedConversation = connectionId;
-      state.shell.chatOpen = true;
-      state.shell.chatMinimized = false;
-      state.shell.activePaneTab = 'chat';
-      render();
-    });
-  });
-
-  const globalConnectionsSearchForm = document.getElementById('global-connections-search-form');
-  if (globalConnectionsSearchForm) {
-    globalConnectionsSearchForm.onsubmit = (event) => event.preventDefault();
-  }
-  const globalConnectionsSearchInput = document.getElementById('global-connections-search-input');
-  if (globalConnectionsSearchInput) {
-    globalConnectionsSearchInput.oninput = () => {
-      state.network.searchTerm = String(globalConnectionsSearchInput.value || '').trim();
-      render();
-    };
-  }
-
-  document.querySelectorAll('.utility-tab-btn').forEach((button) => {
-    button.addEventListener('click', () => {
-      const nextTab = button.getAttribute('data-pane-tab');
-      if (nextTab === 'connections' || nextTab === 'chat') {
-        state.shell.activePaneTab = nextTab;
-        render();
-      }
-    });
-  });
-
-  const directChatForm = document.getElementById('direct-chat-form');
-  if (directChatForm) {
-    directChatForm.onsubmit = async (event) => {
-      event.preventDefault();
-      if (!state.directChat.activeConnectionId) return;
-      const input = document.getElementById('direct-chat-input');
-      const content = String(input?.value || '').trim();
-      if (!content) return;
-      try {
-        await apiRequest(`/chats/direct/${state.directChat.activeConnectionId}/messages`, {
-          method: 'POST',
-          body: JSON.stringify({ content }),
-        });
-        if (input) input.value = '';
-        await loadDirectChat(state.directChat.activeConnectionId);
-        render();
-      } catch (error) {
-        setStatusMessage(error instanceof Error ? error.message : 'Chat unavailable.', 'error');
-      }
-    };
-  }
-
-  const globalChatForm = document.getElementById('global-chat-form');
-  if (globalChatForm) {
-    globalChatForm.onsubmit = async (event) => {
-      event.preventDefault();
-      if (!state.directChat.activeConnectionId) return;
-      const input = document.getElementById('global-chat-input');
-      const content = String(input?.value || '').trim();
-      if (!content) return;
-      try {
-        await apiRequest(`/chats/direct/${state.directChat.activeConnectionId}/messages`, {
-          method: 'POST',
-          body: JSON.stringify({ content }),
-        });
-        if (input) input.value = '';
-        await loadDirectChat(state.directChat.activeConnectionId);
-        render();
-      } catch (error) {
-        setStatusMessage(error instanceof Error ? error.message : 'Chat unavailable.', 'error');
-      }
-    };
-  }
-
-  const toggleChatPaneButton = document.getElementById('toggle-chat-pane-btn');
-  if (toggleChatPaneButton) {
-    toggleChatPaneButton.onclick = () => {
-      state.shell.chatMinimized = !state.shell.chatMinimized;
-      render();
-    };
-  }
-
-  const closeChatPaneButton = document.getElementById('close-chat-pane-btn');
-  if (closeChatPaneButton) {
-    closeChatPaneButton.onclick = () => {
-      state.shell.chatOpen = false;
-      state.shell.chatMinimized = false;
-      render();
-    };
-  }
-
-  const scenarioForm = document.getElementById('scenario-chat-form');
-  if (scenarioForm) {
-    scenarioForm.onsubmit = async (event) => {
-      event.preventDefault();
-      const input = document.getElementById('scenario-chat-input');
-      const content = String(input?.value || '').trim();
-      if (!content) return;
-      await apiRequest('/chats/scenario/messages', { method: 'POST', body: JSON.stringify({ scenarioId: state.scenarioChat.scenarioId, content }) });
-      if (input) input.value = '';
-      await loadScenarioChat();
-      setStatusMessage('Scenario chat opened.', 'success');
-      render();
-    };
-  }
-
-  const areaForm = document.getElementById('area-chat-form');
-  if (areaForm) {
-    areaForm.onsubmit = async (event) => {
-      event.preventDefault();
-      const input = document.getElementById('area-chat-input');
-      const content = String(input?.value || '').trim();
-      if (!content) return;
-      await apiRequest('/chats/area/messages', { method: 'POST', body: JSON.stringify({ areaId: state.areaChat.areaId, content }) });
-      if (input) input.value = '';
-      await loadAreaChat();
-      setStatusMessage('Area chat opened.', 'success');
-      render();
-    };
-  }
-
-  const openScenarioChat = document.getElementById('open-scenario-chat');
-  if (openScenarioChat) {
-    openScenarioChat.addEventListener('click', () => setStatusMessage('Scenario chat opened.', 'success'));
-  }
-  const openAreaChat = document.getElementById('open-area-chat');
-  if (openAreaChat) {
-    openAreaChat.addEventListener('click', () => setStatusMessage('Area chat opened.', 'success'));
-  }
-}
-
-function starterScenarioModalMarkup() {
-  if (!state.onboarding.starterModalOpen) {
-    return '';
-  }
-  const starterTrial = STARTER_TRIALS[0];
-  return `
-    <div class="modal-overlay" role="presentation">
-      <section class="onboarding-modal card" role="dialog" aria-modal="true" aria-labelledby="starter-scenario-title">
-        <h3 id="starter-scenario-title">Welcome to your first Trial</h3>
-        <p class="muted">Your account is ready. Start with this guided scenario to begin onboarding.</p>
-        <article class="feature">
-          <p class="muted" style="margin:0 0 6px;">Starter Scenario · ${escapeHtml(starterTrial.category)} · ${escapeHtml(starterTrial.difficulty)}</p>
-          <h4 style="margin:0 0 8px;">${escapeHtml(starterTrial.title)}</h4>
-          <p style="margin:0;">${escapeHtml(starterTrial.description)}</p>
-        </article>
-        <div class="actions" style="margin-top:14px;">
-          <button class="pill-btn cta-primary" id="start-starter-scenario" data-trial-id="${escapeAttr(starterTrial.id)}">Start Scenario</button>
-          <button class="pill-btn" id="close-starter-scenario">Continue Later</button>
-        </div>
-      </section>
-    </div>
-  `;
-}
-
-function attachOnboardingHandlers() {
-  const startButton = document.getElementById('start-starter-scenario');
-  if (startButton) {
-    startButton.onclick = () => {
-      const starterTrialId = startButton.getAttribute('data-trial-id');
-      const selectedTrial = STARTER_TRIALS.find((trial) => trial.id === starterTrialId) || STARTER_TRIALS[0];
-      state.arena.activeTrialId = selectedTrial.id;
-      state.arena.messages = [{ id: crypto.randomUUID(), type: 'system', content: selectedTrial.openingPrompt }];
-      state.onboarding.starterModalOpen = false;
-      markStarterScenarioSeen();
-      setStatusMessage('Starter scenario loaded. Entering Trial Arena…', 'success');
-      location.hash = '/arena';
-    };
-  }
-
-  const closeButton = document.getElementById('close-starter-scenario');
-  if (closeButton) {
-    closeButton.onclick = () => {
-      state.onboarding.starterModalOpen = false;
-      markStarterScenarioSeen();
-      setStatusMessage('Starter scenario ready when you are.', 'info');
-      render();
-    };
-  }
-}
-
-function attachHeaderActions() {
-  const professionalButton = document.getElementById('professional-mode');
-  if (professionalButton) {
-    professionalButton.onclick = () => setMode('professional');
-  }
-
-  const roleplayButton = document.getElementById('roleplay-mode');
-  if (roleplayButton) {
-    roleplayButton.onclick = () => setMode('roleplay');
-  }
-
-  const logoutButton = document.getElementById('logout-btn');
-  if (logoutButton) {
-    logoutButton.onclick = async () => {
-      try {
-        await apiRequest('/auth/logout', { method: 'POST' });
-      } catch {
-        // noop
-      }
-      clearAuthSession();
-      state.membersLoaded = false;
-      location.hash = '/login';
-    };
-  }
-
 }
 
 function attachArenaHandlers() {

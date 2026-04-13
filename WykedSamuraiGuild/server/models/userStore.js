@@ -1,16 +1,77 @@
 import crypto from "crypto";
 import pool from "../config/db.js";
 
-function publicUser(row, connections = []) {
+const PROFILE_LAYER_KEYS = ["free", "professional", "roleplay"];
+
+function getUnlockedLayers(accessTier = "free") {
+  switch (accessTier) {
+    case "guild":
+      return [...PROFILE_LAYER_KEYS];
+    case "professional":
+      return ["free", "professional"];
+    case "roleplay":
+      return ["free", "roleplay"];
+    case "free":
+    default:
+      return ["free"];
+  }
+}
+
+function mapLayerRow(row) {
+  return {
+    id: row.id,
+    layerKey: row.layer_key,
+    displayName: row.display_name || "",
+    headline: row.headline || "",
+    bio: row.bio || "",
+    skills: Array.isArray(row.skills) ? row.skills : [],
+    themeMode: row.theme_mode || "",
+    isPublic: row.is_public === true,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+async function getProfileLayersByUserId(userId) {
+  const { rows } = await pool.query(
+    `SELECT *
+     FROM profile_layers
+     WHERE user_id = $1
+     ORDER BY CASE layer_key WHEN 'free' THEN 0 WHEN 'professional' THEN 1 WHEN 'roleplay' THEN 2 ELSE 9 END, created_at ASC`,
+    [userId],
+  );
+  return rows.map(mapLayerRow);
+}
+
+function publicUser(row, layers = [], connections = []) {
   if (!row) return null;
 
   const email = row.email || "";
   const username = String(email).split("@")[0] || "member";
+  const unlockedSet = new Set(getUnlockedLayers(row.access_tier));
+  const availableLayers = PROFILE_LAYER_KEYS.filter((key) => unlockedSet.has(key));
+  const lockedLayers = PROFILE_LAYER_KEYS.filter((key) => !unlockedSet.has(key));
+
+  const layerMap = layers.reduce((acc, layer) => {
+    acc[layer.layerKey] = layer;
+    return acc;
+  }, {});
+  const freeLayer = layerMap.free || {
+    layerKey: "free",
+    displayName: row.legal_name,
+    headline: "",
+    bio: "",
+    skills: [],
+    themeMode: "",
+    isPublic: false,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 
   return {
     id: row.id,
     username,
-    displayName: row.display_name || row.legal_name,
+    displayName: freeLayer.displayName || row.legal_name,
     legalName: row.legal_name,
     email,
     emailVerified: false,
@@ -20,8 +81,13 @@ function publicUser(row, connections = []) {
     backupEmail: row.backup_email || "",
     backupEmailVerified: false,
     avatarUrl: "",
-    bio: row.bio || "",
-    skillsInterests: Array.isArray(row.skills) ? row.skills : [],
+    bio: freeLayer.bio || "",
+    skillsInterests: Array.isArray(freeLayer.skills) ? freeLayer.skills : [],
+    accessTier: row.access_tier || "free",
+    subscriptionStatus: row.subscription_status || "inactive",
+    availableLayers,
+    lockedLayers,
+    layers: layerMap,
     connections,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -51,7 +117,7 @@ export async function createUser({
   mfaEnabled = false,
 }) {
   const userId = crypto.randomUUID();
-  const profileId = crypto.randomUUID();
+  const freeLayerId = crypto.randomUUID();
 
   const client = await pool.connect();
   try {
@@ -64,13 +130,24 @@ export async function createUser({
     );
 
     await client.query(
-      `INSERT INTO profiles (id, user_id, display_name, bio, skills)
-       VALUES ($1, $2, $3, '', ARRAY[]::TEXT[])`,
-      [profileId, userId, (displayName || legalName).trim()],
+      `INSERT INTO profile_layers (id, user_id, layer_key, display_name, bio, skills)
+       VALUES ($1, $2, 'free', $3, '', ARRAY[]::TEXT[])`,
+      [freeLayerId, userId, (displayName || legalName).trim()],
     );
 
     await client.query("COMMIT");
-    return publicUser({ ...userInsert.rows[0], display_name: (displayName || legalName).trim(), bio: "", skills: [] }, []);
+    return publicUser(userInsert.rows[0], [{
+      id: freeLayerId,
+      layerKey: "free",
+      displayName: (displayName || legalName).trim(),
+      headline: "",
+      bio: "",
+      skills: [],
+      themeMode: "",
+      isPublic: false,
+      createdAt: userInsert.rows[0].created_at,
+      updatedAt: userInsert.rows[0].updated_at,
+    }], []);
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
@@ -81,9 +158,8 @@ export async function createUser({
 
 export async function findUserByIdentifier(identifier) {
   const { rows } = await pool.query(
-    `SELECT u.*, p.display_name, p.bio, p.skills
+    `SELECT u.*
      FROM users u
-     LEFT JOIN profiles p ON p.user_id = u.id
      WHERE LOWER(u.email) = LOWER($1)
      LIMIT 1`,
     [String(identifier || "").trim()],
@@ -93,9 +169,8 @@ export async function findUserByIdentifier(identifier) {
 
 export async function findUserById(userId) {
   const { rows } = await pool.query(
-    `SELECT u.*, p.display_name, p.bio, p.skills
+    `SELECT u.*
      FROM users u
-     LEFT JOIN profiles p ON p.user_id = u.id
      WHERE u.id = $1
      LIMIT 1`,
     [userId],
@@ -105,73 +180,97 @@ export async function findUserById(userId) {
 
 export async function listUsers() {
   const { rows } = await pool.query(
-    `SELECT u.*, p.display_name, p.bio, p.skills
+    `SELECT u.*
      FROM users u
-     LEFT JOIN profiles p ON p.user_id = u.id
-     ORDER BY COALESCE(p.display_name, u.legal_name) ASC`,
+     ORDER BY u.legal_name ASC`,
   );
 
   const users = [];
   for (const row of rows) {
-    const connections = await getConnectionIds(row.id);
-    users.push(publicUser(row, connections));
+    const [connections, layers] = await Promise.all([
+      getConnectionIds(row.id),
+      getProfileLayersByUserId(row.id),
+    ]);
+    users.push(publicUser(row, layers, connections));
   }
   return users;
 }
 
 export async function updateUserProfile(userId, { displayName, bio }) {
   const { rows } = await pool.query(
-    `UPDATE profiles
+    `UPDATE profile_layers
      SET display_name = $2, bio = $3, updated_at = NOW()
-     WHERE user_id = $1
+     WHERE user_id = $1 AND layer_key = 'free'
      RETURNING *`,
     [userId, String(displayName || "").trim(), String(bio || "").trim()],
   );
 
   const user = await findUserById(userId);
   if (!user) return null;
-  const connections = await getConnectionIds(userId);
-  return publicUser({ ...user, ...rows[0], updated_at: rows[0]?.updated_at || user.updated_at }, connections);
+  const [connections, layers] = await Promise.all([
+    getConnectionIds(userId),
+    getProfileLayersByUserId(userId),
+  ]);
+  return publicUser(user, layers, connections);
 }
 
-export async function updateUserHubProfile(userId, { legalName, displayName, email, role, organizationName, bio, skillsInterests }) {
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-
-    await client.query(
-      `UPDATE users
-       SET legal_name = $2,
-           email = $3,
-           role = $4,
-           organization_name = $5,
-           updated_at = NOW()
-       WHERE id = $1`,
-      [userId, legalName.trim(), email.trim(), role.trim(), organizationName.trim()],
-    );
-
-    await client.query(
-      `UPDATE profiles
-       SET display_name = $2,
-           bio = $3,
-           skills = $4,
-           updated_at = NOW()
-       WHERE user_id = $1`,
-      [userId, displayName.trim(), bio.trim(), skillsInterests],
-    );
-
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
-  }
+export async function updateUserHubProfile(userId, { legalName, email, role, organizationName }) {
+  await pool.query(
+    `UPDATE users
+     SET legal_name = $2,
+         email = $3,
+         role = $4,
+         organization_name = $5,
+         updated_at = NOW()
+     WHERE id = $1`,
+    [userId, legalName.trim(), email.trim(), role.trim(), organizationName.trim()],
+  );
 
   const user = await findUserById(userId);
   if (!user) return null;
-  const connections = await getConnectionIds(userId);
-  return publicUser(user, connections);
+  const [connections, layers] = await Promise.all([
+    getConnectionIds(userId),
+    getProfileLayersByUserId(userId),
+  ]);
+  return publicUser(user, layers, connections);
+}
+
+export async function getProfileLayer(userId, layerKey) {
+  const { rows } = await pool.query(
+    `SELECT * FROM profile_layers WHERE user_id = $1 AND layer_key = $2 LIMIT 1`,
+    [userId, layerKey],
+  );
+  return rows[0] ? mapLayerRow(rows[0]) : null;
+}
+
+export async function upsertProfileLayer(userId, layerKey, payload = {}) {
+  const { rows } = await pool.query(
+    `INSERT INTO profile_layers (id, user_id, layer_key, display_name, headline, bio, skills, theme_mode, is_public)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+     ON CONFLICT (user_id, layer_key)
+     DO UPDATE SET
+       display_name = EXCLUDED.display_name,
+       headline = EXCLUDED.headline,
+       bio = EXCLUDED.bio,
+       skills = EXCLUDED.skills,
+       theme_mode = EXCLUDED.theme_mode,
+       is_public = EXCLUDED.is_public,
+       updated_at = NOW()
+     RETURNING *`,
+    [
+      crypto.randomUUID(),
+      userId,
+      layerKey,
+      String(payload.displayName || "").trim(),
+      String(payload.headline || "").trim(),
+      String(payload.bio || "").trim(),
+      Array.isArray(payload.skills) ? payload.skills : [],
+      String(payload.themeMode || "").trim(),
+      payload.isPublic === true,
+    ],
+  );
+
+  return mapLayerRow(rows[0]);
 }
 
 export async function addConnection(userId, connectionUserId) {
@@ -183,8 +282,11 @@ export async function addConnection(userId, connectionUserId) {
   );
 
   const user = await findUserById(userId);
-  const connections = await getConnectionIds(userId);
-  return publicUser(user, connections);
+  const [connections, layers] = await Promise.all([
+    getConnectionIds(userId),
+    getProfileLayersByUserId(userId),
+  ]);
+  return publicUser(user, layers, connections);
 }
 
 export async function removeConnection(userId, connectionUserId) {
@@ -193,15 +295,21 @@ export async function removeConnection(userId, connectionUserId) {
     [userId, connectionUserId],
   );
   const user = await findUserById(userId);
-  const connections = await getConnectionIds(userId);
-  return publicUser(user, connections);
+  const [connections, layers] = await Promise.all([
+    getConnectionIds(userId),
+    getProfileLayersByUserId(userId),
+  ]);
+  return publicUser(user, layers, connections);
 }
 
 export async function touchLastActiveAt(userId) {
   await pool.query(`UPDATE users SET updated_at = NOW() WHERE id = $1`, [userId]);
   const user = await findUserById(userId);
-  const connections = await getConnectionIds(userId);
-  return publicUser(user, connections);
+  const [connections, layers] = await Promise.all([
+    getConnectionIds(userId),
+    getProfileLayersByUserId(userId),
+  ]);
+  return publicUser(user, layers, connections);
 }
 
 export async function createSession(userId, options = {}) {
@@ -307,6 +415,9 @@ export async function markSessionReauthenticated(sessionToken, { mfaConfirmed = 
 
 export async function toPublicUser(user) {
   if (!user) return null;
-  const connections = await getConnectionIds(user.id);
-  return publicUser(user, connections);
+  const [connections, layers] = await Promise.all([
+    getConnectionIds(user.id),
+    getProfileLayersByUserId(user.id),
+  ]);
+  return publicUser(user, layers, connections);
 }
