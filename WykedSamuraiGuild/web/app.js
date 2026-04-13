@@ -181,6 +181,22 @@ function setProfileHubMessage(message, tone = 'info') {
   state.profileHub.tone = tone;
 }
 
+function normalizeLayeredProfile(profilePayload) {
+  const hasNestedUser = Boolean(profilePayload && typeof profilePayload === 'object' && profilePayload.user);
+  const user = hasNestedUser ? profilePayload.user : (profilePayload || null);
+  const availableLayers = hasNestedUser
+    ? (profilePayload.availableLayers || ['free'])
+    : (user?.availableLayers || ['free']);
+  const lockedLayers = hasNestedUser
+    ? (profilePayload.lockedLayers || ['professional', 'roleplay'])
+    : (user?.lockedLayers || ['professional', 'roleplay']);
+  const layers = hasNestedUser
+    ? (profilePayload.layers || {})
+    : (user?.layers || {});
+
+  return { user, availableLayers, lockedLayers, layers };
+}
+
 function escapeAttr(value) {
   return escapeHtml(String(value || '')).replace(/"/g, '&quot;');
 }
@@ -1533,17 +1549,18 @@ function initializeGoogleAuth(routeKey) {
 }
 
 function setAuthSession({ sessionToken, user }) {
+  const normalized = normalizeLayeredProfile(user);
   state.authToken = sessionToken;
-  state.currentUser = user;
-  state.layers = user?.layers || {};
-  state.availableLayers = user?.availableLayers || ['free'];
-  state.lockedLayers = user?.lockedLayers || ['professional', 'roleplay'];
+  state.currentUser = normalized.user;
+  state.layers = normalized.layers;
+  state.availableLayers = normalized.availableLayers;
+  state.lockedLayers = normalized.lockedLayers;
   state.activeLayer = state.availableLayers.includes(state.activeLayer) ? state.activeLayer : (state.availableLayers[0] || 'free');
   localStorage.setItem('wsg-auth-token', sessionToken);
   console.log('[auth:frontend] session token saved', {
     hasSessionToken: Boolean(sessionToken),
-    userId: user?.id || null,
-    email: user?.email || null,
+    userId: normalized.user?.id || null,
+    email: normalized.user?.email || null,
   });
 }
 
@@ -1564,12 +1581,13 @@ async function bootstrapAuth() {
 
   try {
     const data = await apiRequest('/auth/me');
-    state.currentUser = data.user;
-    state.layers = data.user?.layers || {};
-    state.availableLayers = data.user?.availableLayers || ['free'];
-    state.lockedLayers = data.user?.lockedLayers || ['professional', 'roleplay'];
+    const normalized = normalizeLayeredProfile(data.user);
+    state.currentUser = normalized.user;
+    state.layers = normalized.layers;
+    state.availableLayers = normalized.availableLayers;
+    state.lockedLayers = normalized.lockedLayers;
     state.activeLayer = state.availableLayers.includes(state.activeLayer) ? state.activeLayer : (state.availableLayers[0] || 'free');
-    console.log('[auth:frontend] bootstrap /auth/me success', { userId: data?.user?.id, email: data?.user?.email });
+    console.log('[auth:frontend] bootstrap /auth/me success', { userId: normalized.user?.id, email: normalized.user?.email });
   } catch {
     console.warn('[auth:frontend] bootstrap /auth/me failed, clearing local auth session');
     clearAuthSession();
@@ -1647,10 +1665,13 @@ async function loadAreaChat() {
 
 async function loadProfileForRoute(path) {
   if (path === '/profile') {
-    state.activeProfile = state.currentUser;
-    state.layers = state.currentUser?.layers || {};
-    state.availableLayers = state.currentUser?.availableLayers || ['free'];
-    state.lockedLayers = state.currentUser?.lockedLayers || ['professional', 'roleplay'];
+    const result = await apiRequest('/profile/me');
+    const normalized = normalizeLayeredProfile(result.profile);
+    state.activeProfile = normalized.user;
+    state.currentUser = normalized.user;
+    state.layers = normalized.layers;
+    state.availableLayers = normalized.availableLayers;
+    state.lockedLayers = normalized.lockedLayers;
     if (!state.availableLayers.includes(state.activeLayer)) {
       state.activeLayer = state.availableLayers[0] || 'free';
     }
@@ -1786,11 +1807,12 @@ function attachProfileEditHandler() {
       render();
       try {
         const result = await apiRequest(`/profile/layers/${layerKey}`, { method: 'PATCH', body: JSON.stringify(payload) });
-        state.currentUser = result.profile;
-        state.activeProfile = result.profile;
-        state.layers = result.profile?.layers || {};
-        state.availableLayers = result.profile?.availableLayers || ['free'];
-        state.lockedLayers = result.profile?.lockedLayers || ['professional', 'roleplay'];
+        const normalized = normalizeLayeredProfile(result.profile);
+        state.currentUser = normalized.user;
+        state.activeProfile = normalized.user;
+        state.layers = normalized.layers;
+        state.availableLayers = normalized.availableLayers;
+        state.lockedLayers = normalized.lockedLayers;
         setProfileHubMessage('Profile layer saved successfully.', 'success');
       } catch (error) {
         setProfileHubMessage(error instanceof Error ? error.message : 'Unable to save profile layer right now.', 'error');
@@ -1819,11 +1841,12 @@ function attachProfileEditHandler() {
       render();
       try {
         const result = await apiRequest('/profile/hub', { method: 'PATCH', body: JSON.stringify(payload) });
-        state.currentUser = result.profile;
-        state.activeProfile = result.profile;
-        state.layers = result.profile?.layers || {};
-        state.availableLayers = result.profile?.availableLayers || ['free'];
-        state.lockedLayers = result.profile?.lockedLayers || ['professional', 'roleplay'];
+        const normalized = normalizeLayeredProfile(result.profile);
+        state.currentUser = normalized.user;
+        state.activeProfile = normalized.user;
+        state.layers = normalized.layers;
+        state.availableLayers = normalized.availableLayers;
+        state.lockedLayers = normalized.lockedLayers;
         setProfileHubMessage('Account settings saved successfully.', 'success');
         setStatusMessage('Account settings saved successfully.', 'success');
       } catch (error) {

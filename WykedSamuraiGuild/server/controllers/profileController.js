@@ -5,7 +5,7 @@ import {
   getDirectConversation,
   getMemberProfile,
   getMembers,
-  getOwnProfile,
+  getOwnProfileMe,
   getOwnProfileLayer,
   getScenarioChatStream,
   listConnectionProfiles,
@@ -22,8 +22,8 @@ import {
 
 export async function getMyProfile(req, res) {
   console.log("[profile] profile fetch request received", { userId: req.user.id, email: req.user.email });
-  const profile = await getOwnProfile(req.user.id);
-  console.log("[profile] profile fetch success", { userId: profile?.id, email: profile?.email });
+  const profile = await getOwnProfileMe(req.user.id);
+  console.log("[profile] profile fetch success", { userId: profile?.user?.id, email: profile?.user?.email });
   return res.json({ profile });
 }
 

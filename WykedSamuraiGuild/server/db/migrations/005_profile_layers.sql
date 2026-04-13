@@ -16,8 +16,22 @@ CREATE TABLE IF NOT EXISTS profile_layers (
   is_public BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT profile_layers_layer_key_check CHECK (layer_key IN ('free', 'professional', 'roleplay')),
   UNIQUE(user_id, layer_key)
 );
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'profile_layers_layer_key_check'
+  ) THEN
+    ALTER TABLE profile_layers
+      ADD CONSTRAINT profile_layers_layer_key_check
+      CHECK (layer_key IN ('free', 'professional', 'roleplay'));
+  END IF;
+END $$;
 
 INSERT INTO profile_layers (id, user_id, layer_key, display_name, headline, bio, skills, theme_mode, is_public)
 SELECT COALESCE(p.id, u.id), u.id, 'free', COALESCE(p.display_name, u.legal_name, ''), '', COALESCE(p.bio, ''), COALESCE(p.skills, ARRAY[]::TEXT[]), '', FALSE
