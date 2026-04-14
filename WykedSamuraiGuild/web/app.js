@@ -26,6 +26,15 @@ const navItems = [
 
 const STARTER_TRIALS = [
   {
+    id: 'find-your-why',
+    title: 'The First Step: Find Your Why',
+    description: 'Onboarding reflection scenario where you explore four halls and define your core motivation.',
+    category: 'Onboarding',
+    difficulty: 'Foundational',
+    openingPrompt: 'Begin at the Compass Dais, visit each hall, and answer the final question to set your profile motivation.',
+    suggestedRole: 'New Guild Member',
+  },
+  {
     id: 'team-conflict',
     title: 'Team Conflict',
     description: 'Resolve escalating conflict between two high-performing contributors before delivery deadlines slip.',

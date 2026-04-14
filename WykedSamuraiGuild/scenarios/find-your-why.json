@@ -1,0 +1,145 @@
+{
+  "id": "find-your-why",
+  "title": "The First Step: Find Your Why",
+  "description": "An onboarding reflection journey where new guild members uncover the motivation that will guide every future challenge.",
+  "openingSituation": "You arrive at the Compass Dais, where four halls surround you. Each hall asks you to face a different part of yourself before you can name your reason for moving forward.",
+  "map": {
+    "startLocation": "compass_dais",
+    "locations": [
+      "compass_dais",
+      "hall_memory",
+      "hall_ambition",
+      "hall_burden",
+      "hall_connection"
+    ],
+    "paths": [
+      {
+        "from": "compass_dais",
+        "to": "hall_memory"
+      },
+      {
+        "from": "compass_dais",
+        "to": "hall_ambition"
+      },
+      {
+        "from": "compass_dais",
+        "to": "hall_burden"
+      },
+      {
+        "from": "compass_dais",
+        "to": "hall_connection"
+      },
+      {
+        "from": "hall_memory",
+        "to": "compass_dais"
+      },
+      {
+        "from": "hall_ambition",
+        "to": "compass_dais"
+      },
+      {
+        "from": "hall_burden",
+        "to": "compass_dais"
+      },
+      {
+        "from": "hall_connection",
+        "to": "compass_dais"
+      }
+    ]
+  },
+  "locations": {
+    "compass_dais": {
+      "name": "Compass Dais",
+      "description": "A circular platform with four radiant paths. You can choose any hall in any order.",
+      "spawn": true
+    },
+    "hall_memory": {
+      "name": "Hall of Memory",
+      "description": "Echoes of your past speak here. Choose what still shapes your steps."
+    },
+    "hall_ambition": {
+      "name": "Hall of Ambition",
+      "description": "Visions of tomorrow sharpen into intent. Choose what you are willing to chase."
+    },
+    "hall_burden": {
+      "name": "Hall of Burden",
+      "description": "This chamber reveals weight carried in silence. Choose what you are still carrying."
+    },
+    "hall_connection": {
+      "name": "Hall of Connection",
+      "description": "Threads of purpose bind you to others. Choose who you move forward for."
+    }
+  },
+  "prompts": {
+    "hall_memory": {
+      "question": "What part of your past still guides you?",
+      "options": [
+        "hardship",
+        "love",
+        "failure",
+        "duty"
+      ],
+      "saveAs": "scenario.answers.memory"
+    },
+    "hall_ambition": {
+      "question": "What do you want badly enough to chase?",
+      "options": [
+        "build something lasting",
+        "prove myself",
+        "protect others",
+        "discover who I can become"
+      ],
+      "saveAs": "scenario.answers.ambition"
+    },
+    "hall_burden": {
+      "question": "What weighs on you?",
+      "options": [
+        "fear of failure",
+        "responsibility",
+        "loss",
+        "unfinished purpose"
+      ],
+      "saveAs": "scenario.answers.burden"
+    },
+    "hall_connection": {
+      "question": "Who do you move forward for?",
+      "options": [
+        "family",
+        "community",
+        "promise",
+        "future companions"
+      ],
+      "saveAs": "scenario.answers.connection"
+    },
+    "final": {
+      "trigger": {
+        "whenVisitedAll": [
+          "hall_memory",
+          "hall_ambition",
+          "hall_burden",
+          "hall_connection"
+        ],
+        "returnTo": "compass_dais"
+      },
+      "question": "What is your why?",
+      "options": [
+        "To become someone my younger self would trust.",
+        "To build a life that uplifts others.",
+        "To turn my pain into purpose.",
+        "To leave something meaningful behind."
+      ],
+      "allowCustomAnswer": true,
+      "saveAs": "profile.motivation"
+    }
+  },
+  "completionCondition": {
+    "type": "profileFieldSaved",
+    "field": "profile.motivation",
+    "requireVisitedAll": [
+      "hall_memory",
+      "hall_ambition",
+      "hall_burden",
+      "hall_connection"
+    ]
+  }
+}
