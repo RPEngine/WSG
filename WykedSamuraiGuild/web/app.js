@@ -8,6 +8,7 @@ const routes = {
   '/profile/direct-chat': { key: 'directChat', requiresAuth: true },
   '/profile/scenario-chat': { key: 'scenarioChat', requiresAuth: true },
   '/profile/area-chat': { key: 'areaChat', requiresAuth: true },
+  '/scenario': { key: 'scenarioDetail', requiresAuth: true },
   '/login': { key: 'login', guestOnly: true },
   '/signup': { key: 'signup', guestOnly: true },
   '/recruiter-console': { key: 'recruiter', requiresAuth: true },
@@ -80,6 +81,73 @@ const STARTER_TRIALS = [
     suggestedRole: 'Program Manager',
   },
 ];
+
+const FIRST_SCENARIO_ID = 'find-your-why';
+const SCENARIO_BLUEPRINTS = Object.freeze({
+  'find-your-why': {
+    id: 'find-your-why',
+    slug: 'find-your-why',
+    title: 'The First Step: Find Your Why',
+    description: 'Move through each hall to explore memory, ambition, burden, and connection before naming your core motivation.',
+    objective: 'Visit each hall and gather your reflections, then return to the Compass Dais.',
+    startLocation: 'compass_dais',
+    locations: {
+      compass_dais: {
+        id: 'compass_dais',
+        name: 'Compass Dais',
+        prompt: 'The compass hums at your feet. Choose a hall to begin your reflection journey.',
+      },
+      hall_memory: {
+        id: 'hall_memory',
+        name: 'Hall of Memory',
+        prompt: 'Recall a defining moment from your past. Which memory still guides you?',
+        responses: [
+          'A mentor believed in me before I believed in myself.',
+          'A difficult failure taught me resilience and humility.',
+          'A breakthrough moment showed what I can build with others.',
+        ],
+      },
+      hall_ambition: {
+        id: 'hall_ambition',
+        name: 'Hall of Ambition',
+        prompt: 'When you imagine your best future self, what drives that vision?',
+        responses: [
+          'Creating work that leaves a lasting impact.',
+          'Leading teams that thrive under pressure.',
+          'Continuously mastering my craft and passing it on.',
+        ],
+      },
+      hall_burden: {
+        id: 'hall_burden',
+        name: 'Hall of Burden',
+        prompt: 'Every path has weight. Which burden are you willing to carry?',
+        responses: [
+          'The responsibility of making hard decisions.',
+          'The discipline of growth when comfort is easier.',
+          'The patience required to build trust over time.',
+        ],
+      },
+      hall_connection: {
+        id: 'hall_connection',
+        name: 'Hall of Connection',
+        prompt: 'Who are you choosing to serve as you grow into leadership?',
+        responses: [
+          'My team and the people who rely on our work.',
+          'My family and community who shaped my values.',
+          'Future builders who need a path I can help create.',
+        ],
+      },
+    },
+    hallOrder: ['hall_memory', 'hall_ambition', 'hall_burden', 'hall_connection'],
+    finalPrompt: 'What is your why?',
+    finalResponses: [
+      'To build meaningful work that lifts others.',
+      'To lead with integrity when pressure rises.',
+      'To turn hardship into guidance for my community.',
+    ],
+    completionMessage: 'Scenario complete. Your why is now anchored in your guild profile journey.',
+  },
+});
 
 const BRAND_ASSETS = Object.freeze({
   logo: 'assets/branding/wyked-samurai-guild-logo-design.svg',
@@ -184,6 +252,10 @@ const state = {
   statusMessage: null,
   onboarding: {
     starterModalOpen: false,
+  },
+  scenarioDetail: {
+    activeScenarioId: FIRST_SCENARIO_ID,
+    sessions: {},
   },
 };
 
@@ -587,6 +659,69 @@ function escapeHtml(value) {
 
 function getActiveTrial() {
   return STARTER_TRIALS.find((trial) => trial.id === state.arena.activeTrialId) || null;
+}
+
+function slugifyScenario(value) {
+  return String(value || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+}
+
+function findScenarioBlueprint(identifier) {
+  const normalized = slugifyScenario(identifier || FIRST_SCENARIO_ID);
+  if (SCENARIO_BLUEPRINTS[normalized]) {
+    return SCENARIO_BLUEPRINTS[normalized];
+  }
+
+  const fromStarterTrials = STARTER_TRIALS.find((trial) => {
+    const candidateSlug = slugifyScenario(trial.slug || trial.id || trial.title);
+    return normalized === slugifyScenario(trial.id) || normalized === candidateSlug || normalized === slugifyScenario(trial.title);
+  });
+
+  if (!fromStarterTrials) {
+    return null;
+  }
+
+  return SCENARIO_BLUEPRINTS[slugifyScenario(fromStarterTrials.id)] || null;
+}
+
+function getScenarioRouteIdentifier(path) {
+  if (path.startsWith('/scenario/')) {
+    const rawValue = path.slice('/scenario/'.length).split('?')[0];
+    return decodeURIComponent(rawValue || FIRST_SCENARIO_ID);
+  }
+
+  if (path.startsWith('/scenario')) {
+    const [, queryString = ''] = path.split('?');
+    const params = new URLSearchParams(queryString);
+    return params.get('id') || params.get('slug') || FIRST_SCENARIO_ID;
+  }
+
+  return null;
+}
+
+function ensureScenarioSession(scenarioId) {
+  if (!state.scenarioDetail.sessions[scenarioId]) {
+    const scenario = findScenarioBlueprint(scenarioId);
+    if (!scenario) {
+      return null;
+    }
+    state.scenarioDetail.sessions[scenarioId] = {
+      scenarioId,
+      currentLocation: scenario.startLocation,
+      answers: {},
+      visitedLocations: [scenario.startLocation],
+      completedHalls: [],
+      finalUnlocked: false,
+      finalAnswer: '',
+      finalSubmitted: false,
+      completionMessageVisible: false,
+    };
+  }
+
+  return state.scenarioDetail.sessions[scenarioId];
 }
 
 function splitSkills(skills) {
@@ -1128,6 +1263,7 @@ function arenaPage() {
           </section>
         `
 }
+
       <section class="scenario-experience-panel">
         <div class="scenario-panel-head">
           <div>
@@ -1190,6 +1326,105 @@ function arenaPage() {
 }
     `,
   });
+}
+
+function scenarioDetailPage(path) {
+  const scenarioIdentifier = getScenarioRouteIdentifier(path) || FIRST_SCENARIO_ID;
+  const scenario = findScenarioBlueprint(scenarioIdentifier);
+  if (!scenario) {
+    return card('Scenario not found', '<p class="muted">We could not find that scenario. Try /scenario/find-your-why.</p>');
+  }
+
+  const session = ensureScenarioSession(scenario.id);
+  if (!session) {
+    return card('Scenario unavailable', '<p class="muted">Unable to initialize scenario state.</p>');
+  }
+  state.scenarioDetail.activeScenarioId = scenario.id;
+
+  const completedCount = session.completedHalls.length;
+  const totalHalls = scenario.hallOrder.length;
+  const progressLabel = session.finalSubmitted ? 'Scenario Complete' : `${completedCount}/${totalHalls} halls completed`;
+  const isDais = session.currentLocation === scenario.startLocation;
+  const isFinalPromptVisible = isDais && session.finalUnlocked;
+  const activeLocation = scenario.locations[session.currentLocation] || scenario.locations[scenario.startLocation];
+  const activePrompt = isFinalPromptVisible ? scenario.finalPrompt : (activeLocation.prompt || '');
+  const responseOptions = isFinalPromptVisible ? scenario.finalResponses : (activeLocation.responses || []);
+  const answersList = Object.entries(session.answers).map(([locationId, answer]) => `
+    <li><span>${escapeHtml(scenario.locations[locationId]?.name || locationId)}</span><strong>${escapeHtml(answer)}</strong></li>
+  `).join('');
+
+  return `
+    <section class="scenario-detail-layout">
+      <aside class="scenario-detail-card card">
+        <p class="hero-kicker">Scenario Card</p>
+        <h3>${escapeHtml(scenario.title)}</h3>
+        <p class="muted">${escapeHtml(scenario.description)}</p>
+        <div class="scenario-stat-block">
+          <span>Current Objective</span>
+          <strong>${escapeHtml(session.finalUnlocked ? 'Return to the Compass Dais and answer the final question.' : scenario.objective)}</strong>
+        </div>
+        <div class="scenario-stat-block">
+          <span>Current Location</span>
+          <strong>${escapeHtml(activeLocation.name)}</strong>
+        </div>
+        <div class="scenario-stat-block">
+          <span>Progress Status</span>
+          <strong>${escapeHtml(progressLabel)}</strong>
+        </div>
+        <div class="scenario-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="${totalHalls}" aria-valuenow="${completedCount}" aria-label="Hall progress">
+          <span style="width:${Math.min((completedCount / totalHalls) * 100, 100)}%;"></span>
+        </div>
+        <p class="muted scenario-progress-label">${completedCount}/${totalHalls} halls complete</p>
+        ${answersList ? `<ul class="scenario-answer-log">${answersList}</ul>` : '<p class="muted">Your reflections will be recorded here as you explore.</p>'}
+      </aside>
+      <section class="scenario-detail-map-area card">
+        <div class="scenario-map-head">
+          <div>
+            <p class="hero-kicker">Scenario Map</p>
+            <h3>Path of Reflection</h3>
+          </div>
+          <p class="muted">Choose a location to continue.</p>
+        </div>
+        <div class="scenario-location-grid">
+          ${['compass_dais', ...scenario.hallOrder].map((locationId) => {
+    const location = scenario.locations[locationId];
+    const isCurrent = session.currentLocation === locationId;
+    const isCompleted = session.completedHalls.includes(locationId);
+    const isHall = locationId !== scenario.startLocation;
+    const isLockedDais = locationId === scenario.startLocation && !session.finalUnlocked && completedCount < totalHalls;
+    return `
+              <button
+                type="button"
+                class="scenario-location-btn ${isCurrent ? 'is-current' : ''} ${isCompleted ? 'is-completed' : ''}"
+                data-location-id="${locationId}"
+                ${isLockedDais ? 'disabled' : ''}
+              >
+                <span>${escapeHtml(location.name)}</span>
+                <small>${isCompleted ? 'Visited' : (isHall ? 'Unvisited' : 'Central node')}</small>
+              </button>
+            `;
+  }).join('')}
+        </div>
+        <section class="scenario-prompt-panel">
+          <p class="hero-kicker">Current Prompt</p>
+          <h4>${escapeHtml(activeLocation.name)}</h4>
+          <p class="scenario-prompt">${escapeHtml(activePrompt)}</p>
+          <div class="scenario-response-stack">
+            ${responseOptions.map((choice, index) => `
+              <button type="button" class="pill-btn scenario-response-btn" data-response-value="${escapeAttr(choice)}">${index + 1}. ${escapeHtml(choice)}</button>
+            `).join('')}
+          </div>
+          ${isFinalPromptVisible && !session.finalSubmitted ? `
+            <form id="scenario-final-form" class="scenario-final-form">
+              <input id="scenario-final-input" name="finalAnswer" placeholder="Or write your why in your own words..." value="${escapeAttr(session.finalAnswer || '')}" />
+              <button class="pill-btn cta-primary" type="submit">Submit Final Answer</button>
+            </form>
+          ` : ''}
+          ${session.completionMessageVisible ? `<p class="scenario-completion-message">${escapeHtml(scenario.completionMessage)}</p>` : ''}
+        </section>
+      </section>
+    </section>
+  `;
 }
 
 function guildPage() {
@@ -1823,7 +2058,10 @@ async function loadProfileForRoute(path) {
 }
 
 function applyRouteGuards(path) {
-  const known = routes[path] || (path.startsWith('/members/') ? { key: 'profile', requiresAuth: true } : null);
+  const isScenarioRoute = path === '/scenario' || path.startsWith('/scenario/');
+  const known = routes[path]
+    || (path.startsWith('/members/') ? { key: 'profile', requiresAuth: true } : null)
+    || (isScenarioRoute ? { key: 'scenarioDetail', requiresAuth: true } : null);
   if (!known) {
     return path;
   }
@@ -1837,6 +2075,76 @@ function applyRouteGuards(path) {
   }
 
   return path;
+}
+
+function attachScenarioDetailHandlers() {
+  const scenarioId = state.scenarioDetail.activeScenarioId;
+  if (!scenarioId) {
+    return;
+  }
+  const scenario = findScenarioBlueprint(scenarioId);
+  const session = ensureScenarioSession(scenarioId);
+  if (!scenario || !session) {
+    return;
+  }
+
+  document.querySelectorAll('.scenario-location-btn').forEach((button) => {
+    button.onclick = () => {
+      const locationId = String(button.getAttribute('data-location-id') || '');
+      if (!scenario.locations[locationId]) {
+        return;
+      }
+      if (!session.visitedLocations.includes(locationId)) {
+        session.visitedLocations.push(locationId);
+      }
+      session.currentLocation = locationId;
+      render();
+    };
+  });
+
+  document.querySelectorAll('.scenario-response-btn').forEach((button) => {
+    button.onclick = () => {
+      const selectedResponse = String(button.getAttribute('data-response-value') || '').trim();
+      const locationId = session.currentLocation;
+      if (!selectedResponse) {
+        return;
+      }
+
+      if (locationId === scenario.startLocation && session.finalUnlocked) {
+        session.finalAnswer = selectedResponse;
+      } else if (scenario.hallOrder.includes(locationId)) {
+        session.answers[locationId] = selectedResponse;
+        if (!session.completedHalls.includes(locationId)) {
+          session.completedHalls.push(locationId);
+        }
+      }
+
+      if (scenario.hallOrder.every((hallId) => session.completedHalls.includes(hallId))) {
+        session.finalUnlocked = true;
+      }
+      if (session.finalUnlocked && locationId !== scenario.startLocation) {
+        session.currentLocation = scenario.startLocation;
+      }
+      render();
+    };
+  });
+
+  const finalAnswerForm = document.getElementById('scenario-final-form');
+  if (finalAnswerForm) {
+    finalAnswerForm.onsubmit = (event) => {
+      event.preventDefault();
+      const input = document.getElementById('scenario-final-input');
+      const value = String(input?.value || session.finalAnswer || '').trim();
+      if (!value) {
+        return;
+      }
+
+      session.finalAnswer = value;
+      session.finalSubmitted = true;
+      session.completionMessageVisible = true;
+      render();
+    };
+  }
 }
 
 function getLoginErrorMessage(error) {
@@ -2450,6 +2758,8 @@ async function render() {
   }
 
   const route = routes[path] || (path.startsWith('/members/') ? { key: 'profile', requiresAuth: true } : { key: 'fallback' });
+  const isScenarioRoute = path === '/scenario' || path.startsWith('/scenario/');
+  const resolvedRoute = isScenarioRoute ? { key: 'scenarioDetail', requiresAuth: true } : route;
   const pageHtml = {
     landing: landingPage,
     home: homePage,
@@ -2460,19 +2770,20 @@ async function render() {
     directChat: directChatPage,
     scenarioChat: scenarioChatPage,
     areaChat: areaChatPage,
+    scenarioDetail: () => scenarioDetailPage(path),
     profileEdit: profileEditPage,
     login: loginPage,
     signup: signupPage,
     recruiter: recruiterPage,
     fallback: fallbackPage,
-  }[route.key]();
+  }[resolvedRoute.key]();
 
-  if (route.key === 'landing' || route.key === 'login' || route.key === 'signup') {
-    renderPublicLayout(path, route.key, pageHtml);
+  if (resolvedRoute.key === 'landing' || resolvedRoute.key === 'login' || resolvedRoute.key === 'signup') {
+    renderPublicLayout(path, resolvedRoute.key, pageHtml);
   } else {
-    renderLayout(path, route.key, pageHtml);
+    renderLayout(path, resolvedRoute.key, pageHtml);
   }
-  initializeGoogleAuth(route.key);
+  initializeGoogleAuth(resolvedRoute.key);
 
   const loginForm = document.getElementById('login-form');
   if (loginForm) {
@@ -2594,6 +2905,7 @@ async function render() {
     });
   });
   attachArenaHandlers();
+  attachScenarioDetailHandlers();
   attachHomeChatHandlers();
   attachChatPaneHandlers();
   console.log('[wsg] render complete');
