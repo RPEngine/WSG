@@ -77,38 +77,20 @@ const BRAND_ASSETS = Object.freeze({
   hero: 'assets/branding/wyked-samurai-under-the-glowing-moon.svg',
 });
 
-const BACKGROUND_ASSETS = Object.freeze({
-  home: 'assets/backgrounds/bg-home-nexus.svg',
-  arena: 'assets/backgrounds/bg-arena-duel.svg',
-  scenario: 'assets/backgrounds/bg-scenario.svg',
-  recruiter: 'assets/backgrounds/bg-recruiter-network.svg',
-  guild: 'assets/backgrounds/bg-guild-temple.svg',
-  starsOverlay: 'assets/overlays/bg-stars-overlay.svg',
-});
 
 function pageBackgroundClass(path, key) {
-  if (path === '/app' || key === 'home') return 'page-home';
-  if (path === '/arena' || key === 'arena') return 'page-arena';
-  if (path === '/guild-world' || key === 'guild') return 'page-guild-world';
-  if (path === '/recruiter-console' || key === 'recruiter') return 'page-recruiter-console';
-  if (['scenarioChat', 'areaChat'].includes(key)) return 'page-scenario';
-  return 'page-home';
+  if (path === '/arena' || key === 'arena') return 'arena-bg';
+  if (path === '/guild-world' || key === 'guild') return 'guild-bg';
+  if (path === '/recruiter-console' || key === 'recruiter') return 'recruiter-bg';
+  if (['scenarioChat', 'areaChat', 'directChat'].includes(key)) return 'scenario-bg';
+  if (path === '/members' || key === 'members' || key === 'profile') return 'guild-bg';
+  return 'home-bg';
 }
 
 function applyPageBackground(path, key) {
   const pageClass = pageBackgroundClass(path, key);
-  document.body.classList.remove(
-    'page-home',
-    'page-arena',
-    'page-guild-world',
-    'page-recruiter-console',
-    'page-scenario',
-    'page-scenario-chat',
-    'page-area-chat',
-  );
+  document.body.classList.remove('home-bg', 'arena-bg', 'guild-bg', 'scenario-bg', 'recruiter-bg');
   document.body.classList.add(pageClass);
-  document.body.style.setProperty('--bg-page-image', `url("${BACKGROUND_ASSETS[pageClass.replace('page-', '').replace('guild-world','guild').replace('recruiter-console','recruiter')] || BACKGROUND_ASSETS.home}")`);
-  document.body.style.setProperty('--bg-stars-overlay', `url("${BACKGROUND_ASSETS.starsOverlay}")`);
 }
 
 function guildBrandMark({ compact = false, className = '' } = {}) {

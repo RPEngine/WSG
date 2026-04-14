@@ -1544,10 +1544,7 @@ select:focus-visible {
   --body-font: Inter, "Source Sans 3", system-ui, sans-serif;
 
   --bg-base: #090d12;
-  --bg-page-image: url("assets/backgrounds/bg-home-nexus.svg");
-  --bg-stars-overlay: url("assets/overlays/bg-stars-overlay.svg");
-  --bg-readability-gradient: linear-gradient(180deg, rgba(3, 6, 10, 0.86) 0%, rgba(4, 8, 13, 0.94) 65%, rgba(2, 4, 8, 0.98) 100%);
-  --bg-fog-layer: radial-gradient(circle at 16% 8%, rgba(223, 231, 239, 0.08), transparent 34%);
+  --scene-bg: url("/assets/backgrounds/bg-home-nexus.png");
 
   --mode-accent-glow: rgba(199, 90, 27, 0.24);
   --mode-border-glow: rgba(199, 90, 27, 0.45);
@@ -1557,16 +1554,14 @@ select:focus-visible {
 
 body {
   font-family: var(--body-font);
-  background-color: var(--bg-base);
+  background-color: #0b0d10;
   background-image:
-    var(--bg-readability-gradient),
-    var(--bg-stars-overlay),
-    var(--bg-page-image),
-    var(--bg-fog-layer),
-    linear-gradient(165deg, #0b1015 0%, #090d12 62%, #05070a 100%);
-  background-size: cover, cover, cover, cover, cover;
-  background-position: center, center, center top, center, center;
-  background-attachment: fixed, fixed, fixed, fixed, fixed;
+    var(--scene-bg),
+    url("/assets/backgrounds/bg-stars-overlay.png"),
+    radial-gradient(circle at center, rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.85));
+  background-size: cover, cover, cover;
+  background-position: center, center, center;
+  background-attachment: fixed, fixed, fixed;
   background-repeat: no-repeat;
 }
 
@@ -1610,13 +1605,25 @@ body {
   --mode-highlight-secondary: rgba(120, 205, 212, 0.15);
 }
 
-body.page-home { --bg-page-image: url("assets/backgrounds/bg-home-nexus.svg"); }
-body.page-arena { --bg-page-image: url("assets/backgrounds/bg-arena-duel.svg"); }
-body.page-guild-world { --bg-page-image: url("assets/backgrounds/bg-guild-temple.svg"); }
-body.page-recruiter-console { --bg-page-image: url("assets/backgrounds/bg-recruiter-network.svg"); }
-body.page-scenario,
-body.page-scenario-chat,
-body.page-area-chat { --bg-page-image: url("assets/backgrounds/bg-scenario.svg"); }
+body.home-bg {
+  --scene-bg: url("/assets/backgrounds/bg-home-nexus.png");
+}
+
+body.arena-bg {
+  --scene-bg: url("/assets/backgrounds/bg-arena-duel.png");
+}
+
+body.guild-bg {
+  --scene-bg: url("/assets/backgrounds/bg-guild-temple.png");
+}
+
+body.scenario-bg {
+  --scene-bg: url("/assets/backgrounds/bg-scenario.png");
+}
+
+body.recruiter-bg {
+  --scene-bg: url("/assets/backgrounds/bg-recruiter-network.png");
+}
 
 h1, h2, h3, h4, .title, .lockup-title { font-family: var(--heading-font); }
 
@@ -1646,10 +1653,14 @@ h1, h2, h3, h4, .title, .lockup-title { font-family: var(--heading-font); }
 .public-header,
 .public-content,
 .card,
+.panel,
+.sidebar,
+.topbar,
 .global-chat-dock,
 .messaging-rail,
 .active-chat-dock {
-  background: linear-gradient(180deg, var(--panel-strong), var(--panel));
+  background: rgba(18, 22, 28, 0.82);
+  backdrop-filter: blur(6px);
   border-color: var(--border);
 }
 
