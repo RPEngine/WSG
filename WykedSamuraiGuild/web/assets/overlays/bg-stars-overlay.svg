@@ -1,0 +1,8 @@
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 900'>
+  <rect width='1600' height='900' fill='#000' opacity='0.94'/>
+  <g fill='#fff' opacity='0.35'>
+    <circle cx='82' cy='74' r='1'/><circle cx='227' cy='142' r='0.8'/><circle cx='361' cy='44' r='0.7'/><circle cx='510' cy='211' r='0.9'/><circle cx='642' cy='94' r='1'/><circle cx='748' cy='188' r='0.7'/><circle cx='880' cy='120' r='0.8'/><circle cx='1002' cy='58' r='0.9'/><circle cx='1118' cy='194' r='0.7'/><circle cx='1260' cy='118' r='0.8'/><circle cx='1394' cy='72' r='1'/><circle cx='1532' cy='164' r='0.9'/>
+    <circle cx='118' cy='322' r='0.9'/><circle cx='264' cy='402' r='0.7'/><circle cx='418' cy='330' r='0.8'/><circle cx='566' cy='444' r='0.9'/><circle cx='712' cy='360' r='0.7'/><circle cx='860' cy='420' r='1'/><circle cx='1008' cy='334' r='0.8'/><circle cx='1142' cy='412' r='0.7'/><circle cx='1298' cy='346' r='0.8'/><circle cx='1460' cy='430' r='0.9'/>
+    <circle cx='72' cy='672' r='0.7'/><circle cx='238' cy='744' r='0.8'/><circle cx='394' cy='658' r='0.9'/><circle cx='548' cy='790' r='0.7'/><circle cx='686' cy='704' r='0.8'/><circle cx='822' cy='776' r='1'/><circle cx='960' cy='682' r='0.8'/><circle cx='1116' cy='760' r='0.7'/><circle cx='1270' cy='694' r='0.8'/><circle cx='1418' cy='782' r='0.9'/><circle cx='1546' cy='706' r='0.8'/>
+  </g>
+</svg>

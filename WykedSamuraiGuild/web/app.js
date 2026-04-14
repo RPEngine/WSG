@@ -73,9 +73,43 @@ const STARTER_TRIALS = [
 ];
 
 const BRAND_ASSETS = Object.freeze({
-  logo: 'assets/branding/wyked-samurai-guild-logo-design.png',
-  hero: 'assets/branding/wyked-samurai-under-the-glowing-moon.png',
+  logo: 'assets/branding/wyked-samurai-guild-logo-design.svg',
+  hero: 'assets/branding/wyked-samurai-under-the-glowing-moon.svg',
 });
+
+const BACKGROUND_ASSETS = Object.freeze({
+  home: 'assets/backgrounds/bg-home-nexus.svg',
+  arena: 'assets/backgrounds/bg-arena-duel.svg',
+  scenario: 'assets/backgrounds/bg-scenario.svg',
+  recruiter: 'assets/backgrounds/bg-recruiter-network.svg',
+  guild: 'assets/backgrounds/bg-guild-temple.svg',
+  starsOverlay: 'assets/overlays/bg-stars-overlay.svg',
+});
+
+function pageBackgroundClass(path, key) {
+  if (path === '/app' || key === 'home') return 'page-home';
+  if (path === '/arena' || key === 'arena') return 'page-arena';
+  if (path === '/guild-world' || key === 'guild') return 'page-guild-world';
+  if (path === '/recruiter-console' || key === 'recruiter') return 'page-recruiter-console';
+  if (['scenarioChat', 'areaChat'].includes(key)) return 'page-scenario';
+  return 'page-home';
+}
+
+function applyPageBackground(path, key) {
+  const pageClass = pageBackgroundClass(path, key);
+  document.body.classList.remove(
+    'page-home',
+    'page-arena',
+    'page-guild-world',
+    'page-recruiter-console',
+    'page-scenario',
+    'page-scenario-chat',
+    'page-area-chat',
+  );
+  document.body.classList.add(pageClass);
+  document.body.style.setProperty('--bg-page-image', `url("${BACKGROUND_ASSETS[pageClass.replace('page-', '').replace('guild-world','guild').replace('recruiter-console','recruiter')] || BACKGROUND_ASSETS.home}")`);
+  document.body.style.setProperty('--bg-stars-overlay', `url("${BACKGROUND_ASSETS.starsOverlay}")`);
+}
 
 function guildBrandMark({ compact = false, className = '' } = {}) {
   return `
@@ -2331,6 +2365,7 @@ function applyModeClass() {
 
 function renderLayout(path, key, pageHtml) {
   applyModeClass();
+  applyPageBackground(path, key);
 
   const statusMarkup = state.statusMessage
     ? `<p class="status-banner status-${state.statusMessage.tone}" role="status">${escapeHtml(state.statusMessage.message)}</p>`
@@ -2349,6 +2384,7 @@ function renderLayout(path, key, pageHtml) {
 function renderPublicLayout(path, key, pageHtml) {
   const [title, subtitle] = pageTitle(key);
   applyModeClass();
+  applyPageBackground(path, key);
   const showPageHeader = key !== 'landing';
 
   const statusMarkup = state.statusMessage
