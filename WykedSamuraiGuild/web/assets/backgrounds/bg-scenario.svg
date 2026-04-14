@@ -1,0 +1,10 @@
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 900'>
+  <rect width='1600' height='900' fill='#0a0e13'/>
+  <g opacity='0.18' fill='#d7dfe8'>
+    <rect x='120' y='180' width='260' height='540' rx='8'/>
+    <rect x='460' y='120' width='300' height='620' rx='8'/>
+    <rect x='850' y='210' width='220' height='500' rx='8'/>
+    <rect x='1120' y='140' width='360' height='590' rx='8'/>
+  </g>
+  <path d='M0 700 C350 610 450 770 820 680 C1140 610 1360 760 1600 700' stroke='#d0d8e1' opacity='0.23' fill='none'/>
+</svg>

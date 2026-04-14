@@ -1,0 +1,7 @@
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 420 120'>
+  <rect width='420' height='120' rx='14' fill='#0a0f15'/>
+  <path d='M56 85 L98 28 L140 85' stroke='#e4ebf2' stroke-width='8' fill='none'/>
+  <circle cx='98' cy='52' r='8' fill='#e4ebf2'/>
+  <text x='168' y='54' fill='#e7edf4' font-family='Cinzel,serif' font-size='28' font-weight='700'>WYKED</text>
+  <text x='168' y='88' fill='#b4c0cf' font-family='Inter,sans-serif' font-size='22'>SAMURAI GUILD</text>
+</svg>
