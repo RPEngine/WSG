@@ -2025,7 +2025,15 @@ select:focus-visible {
   --body-font: Inter, "Source Sans 3", system-ui, sans-serif;
 
   --bg-base: #090d12;
-  --scene-bg: url("/assets/backgrounds/bg-home-nexus.png");
+  --page-scene-image: url("/assets/backgrounds/bg-home-nexus.svg");
+  --page-scene-overlay:
+    radial-gradient(circle at center, rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.85));
+  --page-scene-texture: url("/assets/overlays/bg-stars-overlay.svg");
+  --page-scene-opacity: 1;
+  --page-scene-position: center;
+  --page-scene-size: cover;
+  --page-scene-attachment: fixed;
+  --page-scene-noise-opacity: 0.2;
 
   --mode-accent-glow: rgba(199, 90, 27, 0.24);
   --mode-border-glow: rgba(199, 90, 27, 0.45);
@@ -2035,15 +2043,7 @@ select:focus-visible {
 
 body {
   font-family: var(--body-font);
-  background-color: #0b0d10;
-  background-image:
-    var(--scene-bg),
-    url("/assets/backgrounds/bg-stars-overlay.png"),
-    radial-gradient(circle at center, rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.85));
-  background-size: cover, cover, cover;
-  background-position: center, center, center;
-  background-attachment: fixed, fixed, fixed;
-  background-repeat: no-repeat;
+  background: var(--bg-base);
 }
 
 .mode-professional {
@@ -2086,26 +2086,6 @@ body {
   --mode-highlight-secondary: rgba(120, 205, 212, 0.15);
 }
 
-body.home-bg {
-  --scene-bg: url("/assets/backgrounds/bg-home-nexus.png");
-}
-
-body.arena-bg {
-  --scene-bg: url("/assets/backgrounds/bg-arena-duel.png");
-}
-
-body.guild-bg {
-  --scene-bg: url("/assets/backgrounds/bg-guild-temple.png");
-}
-
-body.scenario-bg {
-  --scene-bg: url("/assets/backgrounds/bg-scenario.png");
-}
-
-body.recruiter-bg {
-  --scene-bg: url("/assets/backgrounds/bg-recruiter-network.png");
-}
-
 h1, h2, h3, h4, .title, .lockup-title { font-family: var(--heading-font); }
 
 .app-shell,
@@ -2114,17 +2094,67 @@ h1, h2, h3, h4, .title, .lockup-title { font-family: var(--heading-font); }
   isolation: isolate;
 }
 
-.app-shell::before,
-.public-shell::before {
+.page-set::before {
   content: '';
   position: fixed;
   inset: 0;
   pointer-events: none;
+  z-index: -2;
+  background:
+    var(--page-scene-overlay),
+    var(--page-scene-image);
+  background-position: center, var(--page-scene-position);
+  background-size: cover, var(--page-scene-size);
+  background-repeat: no-repeat, no-repeat;
+  background-attachment: fixed, var(--page-scene-attachment);
+  opacity: var(--page-scene-opacity);
+}
+
+.page-set::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
   background:
     radial-gradient(circle at 88% 12%, var(--mode-highlight-secondary), transparent 27%),
-    radial-gradient(circle at 12% 5%, var(--mode-highlight-primary), transparent 30%);
-  opacity: 0.75;
-  z-index: -1;
+    radial-gradient(circle at 12% 5%, var(--mode-highlight-primary), transparent 30%),
+    var(--page-scene-texture);
+  background-size: cover, cover, var(--page-scene-size);
+  background-position: center, center, var(--page-scene-position);
+  background-repeat: no-repeat;
+  opacity: calc(0.55 + var(--page-scene-noise-opacity));
+  mix-blend-mode: screen;
+}
+
+.page-set--home {
+  --page-scene-image: url("/assets/backgrounds/bg-home-nexus.svg");
+  --page-scene-overlay: linear-gradient(160deg, rgba(6, 10, 16, 0.64), rgba(4, 8, 14, 0.84));
+}
+
+.page-set--arena {
+  --page-scene-image: url("/assets/backgrounds/bg-arena-duel.svg");
+  --page-scene-overlay: linear-gradient(165deg, rgba(20, 10, 8, 0.56), rgba(6, 9, 15, 0.86));
+}
+
+.page-set--guild {
+  --page-scene-image: url("/assets/backgrounds/bg-guild-temple.svg");
+  --page-scene-overlay: linear-gradient(165deg, rgba(8, 14, 24, 0.55), rgba(5, 9, 15, 0.84));
+}
+
+.page-set--world-rp {
+  --page-scene-image: url("/assets/backgrounds/bg-scenario.svg");
+  --page-scene-overlay: linear-gradient(165deg, rgba(8, 18, 26, 0.52), rgba(4, 10, 16, 0.84));
+}
+
+.page-set--profile {
+  --page-scene-image: url("/assets/backgrounds/bg-home-nexus.svg");
+  --page-scene-overlay: linear-gradient(165deg, rgba(11, 14, 20, 0.58), rgba(5, 9, 15, 0.86));
+}
+
+.page-set--recruiter {
+  --page-scene-image: url("/assets/backgrounds/bg-recruiter-network.svg");
+  --page-scene-overlay: linear-gradient(165deg, rgba(15, 11, 8, 0.56), rgba(5, 9, 15, 0.88));
 }
 
 .header,
@@ -2140,9 +2170,10 @@ h1, h2, h3, h4, .title, .lockup-title { font-family: var(--heading-font); }
 .global-chat-dock,
 .messaging-rail,
 .active-chat-dock {
-  background: rgba(18, 22, 28, 0.82);
-  backdrop-filter: blur(6px);
+  background: rgba(11, 16, 23, 0.72);
+  backdrop-filter: blur(8px);
   border-color: var(--border);
+  background-image: none;
 }
 
 .right-sidebar,
