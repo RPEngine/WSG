@@ -1214,6 +1214,10 @@ body {
   min-height: calc(100vh - 220px);
 }
 
+.roleplay-nexus-layout.is-tools-collapsed {
+  grid-template-columns: minmax(0, 1fr) 64px;
+}
+
 .roleplay-nexus-main {
   display: flex;
   flex-direction: column;
@@ -1255,8 +1259,9 @@ body {
 }
 
 .roleplay-nexus-side {
-  align-self: start;
+  align-self: stretch;
   padding: 16px;
+  min-width: 0;
 }
 
 .roleplay-tools-panel {
@@ -1270,6 +1275,7 @@ body {
   width: 64px;
   min-height: 420px;
   padding: 12px 8px;
+  justify-self: end;
 }
 
 .roleplay-tools-head {
@@ -1287,6 +1293,10 @@ body {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
+}
+
+.scenario-tools-panel .roleplay-tools-tabs {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .roleplay-tools-tabs.is-collapsed {
@@ -1322,6 +1332,79 @@ body {
 
 .roleplay-tools-content {
   margin-top: 4px;
+}
+
+.roleplay-nexus-header-meta-row {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  align-items: center;
+}
+
+.scenario-compact-meta-btn {
+  border: 1px solid var(--ring);
+  border-radius: 999px;
+  background: rgba(8, 30, 38, 0.65);
+  color: var(--text-main);
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.scenario-chat-list {
+  display: grid;
+  gap: 8px;
+}
+
+.scenario-chat-entry {
+  border: 1px solid var(--ring);
+  border-radius: 10px;
+  background: rgba(8, 30, 38, 0.55);
+  color: var(--text-main);
+  padding: 10px;
+  display: grid;
+  gap: 4px;
+  text-decoration: none;
+}
+
+.scenario-chat-entry:hover {
+  border-color: var(--mode-highlight-primary);
+}
+
+.scenario-chat-entry.active {
+  border-color: var(--mode-highlight-primary);
+  box-shadow: 0 0 10px rgba(77, 197, 255, 0.24);
+  background: rgba(12, 48, 58, 0.74);
+}
+
+.scenario-chat-entry-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.scenario-status-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.72rem;
+  border: 1px solid var(--ring);
+}
+
+.scenario-status-badge.is-active,
+.scenario-status-badge.is-available {
+  border-color: var(--mode-highlight-primary);
+}
+
+.scenario-status-badge.is-completed {
+  border-color: #4fd4a0;
+  color: #4fd4a0;
+}
+
+.scenario-status-badge.is-locked {
+  opacity: 0.68;
 }
 
 .roleplay-participant-list {
@@ -2791,6 +2874,10 @@ h1, h2, h3, h4, .title, .lockup-title { font-family: var(--heading-font); }
   }
 
   .roleplay-nexus-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .roleplay-nexus-layout.is-tools-collapsed {
     grid-template-columns: 1fr;
   }
 

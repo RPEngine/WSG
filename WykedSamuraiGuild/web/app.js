@@ -393,7 +393,7 @@ const state = {
     pending: false,
     error: '',
     toolsCollapsed: loadRoleplayToolsCollapsedPreference(),
-    activeToolsTab: 'participants',
+    activeToolsTab: 'chats',
     sessions: {},
   },
 };
@@ -1231,6 +1231,80 @@ function roleplayParticipantRoute(participant) {
     return `/characters/${participant.characterId}`;
   }
   return '';
+}
+
+function scenarioParticipantRoute(participant) {
+  if (participant.type === 'user' && participant.profileId) {
+    return `/profile/${participant.profileId}`;
+  }
+  if (participant.type === 'character' && participant.characterId) {
+    return `/characters/${participant.characterId}`;
+  }
+  return '';
+}
+
+function getScenarioStatus(session) {
+  if (!session) return 'locked';
+  if (session.finalSubmitted) return 'completed';
+  if (session.status === 'active' || (Array.isArray(session.taggedParticipantIds) && session.taggedParticipantIds.length > 0)) return 'active';
+  if (session.status === 'locked') return 'locked';
+  return 'available';
+}
+
+function scenarioStatusLabel(status) {
+  const labelMap = {
+    available: 'Available',
+    active: 'Active',
+    completed: 'Completed',
+    locked: 'Locked',
+  };
+  return labelMap[status] || 'Available';
+}
+
+function buildWorkspaceShell({
+  layoutClassName = '',
+  mainClassName = '',
+  sideClassName = '',
+  title,
+  subtitle,
+  headerMeta = '',
+  body,
+  sideHeadTitle,
+  collapseButtonId,
+  collapseAriaLabel,
+  collapseIcon,
+  tabsMarkup,
+  contentMarkup,
+  isToolsCollapsed = false,
+}) {
+  return `
+    <section class="roleplay-nexus-layout ${layoutClassName} ${isToolsCollapsed ? 'is-tools-collapsed' : ''}">
+      <section class="roleplay-nexus-main panel-surface panel-surface--transparent ${mainClassName}">
+        <header class="roleplay-nexus-header">
+          <h2>${escapeHtml(title)}</h2>
+          ${headerMeta || subtitle ? `
+            <div class="roleplay-nexus-header-meta-row">
+              ${subtitle ? `<p class="muted">${escapeHtml(subtitle)}</p>` : ''}
+              ${headerMeta || ''}
+            </div>
+          ` : ''}
+        </header>
+        <div class="roleplay-nexus-chat-shell">
+          ${body}
+        </div>
+      </section>
+      <aside class="roleplay-nexus-side roleplay-tools-panel panel-surface panel-surface--soft ${sideClassName} ${isToolsCollapsed ? 'is-collapsed' : ''}">
+        <div class="roleplay-tools-head">
+          <h3>${escapeHtml(sideHeadTitle)}</h3>
+          <button type="button" class="panel-toggle-btn roleplay-tools-collapse-btn" id="${escapeAttr(collapseButtonId)}" aria-label="${escapeAttr(collapseAriaLabel)}">${collapseIcon}</button>
+        </div>
+        <div class="roleplay-tools-tabs ${isToolsCollapsed ? 'is-collapsed' : ''}" role="tablist">
+          ${tabsMarkup}
+        </div>
+        ${isToolsCollapsed ? '' : `<div class="roleplay-tools-content" role="tabpanel">${contentMarkup}</div>`}
+      </aside>
+    </section>
+  `;
 }
 
 function getScenarioConfig(scenarioId) {
@@ -2263,7 +2337,7 @@ function scenarioDetailPage(path) {
   }
   state.scenarioDetail.activeScenarioId = scenario.id;
   const isToolsCollapsed = Boolean(state.scenarioDetail.toolsCollapsed);
-  const activeToolsTab = state.scenarioDetail.activeToolsTab || 'participants';
+  const activeToolsTab = state.scenarioDetail.activeToolsTab || 'chats';
   const participantCount = Array.isArray(session.taggedParticipantIds) ? session.taggedParticipantIds.length : 0;
   const maxParticipants = Number(session.maxParticipants || 1);
   const sessionStatus = session.status || 'pending';
@@ -2306,7 +2380,34 @@ function scenarioDetailPage(path) {
       <span>${escapeHtml(objective.label)}</span>
     </li>
   `).join('');
-  const participantsMarkup = buildParticipantListMarkup(session.participants, { interactive: false });
+  const participantsMarkup = buildParticipantListMarkup(session.participants, { interactive: true, routeResolver: scenarioParticipantRoute });
+  const scenarioEntries = STARTER_TRIALS.map((trial) => {
+    const trialSession = ensureScenarioSession(trial.id);
+    const status = getScenarioStatus(trialSession);
+    const taggedCount = Array.isArray(trialSession?.taggedParticipantIds) ? trialSession.taggedParticipantIds.length : 0;
+    const participantCap = Number(trialSession?.maxParticipants || getScenarioConfig(trial.id)?.maxParticipants || 1);
+    return {
+      scenarioId: trial.id,
+      title: trial.title,
+      subtitle: trial.category || trial.difficulty || '',
+      status,
+      participantCount: taggedCount,
+      maxParticipants: participantCap,
+    };
+  });
+  const scenarioChatsMarkup = scenarioEntries.map((entry) => {
+    const isActiveChat = entry.scenarioId === scenario.id;
+    return `
+      <a class="scenario-chat-entry ${isActiveChat ? 'active' : ''}" href="${linkFor(`/scenario/${entry.scenarioId}`)}">
+        <span class="scenario-chat-entry-head">
+          <strong>${escapeHtml(entry.title)}</strong>
+          <span class="scenario-status-badge is-${escapeAttr(entry.status)}">${escapeHtml(scenarioStatusLabel(entry.status))}</span>
+        </span>
+        <small>${escapeHtml(entry.subtitle || 'Scenario')}</small>
+        <small>${escapeHtml(`${entry.participantCount || 0}${entry.maxParticipants ? ` / ${entry.maxParticipants}` : ''} participants`)}</small>
+      </a>
+    `;
+  }).join('');
   const stateRows = Object.entries({
     currentPhase: session.finalSubmitted ? 'completed' : (session.finalUnlocked ? 'final_vow' : 'hall_traversal'),
     currentLocation: activeLocation.name,
@@ -2342,69 +2443,61 @@ function scenarioDetailPage(path) {
     <button type="button" class="pill-btn scenario-response-btn" data-response-value="${escapeAttr(choice)}">${index + 1}. ${escapeHtml(choice)}</button>
   `).join('');
 
-  return `
-    <section class="roleplay-nexus-layout scenario-nexus-layout">
-      <section class="roleplay-nexus-main panel-surface panel-surface--transparent scenario-nexus-main">
-        <header class="roleplay-nexus-header scenario-nexus-header">
-          <h2>${escapeHtml(scenario.title)}</h2>
-          <div class="scenario-mini-meta">
-            <span>Status: ${escapeHtml(sessionStatus)}</span>
-            <span>${escapeHtml(participantStatusLabel)}</span>
-            <span>${escapeHtml(progressLabel)}</span>
-          </div>
-          <p class="muted">${escapeHtml(scenario.description)}</p>
-          ${session.fullMessage ? `<p class="muted" style="color:#ffb36b;">${escapeHtml(session.fullMessage)}</p>` : ''}
-        </header>
-        <div class="roleplay-nexus-chat-shell">
-          <div id="scenario-conversation-log" class="conversation-log roleplay-chat-log scenario-chat-log">
-            ${messageMarkup || '<p class="muted">Scenario awaits your first move.</p>'}
-          </div>
-          <form id="scenario-input-form" class="arena-input roleplay-input-form">
-            <select id="scenario-sender-select" class="scenario-sender-select" ${state.scenarioDetail.pending ? 'disabled' : ''}>
-              ${participantOptions}
-            </select>
-            <input id="scenario-input" name="message" placeholder="Respond in-scenario..." ${state.scenarioDetail.pending ? 'disabled' : ''} />
-            <button class="pill-btn cta-primary" type="submit" ${state.scenarioDetail.pending ? 'disabled' : ''}>${state.scenarioDetail.pending ? 'Sending...' : 'Send'}</button>
-          </form>
-          <div class="scenario-response-stack">
-            ${quickResponsesMarkup}
-          </div>
-          ${session.completionMessageVisible ? `<p class="scenario-completion-message">${escapeHtml(scenario.completionMessage)}</p>` : ''}
-        </div>
-        ${state.scenarioDetail.error ? `<p class="muted" style="color:#ff7b7b;margin-top:8px;" role="alert">${escapeHtml(state.scenarioDetail.error)}</p>` : ''}
-      </section>
-      <aside class="roleplay-nexus-side roleplay-tools-panel panel-surface panel-surface--soft ${isToolsCollapsed ? 'is-collapsed' : ''}">
-        <div class="roleplay-tools-head">
-          <h3>${isToolsCollapsed ? 'Scenario' : 'Scenario Tools'}</h3>
-          <button type="button" class="panel-toggle-btn roleplay-tools-collapse-btn" id="scenario-tools-toggle" aria-label="${isToolsCollapsed ? 'Expand scenario tools' : 'Collapse scenario tools'}">${isToolsCollapsed ? '⟨' : '⟩'}</button>
-        </div>
-        <div class="roleplay-tools-tabs ${isToolsCollapsed ? 'is-collapsed' : ''}" role="tablist" aria-label="Scenario tools tabs">
-          <button type="button" class="roleplay-tools-tab ${activeToolsTab === 'participants' ? 'active' : ''}" data-scenario-tools-tab="participants" role="tab" aria-selected="${activeToolsTab === 'participants'}">👥<span>Participants</span></button>
-          <button type="button" class="roleplay-tools-tab ${activeToolsTab === 'objectives' ? 'active' : ''}" data-scenario-tools-tab="objectives" role="tab" aria-selected="${activeToolsTab === 'objectives'}">🎯<span>Objectives</span></button>
-          <button type="button" class="roleplay-tools-tab ${activeToolsTab === 'state' ? 'active' : ''}" data-scenario-tools-tab="state" role="tab" aria-selected="${activeToolsTab === 'state'}">🧠<span>State</span></button>
-          <button type="button" class="roleplay-tools-tab ${activeToolsTab === 'tools' ? 'active' : ''}" data-scenario-tools-tab="tools" role="tab" aria-selected="${activeToolsTab === 'tools'}">🛠️<span>Tools</span></button>
-        </div>
-        ${isToolsCollapsed ? '' : `
-          <div class="roleplay-tools-content" role="tabpanel">
-            ${activeToolsTab === 'participants' ? `
-              <p class="muted">${escapeHtml(participantStatusLabel)} ${participantCount >= maxParticipants ? '• Session full' : ''}</p>
-              <div class="roleplay-participant-list">${participantsMarkup || '<p class="muted">No participants tagged.</p>'}</div>
-            ` : ''}
-            ${activeToolsTab === 'objectives' ? `
-              <ul class="scenario-objectives-list">${objectivesMarkup}</ul>
-            ` : ''}
-            ${activeToolsTab === 'state' ? `
-              <ul class="scenario-state-list">${stateRows}</ul>
-              <div class="scenario-location-grid">${locationButtons}</div>
-              <p class="scenario-prompt muted" style="margin-top:10px;"><strong>Prompt:</strong> ${escapeHtml(activePrompt)}</p>
-            ` : ''}
-            ${activeToolsTab === 'tools' ? '<p class="muted">Scenario tools are coming soon.</p>' : ''}
-            <button type="button" id="scenario-reset-btn" class="pill-btn">Reset Scenario Progress</button>
-          </div>
-        `}
-      </aside>
-    </section>
-  `;
+  return buildWorkspaceShell({
+    layoutClassName: 'scenario-nexus-layout',
+    mainClassName: 'scenario-nexus-main',
+    sideClassName: 'scenario-tools-panel',
+    title: scenario.title,
+    subtitle: scenario.description,
+    headerMeta: `
+      <button type="button" class="scenario-compact-meta-btn" id="scenario-open-participants-btn">${escapeHtml(participantStatusLabel)}</button>
+      <span class="scenario-status-badge is-${escapeAttr(sessionStatus)}">${escapeHtml(scenarioStatusLabel(getScenarioStatus(session)))}</span>
+      <span class="muted">${escapeHtml(progressLabel)}</span>
+      ${session.fullMessage ? `<span class="muted" style="color:#ffb36b;">${escapeHtml(session.fullMessage)}</span>` : ''}
+    `,
+    body: `
+      <div id="scenario-conversation-log" class="conversation-log roleplay-chat-log scenario-chat-log">
+        ${messageMarkup || '<p class="muted">Scenario awaits your first move.</p>'}
+      </div>
+      <form id="scenario-input-form" class="arena-input roleplay-input-form">
+        <select id="scenario-sender-select" class="scenario-sender-select" ${state.scenarioDetail.pending ? 'disabled' : ''}>
+          ${participantOptions}
+        </select>
+        <input id="scenario-input" name="message" placeholder="Respond in-scenario..." ${state.scenarioDetail.pending ? 'disabled' : ''} />
+        <button class="pill-btn cta-primary" type="submit" ${state.scenarioDetail.pending ? 'disabled' : ''}>${state.scenarioDetail.pending ? 'Sending...' : 'Send'}</button>
+      </form>
+      <div class="scenario-response-stack">
+        ${quickResponsesMarkup}
+      </div>
+      ${session.completionMessageVisible ? `<p class="scenario-completion-message">${escapeHtml(scenario.completionMessage)}</p>` : ''}
+      ${state.scenarioDetail.error ? `<p class="muted" style="color:#ff7b7b;margin-top:8px;" role="alert">${escapeHtml(state.scenarioDetail.error)}</p>` : ''}
+    `,
+    sideHeadTitle: isToolsCollapsed ? 'Scenario' : 'Scenario Panel',
+    collapseButtonId: 'scenario-tools-toggle',
+    collapseAriaLabel: isToolsCollapsed ? 'Expand scenario panel' : 'Collapse scenario panel',
+    collapseIcon: isToolsCollapsed ? '⟨' : '⟩',
+    tabsMarkup: `
+      <button type="button" class="roleplay-tools-tab ${activeToolsTab === 'chats' ? 'active' : ''}" data-scenario-tools-tab="chats" role="tab" aria-selected="${activeToolsTab === 'chats'}">💬<span>Chats</span></button>
+      <button type="button" class="roleplay-tools-tab ${activeToolsTab === 'participants' ? 'active' : ''}" data-scenario-tools-tab="participants" role="tab" aria-selected="${activeToolsTab === 'participants'}">👥<span>Participants</span></button>
+      <button type="button" class="roleplay-tools-tab ${activeToolsTab === 'objectives' ? 'active' : ''}" data-scenario-tools-tab="objectives" role="tab" aria-selected="${activeToolsTab === 'objectives'}">🎯<span>Objectives</span></button>
+      <button type="button" class="roleplay-tools-tab ${activeToolsTab === 'state' ? 'active' : ''}" data-scenario-tools-tab="state" role="tab" aria-selected="${activeToolsTab === 'state'}">🧠<span>State</span></button>
+    `,
+    contentMarkup: `
+      ${activeToolsTab === 'chats' ? `<div class="scenario-chat-list">${scenarioChatsMarkup}</div>` : ''}
+      ${activeToolsTab === 'participants' ? `
+        <p class="muted">${escapeHtml(participantStatusLabel)} ${participantCount >= maxParticipants ? '• Session full' : ''}</p>
+        <div class="roleplay-participant-list">${participantsMarkup || '<p class="muted">No participants tagged.</p>'}</div>
+      ` : ''}
+      ${activeToolsTab === 'objectives' ? `<ul class="scenario-objectives-list">${objectivesMarkup}</ul>` : ''}
+      ${activeToolsTab === 'state' ? `
+        <ul class="scenario-state-list">${stateRows}</ul>
+        <div class="scenario-location-grid">${locationButtons}</div>
+        <p class="scenario-prompt muted" style="margin-top:10px;"><strong>Prompt:</strong> ${escapeHtml(activePrompt)}</p>
+      ` : ''}
+      <button type="button" id="scenario-reset-btn" class="pill-btn">Reset Scenario Progress</button>
+    `,
+    isToolsCollapsed,
+  });
 }
 
 function guildPage() {
@@ -2448,53 +2541,44 @@ function roleplayHubPage() {
     </article>
   `).join('');
 
-  return `
-    <section class="roleplay-nexus-layout">
-      <section class="roleplay-nexus-main panel-surface panel-surface--transparent">
-        <header class="roleplay-nexus-header">
-          <h2>Roleplay Nexus</h2>
-          <p class="muted">Enter the story and speak to the world.</p>
-        </header>
-        <div class="roleplay-nexus-chat-shell">
-          <div id="roleplay-conversation-log" class="conversation-log roleplay-chat-log">
-            ${messagesMarkup || '<p class="muted">Your scene is quiet. Speak to begin the story.</p>'}
-          </div>
-          <form id="roleplay-input-form" class="arena-input roleplay-input-form">
-            <input id="roleplay-input" name="message" placeholder="Speak, act, or describe what you do..." ${state.roleplay.pending ? 'disabled' : ''} />
-            <button class="pill-btn cta-primary" type="submit" ${state.roleplay.pending ? 'disabled' : ''}>${state.roleplay.pending ? 'Sending...' : 'Send'}</button>
-          </form>
-          <div class="roleplay-input-examples muted">
-            <span>I step into the ruined shrine and look for movement.</span>
-            <span>I bow slightly and ask the innkeeper what he knows.</span>
-            <span>I draw my blade but do not attack.</span>
-          </div>
+  return buildWorkspaceShell({
+    title: 'Roleplay Nexus',
+    subtitle: 'Enter the story and speak to the world.',
+    sideHeadTitle: isToolsCollapsed ? 'Tools' : 'Roleplay Tools',
+    collapseButtonId: 'roleplay-tools-toggle',
+    collapseAriaLabel: isToolsCollapsed ? 'Expand roleplay tools' : 'Collapse roleplay tools',
+    collapseIcon: isToolsCollapsed ? '⟨' : '⟩',
+    tabsMarkup: `
+      <button type="button" class="roleplay-tools-tab ${activeToolsTab === 'participants' ? 'active' : ''}" data-roleplay-tools-tab="participants" role="tab" aria-selected="${activeToolsTab === 'participants'}" title="Participants">👥<span>Participants</span></button>
+      <button type="button" class="roleplay-tools-tab ${activeToolsTab === 'scene' ? 'active' : ''}" data-roleplay-tools-tab="scene" role="tab" aria-selected="${activeToolsTab === 'scene'}" title="Scene">🗺️<span>Scene</span></button>
+      <button type="button" class="roleplay-tools-tab ${activeToolsTab === 'tools' ? 'active' : ''}" data-roleplay-tools-tab="tools" role="tab" aria-selected="${activeToolsTab === 'tools'}" title="Tools">🛠️<span>Tools</span></button>
+    `,
+    body: `
+      <div id="roleplay-conversation-log" class="conversation-log roleplay-chat-log">
+        ${messagesMarkup || '<p class="muted">Your scene is quiet. Speak to begin the story.</p>'}
+      </div>
+      <form id="roleplay-input-form" class="arena-input roleplay-input-form">
+        <input id="roleplay-input" name="message" placeholder="Speak, act, or describe what you do..." ${state.roleplay.pending ? 'disabled' : ''} />
+        <button class="pill-btn cta-primary" type="submit" ${state.roleplay.pending ? 'disabled' : ''}>${state.roleplay.pending ? 'Sending...' : 'Send'}</button>
+      </form>
+      <div class="roleplay-input-examples muted">
+        <span>I step into the ruined shrine and look for movement.</span>
+        <span>I bow slightly and ask the innkeeper what he knows.</span>
+        <span>I draw my blade but do not attack.</span>
+      </div>
+      ${state.roleplay.error ? `<p class="muted" style="color:#ff7b7b;margin-top:8px;" role="alert">${escapeHtml(state.roleplay.error)}</p>` : ''}
+    `,
+    contentMarkup: `
+      ${activeToolsTab === 'participants' ? `
+        <div class="roleplay-participant-list">
+          ${participantsMarkup || '<p class="muted">No participants are visible in this room yet.</p>'}
         </div>
-        ${state.roleplay.error ? `<p class="muted" style="color:#ff7b7b;margin-top:8px;" role="alert">${escapeHtml(state.roleplay.error)}</p>` : ''}
-      </section>
-      <aside class="roleplay-nexus-side roleplay-tools-panel panel-surface panel-surface--soft ${isToolsCollapsed ? 'is-collapsed' : ''}">
-        <div class="roleplay-tools-head">
-          <h3>${isToolsCollapsed ? 'Tools' : 'Roleplay Tools'}</h3>
-          <button type="button" class="panel-toggle-btn roleplay-tools-collapse-btn" id="roleplay-tools-toggle" aria-label="${isToolsCollapsed ? 'Expand roleplay tools' : 'Collapse roleplay tools'}">${isToolsCollapsed ? '⟨' : '⟩'}</button>
-        </div>
-        <div class="roleplay-tools-tabs ${isToolsCollapsed ? 'is-collapsed' : ''}" role="tablist" aria-label="Roleplay tools tabs">
-          <button type="button" class="roleplay-tools-tab ${activeToolsTab === 'participants' ? 'active' : ''}" data-roleplay-tools-tab="participants" role="tab" aria-selected="${activeToolsTab === 'participants'}" title="Participants">👥<span>Participants</span></button>
-          <button type="button" class="roleplay-tools-tab ${activeToolsTab === 'scene' ? 'active' : ''}" data-roleplay-tools-tab="scene" role="tab" aria-selected="${activeToolsTab === 'scene'}" title="Scene">🗺️<span>Scene</span></button>
-          <button type="button" class="roleplay-tools-tab ${activeToolsTab === 'tools' ? 'active' : ''}" data-roleplay-tools-tab="tools" role="tab" aria-selected="${activeToolsTab === 'tools'}" title="Tools">🛠️<span>Tools</span></button>
-        </div>
-        ${isToolsCollapsed ? '' : `
-          <div class="roleplay-tools-content" role="tabpanel">
-            ${activeToolsTab === 'participants' ? `
-              <div class="roleplay-participant-list">
-                ${participantsMarkup || '<p class="muted">No participants are visible in this room yet.</p>'}
-              </div>
-            ` : ''}
-            ${activeToolsTab === 'scene' ? '<p class="muted">Scene state, room info, and location tools will appear here later.</p>' : ''}
-            ${activeToolsTab === 'tools' ? '<p class="muted">NPC controls, room tools, and scene utilities will be added later.</p>' : ''}
-          </div>
-        `}
-      </aside>
-    </section>
-  `;
+      ` : ''}
+      ${activeToolsTab === 'scene' ? '<p class="muted">Scene state, room info, and location tools will appear here later.</p>' : ''}
+      ${activeToolsTab === 'tools' ? '<p class="muted">NPC controls, room tools, and scene utilities will be added later.</p>' : ''}
+    `,
+    isToolsCollapsed,
+  });
 }
 
 function characterDetailPage(path) {
@@ -3339,6 +3423,17 @@ function attachScenarioDetailHandlers() {
     });
   });
 
+  const openParticipantsButton = document.getElementById('scenario-open-participants-btn');
+  if (openParticipantsButton) {
+    openParticipantsButton.onclick = () => {
+      state.scenarioDetail.activeToolsTab = 'participants';
+      if (state.scenarioDetail.toolsCollapsed) {
+        state.scenarioDetail.toolsCollapsed = false;
+      }
+      render();
+    };
+  }
+
   document.querySelectorAll('.scenario-location-btn').forEach((button) => {
     button.onclick = () => {
       const locationId = String(button.getAttribute('data-location-id') || '');
@@ -3449,6 +3544,14 @@ function attachScenarioDetailHandlers() {
       render();
     };
   }
+
+  document.querySelectorAll('[data-roleplay-participant-route]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const route = button.getAttribute('data-roleplay-participant-route');
+      if (!route) return;
+      location.hash = route;
+    });
+  });
 }
 
 function getLoginErrorMessage(error) {
