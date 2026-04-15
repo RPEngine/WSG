@@ -5,7 +5,9 @@ function cleanEnvValue(value) {
   const trimmed = value.trim();
   if (!trimmed) return '';
   const lower = trimmed.toLowerCase();
-  return (lower === 'undefined' || lower === 'null') ? '' : trimmed;
+  if (lower === 'undefined' || lower === 'null') return '';
+  if (/^__WSG_[A-Z0-9_]+__$/.test(trimmed)) return '';
+  return trimmed;
 }
 
 function readSupabaseConfig() {
