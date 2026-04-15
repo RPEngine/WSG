@@ -1,4 +1,4 @@
-import { supabase, toAppUser } from './supabaseClient.js';
+import { supabase, supabaseConfig, toAppUser } from './supabaseClient.js';
 
 const routes = {
   '/': { key: 'landing' },
@@ -321,6 +321,7 @@ const state = {
     session: null,
     loading: true,
   },
+  supabaseConfigMissing: false,
   members: [],
   activeProfile: null,
   activeLayer: 'free',
@@ -3544,19 +3545,32 @@ function clearAuthSession() {
 
 async function bootstrapAuth() {
   state.auth.loading = true;
-  const { data, error } = await supabase.auth.getSession();
-  if (error) {
-    console.warn('[auth:frontend] Supabase session bootstrap failed', error.message);
-  }
-  syncAuthStateFromSupabase(data?.session || null);
 
-  supabase.auth.onAuthStateChange((_event, session) => {
-    syncAuthStateFromSupabase(session || null);
-    render();
-  });
+  if (!supabase) {
+    state.supabaseConfigMissing = true;
+    clearAuthSession();
+    return;
+  }
+
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) {
+      console.warn('[auth:frontend] Supabase session bootstrap failed', error.message);
+    }
+    syncAuthStateFromSupabase(data?.session || null);
+
+    supabase.auth.onAuthStateChange((_event, session) => {
+      syncAuthStateFromSupabase(session || null);
+      render();
+    });
+  } catch (error) {
+    console.warn('[auth:frontend] Supabase bootstrap threw unexpectedly', error instanceof Error ? error.message : String(error));
+    clearAuthSession();
+  }
 }
 
 async function signupWithSupabase({ email, password, metadata }) {
+  if (!supabase) throw new Error('Supabase configuration is missing. Check frontend environment variables and redeploy.');
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
@@ -3570,12 +3584,14 @@ async function signupWithSupabase({ email, password, metadata }) {
 }
 
 async function loginWithSupabase({ email, password }) {
+  if (!supabase) throw new Error('Supabase configuration is missing. Check frontend environment variables and redeploy.');
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw error;
   return data;
 }
 
 async function logoutWithSupabase() {
+  if (!supabase) return;
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
 }
@@ -4765,6 +4781,11 @@ function renderPublicLayout(path, key, pageHtml) {
 async function render() {
   let path = location.hash.replace('#', '') || '/';
 
+  if (state.supabaseConfigMissing) {
+    document.getElementById('app').innerHTML = '<div class="public-shell"><main class="public-container public-content panel"><h2>Configuration Required</h2><p class="muted">Supabase configuration is missing. Check frontend environment variables and redeploy.</p></main></div>';
+    return;
+  }
+
   if (state.auth.loading) {
     document.getElementById('app').innerHTML = '<div class="public-shell"><main class="public-container public-content panel"><p class="muted">Authenticating session...</p></main></div>';
     return;
@@ -5116,6 +5137,8 @@ window.addEventListener('DOMContentLoaded', async () => {
   applyModeClass();
   const resolvedApiBaseUrl = resolveApiBaseUrl();
   console.log('[wsg] Resolved API base URL:', resolvedApiBaseUrl || '(same-origin)');
+  console.info(`[wsg] Supabase URL present: ${supabaseConfig.urlPresent ? 'yes' : 'no'}`);
+  console.info(`[wsg] Supabase key present: ${supabaseConfig.keyPresent ? 'yes' : 'no'}`);
   await bootstrapAuth();
   render();
 });
