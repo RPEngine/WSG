@@ -14,6 +14,7 @@ const scenarioCreateLimiter = createRateLimiter({ keyPrefix: "scenario:create", 
 
 router.post(
   "/generate",
+  requireAuth,
   requireObjectBody,
   scenarioCreateLimiter,
   sanitizeBody({ prompt: { maxLength: 1500 }, genre: { maxLength: 120 }, tone: { maxLength: 120 }, constraints: { maxLength: 1200 } }),

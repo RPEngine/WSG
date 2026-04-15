@@ -1,9 +1,6 @@
-const HTML_OR_SCRIPT_PATTERN = /<[^>]+>|javascript:|on\w+\s*=|<\s*script/gi;
-const FRAUD_KEYWORDS = [/wire transfer/i, /gift card/i, /crypto only/i, /pay .* upfront/i, /guaranteed income/i];
-const HATE_OR_HARASSMENT_KEYWORDS = [/\bslur\b/i, /kill yourself/i, /racially inferior/i];
-const sexualContentKeywords = [/explicit sex/i, /nude/i, /porn/i];
-const floodTracker = new Map();
+import { runModerationHooks } from "./moderationHooks.js";
 
+const HTML_OR_SCRIPT_PATTERN = /<[^>]+>|javascript:|on\w+\s*=|<\s*script/gi;
 function normalize(value) {
   return String(value || '').replace(/[\u0000-\u001f\u007f]/g, '').trim();
 }
@@ -13,48 +10,72 @@ function sanitizeText(value, maxLength = 1000) {
   return trimmed.replace(HTML_OR_SCRIPT_PATTERN, '');
 }
 
-function detectUnsafeContent(text) {
-  const sample = String(text || '');
-  return (
-    FRAUD_KEYWORDS.some((pattern) => pattern.test(sample))
-    || HATE_OR_HARASSMENT_KEYWORDS.some((pattern) => pattern.test(sample))
-    || sexualContentKeywords.some((pattern) => pattern.test(sample))
-  );
+function validateBoolean(value) {
+  return typeof value === 'boolean';
 }
 
-function detectFlood(req, keySuffix, maxInWindow = 8, windowMs = 20_000) {
-  const ip = req.ip || 'unknown';
-  const key = `${ip}:${keySuffix}`;
-  const start = Date.now() - windowMs;
-  const current = (floodTracker.get(key) || []).filter((ts) => ts >= start);
-  current.push(Date.now());
-  floodTracker.set(key, current);
-  return current.length > maxInWindow;
-}
-
-export function sanitizeBody(schema = {}) {
+export function sanitizeBody(schema = {}, options = {}) {
+  const { strict = true } = options;
   return function sanitizeBodyMiddleware(req, res, next) {
-    if (!req.body || typeof req.body !== 'object') {
+    if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
       req.body = {};
       return next();
     }
 
+    const bodyKeys = Object.keys(req.body);
+    const schemaKeys = Object.keys(schema);
+
+    if (strict) {
+      const unknownKeys = bodyKeys.filter((key) => !schemaKeys.includes(key));
+      if (unknownKeys.length) {
+        return res.status(400).json({ error: `Unsupported fields: ${unknownKeys.join(', ')}` });
+      }
+    }
+
     const sanitized = {};
     for (const [field, config] of Object.entries(schema)) {
-      const { maxLength = 500, required = false } = config || {};
-      const cleaned = sanitizeText(req.body[field], maxLength);
+      const {
+        maxLength = 500,
+        required = false,
+        type = 'string',
+        allowedValues = null,
+      } = config || {};
+      const value = req.body[field];
+
+      if (value === undefined || value === null || value === '') {
+        if (required) {
+          return res.status(400).json({ error: `${field} is required.` });
+        }
+        continue;
+      }
+
+      if (type === 'boolean') {
+        if (!validateBoolean(value)) {
+          return res.status(400).json({ error: `${field} must be a boolean.` });
+        }
+        sanitized[field] = value;
+        continue;
+      }
+
+      if (typeof value !== 'string') {
+        return res.status(400).json({ error: `${field} must be a string.` });
+      }
+
+      const cleaned = sanitizeText(value, maxLength);
       if (required && !cleaned) {
         return res.status(400).json({ error: `${field} is required.` });
       }
+
+      if (allowedValues && !allowedValues.includes(cleaned)) {
+        return res.status(400).json({ error: `${field} is invalid.` });
+      }
+
       if (cleaned) {
         sanitized[field] = cleaned;
       }
     }
 
-    req.body = {
-      ...req.body,
-      ...sanitized,
-    };
+    req.body = sanitized;
     return next();
   };
 }
@@ -74,16 +95,16 @@ export function contentSafetyGate({ fields = [], category = 'general' } = {}) {
       return next();
     }
 
-    if (detectUnsafeContent(composite)) {
-      return res.status(400).json({ error: 'Content violates platform safety requirements.' });
-    }
+    const moderationResult = runModerationHooks({
+      req,
+      text: composite,
+      category,
+    });
 
-    if (category === 'recruiter' && FRAUD_KEYWORDS.some((pattern) => pattern.test(composite))) {
-      return res.status(400).json({ error: 'Potential recruiter fraud/scam content detected.' });
-    }
-
-    if (detectFlood(req, category)) {
-      return res.status(429).json({ error: 'Activity temporarily throttled due to flood detection.' });
+    if (moderationResult?.ok === false) {
+      return res.status(moderationResult.status || 400).json({
+        error: moderationResult.error || 'We could not process your request.',
+      });
     }
 
     return next();

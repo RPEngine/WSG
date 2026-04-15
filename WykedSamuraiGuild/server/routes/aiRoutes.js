@@ -20,6 +20,7 @@ router.post(
 );
 router.post(
   "/scenario",
+  requireAuth,
   requireObjectBody,
   aiLimiter,
   sanitizeBody({ prompt: { maxLength: 1500 }, genre: { maxLength: 120 }, tone: { maxLength: 120 }, constraints: { maxLength: 1000 } }),
