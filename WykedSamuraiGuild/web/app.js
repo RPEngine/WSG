@@ -211,19 +211,15 @@ const BRAND_ASSETS = Object.freeze({
 });
 
 
-function pageBackgroundClass(path, key) {
-  if (path === '/arena' || key === 'arena') return 'arena-bg';
-  if (path === '/guild' || path === '/world' || path === '/guild-world' || key === 'guild') return 'guild-bg';
-  if (path === '/recruiter-console' || key === 'recruiter') return 'recruiter-bg';
-  if (['scenarioChat', 'areaChat', 'directChat'].includes(key)) return 'scenario-bg';
-  if (path === '/members' || key === 'members' || key === 'profile') return 'guild-bg';
-  return 'home-bg';
-}
-
-function applyPageBackground(path, key) {
-  const pageClass = pageBackgroundClass(path, key);
-  document.body.classList.remove('home-bg', 'arena-bg', 'guild-bg', 'scenario-bg', 'recruiter-bg');
-  document.body.classList.add(pageClass);
+function pageSetClass(path, key) {
+  if (path === '/arena' || key === 'arena') return 'page-set--arena';
+  if (path === '/guild' || path === '/guild-world' || key === 'guild') return 'page-set--guild';
+  if (path === '/world') return 'page-set--world-rp';
+  if (path === '/recruiter-console' || key === 'recruiter') return 'page-set--recruiter';
+  if (path === '/profile' || path === '/members' || key === 'profile' || key === 'members' || ['scenarioChat', 'areaChat', 'directChat'].includes(key)) {
+    return 'page-set--profile';
+  }
+  return 'page-set--home';
 }
 
 function guildBrandMark({ compact = false, className = '' } = {}) {
@@ -1264,10 +1260,10 @@ function Header() {
   `;
 }
 
-function AppShell(path, key, pageHtml, statusMarkup) {
+function AppShell(path, key, pageHtml, statusMarkup, pageSet) {
   const [title, subtitle] = pageTitle(key);
   return `
-    <div class="app-shell ${state.shell.leftSidebarCollapsed ? 'is-left-sidebar-collapsed' : ''} ${state.shell.rightSidebarCollapsed ? 'is-right-sidebar-collapsed' : ''}">
+    <div class="app-shell page-set ${pageSet} ${state.shell.leftSidebarCollapsed ? 'is-left-sidebar-collapsed' : ''} ${state.shell.rightSidebarCollapsed ? 'is-right-sidebar-collapsed' : ''}">
       ${Header()}
       ${Sidebar(path, key)}
       ${MainContent(key, title, subtitle, statusMarkup, pageHtml)}
@@ -2897,14 +2893,14 @@ function applyModeClass() {
 
 function renderLayout(path, key, pageHtml) {
   applyModeClass();
-  applyPageBackground(path, key);
+  const pageSet = pageSetClass(path, key);
 
   const statusMarkup = state.statusMessage
     ? `<p class="status-banner status-${state.statusMessage.tone}" role="status">${escapeHtml(state.statusMessage.message)}</p>`
     : '';
 
   document.getElementById('app').innerHTML = `
-    ${AppShell(path, key, pageHtml, statusMarkup)}
+    ${AppShell(path, key, pageHtml, statusMarkup, pageSet)}
     ${starterScenarioModalMarkup()}
     ${key === 'arena' ? '' : SiteFooter()}
   `;
@@ -2916,7 +2912,7 @@ function renderLayout(path, key, pageHtml) {
 function renderPublicLayout(path, key, pageHtml) {
   const [title, subtitle] = pageTitle(key);
   applyModeClass();
-  applyPageBackground(path, key);
+  const pageSet = pageSetClass(path, key);
   const showPageHeader = key !== 'landing';
 
   const statusMarkup = state.statusMessage
@@ -2924,7 +2920,7 @@ function renderPublicLayout(path, key, pageHtml) {
     : '';
 
   document.getElementById('app').innerHTML = `
-    <div class="public-shell">
+    <div class="public-shell page-set ${pageSet}">
       <header class="public-header panel">
         <div class="public-container public-header-inner">
           <div class="brand">
