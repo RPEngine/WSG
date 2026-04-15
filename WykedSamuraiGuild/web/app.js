@@ -6,6 +6,7 @@ const routes = {
   '/world': { key: 'guild', requiresAuth: true },
   '/guild-world': { key: 'guild', requiresAuth: true },
   '/members': { key: 'members', requiresAuth: true },
+  '/discussions': { key: 'scenarioChat', requiresAuth: true },
   '/profile': { key: 'profile', requiresAuth: true },
   '/profile/direct-chat': { key: 'directChat', requiresAuth: true },
   '/profile/scenario-chat': { key: 'scenarioChat', requiresAuth: true },
@@ -20,8 +21,8 @@ const sharedNavItems = [
   { label: 'Home', path: '/app', icon: '🏠' },
   { label: 'Arena', path: '/arena', icon: '⚔️' },
   { label: 'Members', path: '/members', icon: '🧑‍🤝‍🧑' },
-  { label: 'Discussions', path: '/profile/scenario-chat', icon: '💬' },
-  { label: 'Profile Hub', path: '/profile', icon: '👤' },
+  { label: 'Discussions', path: '/discussions', icon: '💬' },
+  { label: 'Profile', path: '/profile', icon: '👤' },
   { label: 'Recruiter Console', path: '/recruiter-console', icon: '🛰️' },
 ];
 
@@ -43,7 +44,7 @@ function visibleNavItems(mode) {
 }
 
 function isNavItemActive(pathname, itemPath) {
-  return pathname === itemPath || pathname.startsWith(`${itemPath}/`);
+  return pathname === itemPath;
 }
 
 const STARTER_TRIALS = [
@@ -551,7 +552,16 @@ function withPersistedOnboardingProfile(user) {
     return user;
   }
   const onboardingProfile = readOnboardingProfile(user.id);
-  return onboardingProfile ? { ...user, ...onboardingProfile } : user;
+  const mergedProfile = onboardingProfile ? { ...user, ...onboardingProfile } : user;
+  const roleplayCharacters = Array.isArray(mergedProfile.roleplayCharacters) ? mergedProfile.roleplayCharacters : [];
+  const roleplayCharacterLimit = Number.isFinite(Number(mergedProfile.roleplayCharacterLimit))
+    ? Math.max(1, Number(mergedProfile.roleplayCharacterLimit))
+    : 5;
+  return {
+    ...mergedProfile,
+    roleplayCharacters,
+    roleplayCharacterLimit,
+  };
 }
 
 function readPersistedScenarioProgressForUser(userId = state.currentUser?.id) {
@@ -1037,8 +1047,8 @@ function pageTitle(key) {
     arena: ['Trial Arena', 'Run starter leadership Trials and prepare for live simulation loops.'],
     guild: ['Guild World', 'Story streams, locations, and social immersion in one space.'],
     members: ['Guild Members', 'Discover member profiles and current contribution footprint.'],
-    profile: ['Profile Hub', 'Identity-focused profile details, activity snapshot, and quick connection actions.'],
-    directChat: ['Direct Chat', 'Messaging now lives in dedicated collaboration rails outside Profile Hub.'],
+    profile: ['Profile', 'Identity-focused profile details, activity snapshot, and quick connection actions.'],
+    directChat: ['Direct Chat', 'Messaging now lives in dedicated collaboration rails outside Profile.'],
     scenarioChat: ['Scenario Chat', 'Scenario messaging for active Arena sessions.'],
     areaChat: ['Area Chat', 'Shared location-based roleplay chat stream.'],
     login: ['Log In', 'Access your guild account.'],
@@ -1846,18 +1856,20 @@ function arenaPage() {
             </div>
             <p class="muted">${state.mode === 'roleplay' ? 'Immersive roleplay lane' : 'Structured decision lane'} · ${state.arena.messages.length} messages</p>
           </div>
-          <div class="arena-chat-body">
-            ${
+          <div class="arena-chat-container">
+            <div class="arena-chat-body">
+              ${
   hasActiveTrial
     ? `<div id="arena-conversation-log" class="conversation-log arena-chat-log">${chatMessages}</div>`
     : `<div class="arena-empty"><h4>No ${isRoleplayMode ? 'Room' : 'Trial'} active</h4><p class="muted">Select a ${isRoleplayMode ? 'room' : 'scenario card'} from the strip above to begin chatting.</p></div>`
 }
-          </div>
-          <div class="arena-chat-input-row">
-            <form id="arena-input-form" class="arena-input">
-              <input id="arena-input" name="message" placeholder="${hasActiveTrial ? `Type your ${isRoleplayMode ? 'roleplay' : 'response'} message...` : `Start a ${isRoleplayMode ? 'room' : 'trial'} to enable chat`}" ${hasActiveTrial ? '' : 'disabled'} />
-              <button id="arena-send-btn" class="pill-btn" type="submit" ${(hasActiveTrial && !state.arena.pending) ? '' : 'disabled'}>${state.arena.pending ? 'Sending...' : 'Send'}</button>
-            </form>
+            </div>
+            <div class="arena-chat-input-row">
+              <form id="arena-input-form" class="arena-input">
+                <input id="arena-input" name="message" placeholder="${hasActiveTrial ? `Type your ${isRoleplayMode ? 'roleplay' : 'response'} message...` : `Start a ${isRoleplayMode ? 'room' : 'trial'} to enable chat`}" ${hasActiveTrial ? '' : 'disabled'} />
+                <button id="arena-send-btn" class="pill-btn" type="submit" ${(hasActiveTrial && !state.arena.pending) ? '' : 'disabled'}>${state.arena.pending ? 'Sending...' : 'Send'}</button>
+              </form>
+            </div>
           </div>
           ${state.arena.error ? `<p class="muted" style="color:#ff7b7b;margin-top:8px;" role="alert">${escapeHtml(state.arena.error)}</p>` : ''}
         </section>
@@ -2022,7 +2034,7 @@ function membersPage() {
 function profilePage() {
   const profile = state.currentUser;
   if (!profile) {
-    return card('Profile Hub', '<p class="muted">Please log in first.</p>');
+    return card('Profile', '<p class="muted">Please log in first.</p>');
   }
 
   const activeLayer = state.activeLayer || 'free';
@@ -2036,6 +2048,12 @@ function profilePage() {
 
   const isLayerLocked = state.lockedLayers.includes(activeLayer);
   const skillsList = Array.isArray(activeData.skills) ? activeData.skills : [];
+  const roleplayCharacters = Array.isArray(profile.roleplayCharacters) ? profile.roleplayCharacters : [];
+  const roleplayCharacterLimit = Number.isFinite(Number(profile.roleplayCharacterLimit))
+    ? Math.max(1, Number(profile.roleplayCharacterLimit))
+    : 5;
+  const roleplaySlotsUsed = roleplayCharacters.length;
+  const isRoleplayLimitReached = roleplaySlotsUsed >= roleplayCharacterLimit;
   const layerBioLabel = activeLayer === 'professional' ? 'Professional Bio' : activeLayer === 'roleplay' ? 'Roleplay Bio' : 'Short Bio';
   const layerSkillsLabel = activeLayer === 'free' ? 'Basic Tags' : 'Tags / Skills';
 
@@ -2069,6 +2087,29 @@ function profilePage() {
         <button type="button">Connections</button>
       </div>
       <p class="muted" style="margin-top:10px;">Profile insights and contribution history panels are currently placeholder content backed by live account data above.</p>
+    </section>
+
+    <section class="card profile-edit-section panel-surface panel-surface--transparent" style="margin-top:12px;">
+      <h3>Roleplay Characters</h3>
+      <p class="muted">Manage your saved RP characters used in Arena roleplay sessions.</p>
+      <p class="muted roleplay-slot-indicator">${roleplaySlotsUsed} / ${roleplayCharacterLimit} used</p>
+      ${roleplayCharacters.length
+    ? `<ul class="list roleplay-character-list">
+            ${roleplayCharacters.map((character) => `
+              <li>
+                <span>
+                  <strong>${escapeHtml(character.name || 'Unnamed Character')}</strong><br/>
+                  <span class="muted">${escapeHtml(character.system || 'WSG RP System')}</span>
+                </span>
+                <span class="muted">${formatDateTime(character.createdAt)}</span>
+              </li>
+            `).join('')}
+          </ul>`
+    : '<p class="muted">No roleplay characters saved yet.</p>'}
+      <div class="actions" style="margin-top:10px;">
+        <button class="pill-btn cta-primary" id="create-roleplay-character-btn" type="button" ${isRoleplayLimitReached ? 'disabled' : ''}>Create Character</button>
+      </div>
+      ${isRoleplayLimitReached ? '<p class="muted roleplay-limit-message">Character limit reached. Upgrade to add more slots.</p>' : ''}
     </section>
 
     <section class="card profile-edit-section panel-surface panel-surface--transparent">
@@ -2146,7 +2187,7 @@ function roleplayChannelPage(type) {
 function directChatPage() {
   return layoutColumns({
     className: 'recruiter-layout',
-    left: `<h3>Messaging Entry</h3><p class="muted">Direct messaging has moved out of Profile Hub.</p>`,
+    left: `<h3>Messaging Entry</h3><p class="muted">Direct messaging has moved out of Profile.</p>`,
     center: `<h3>Conversation Context</h3><p class="muted">Select a connection from the right messaging rail.</p>`,
     right: messagingRail({ title: 'Right-side Messaging Rail', description: 'Direct chat and network actions.' }),
   });
@@ -2164,8 +2205,8 @@ function profileEditPage() {
   return `
     <section class="card">
       <h3>Profile Edit moved</h3>
-      <p class="muted">Profile setup now lives directly in the Profile Hub.</p>
-      <a href="#/profile" class="pill-btn">Open Profile Hub</a>
+      <p class="muted">Profile setup now lives directly in the Profile page.</p>
+      <a href="#/profile" class="pill-btn">Open Profile</a>
     </section>
   `;
 }
@@ -2786,6 +2827,39 @@ function isStrongPassword(password) {
 }
 
 function attachProfileEditHandler() {
+  const createRoleplayCharacterButton = document.getElementById('create-roleplay-character-btn');
+  if (createRoleplayCharacterButton) {
+    createRoleplayCharacterButton.onclick = () => {
+      const currentCharacters = Array.isArray(state.currentUser?.roleplayCharacters) ? state.currentUser.roleplayCharacters : [];
+      const characterLimit = Number.isFinite(Number(state.currentUser?.roleplayCharacterLimit))
+        ? Math.max(1, Number(state.currentUser.roleplayCharacterLimit))
+        : 5;
+      if (currentCharacters.length >= characterLimit) {
+        render();
+        return;
+      }
+      const nextCharacterNumber = currentCharacters.length + 1;
+      const newCharacter = {
+        id: crypto.randomUUID(),
+        name: `Ronin Character ${nextCharacterNumber}`,
+        system: 'WSG RP System',
+        createdAt: new Date().toISOString(),
+      };
+      state.currentUser = {
+        ...state.currentUser,
+        roleplayCharacterLimit: characterLimit,
+        roleplayCharacters: [...currentCharacters, newCharacter],
+      };
+      saveOnboardingProfile({
+        ...(readOnboardingProfile(state.currentUser.id) || {}),
+        roleplayCharacters: state.currentUser.roleplayCharacters,
+        roleplayCharacterLimit: state.currentUser.roleplayCharacterLimit,
+      }, state.currentUser.id);
+      setStatusMessage('Roleplay character created.', 'success');
+      render();
+    };
+  }
+
   const layerTabs = document.getElementById('profile-layer-tabs');
   if (layerTabs) {
     layerTabs.querySelectorAll('[data-layer-tab]').forEach((button) => {
@@ -3438,7 +3512,7 @@ async function render() {
   if (path === '/recruiter-console' || path === '/members') {
     await ensureMembersLoaded();
   }
-  if (path === '/arena' || path === '/profile/scenario-chat') {
+  if (path === '/arena' || path === '/profile/scenario-chat' || path === '/discussions') {
     await loadScenarioChat();
   }
   if (path === '/profile/area-chat') {

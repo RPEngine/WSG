@@ -75,7 +75,7 @@ body {
   --right-sidebar-width: 320px;
   display: grid;
   grid-template-columns: var(--left-sidebar-width) minmax(0, 1fr) var(--right-sidebar-width);
-  grid-template-rows: 76px 1fr;
+  grid-template-rows: 68px 1fr;
   grid-template-areas:
     "header header header"
     "left main right";
@@ -115,7 +115,7 @@ body {
 }
 
 .public-header-inner {
-  min-height: 76px;
+  min-height: 68px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -151,7 +151,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 18px;
+  min-height: 68px;
+  padding: 0 14px;
 }
 
 .brand { display: flex; gap: 12px; align-items: center; }
@@ -165,6 +166,39 @@ body {
 .subtitle { color: var(--text-muted); font-size: 12px; margin-top: 2px; }
 
 .header-actions { display: flex; align-items: center; gap: 12px; }
+
+.guild-lockup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.lockup-title {
+  margin: 0;
+  letter-spacing: 0.03em;
+}
+
+.guild-brand-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.guild-brand-mark img {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+}
+
+.header-brand-mark img {
+  width: 34px;
+  height: 34px;
+}
+
+.sidebar-brand-mark img {
+  width: 40px;
+  height: 40px;
+}
 
 .toggle {
   border: 1px solid var(--border);
@@ -245,6 +279,13 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.arena-content-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .nav-list { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 8px; }
@@ -996,6 +1037,13 @@ body {
   overflow: hidden;
 }
 
+.arena-chat-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .arena-chat-head {
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   padding-bottom: 10px;
@@ -1066,7 +1114,21 @@ body {
   flex: 0 0 auto;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   padding-top: 10px;
-  margin-top: 2px;
+  margin-top: auto;
+}
+
+.roleplay-character-list {
+  margin-top: 10px;
+}
+
+.roleplay-slot-indicator {
+  margin: 8px 0 0;
+  font-weight: 600;
+}
+
+.roleplay-limit-message {
+  margin: 10px 0 0;
+  color: var(--accent-hover);
 }
 
 .arena-empty h4 {
