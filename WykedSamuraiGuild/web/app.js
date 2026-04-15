@@ -268,6 +268,7 @@ const AI_ENDPOINTS = Object.freeze({
 });
 const ONBOARDING_NEW_USER_KEY = 'wsg-onboarding-new-user';
 const STARTER_SCENARIO_SEEN_PREFIX = 'wsg-starter-seen';
+const SCENARIO_PROGRESS_STORAGE_PREFIX = 'wsg-scenario-progress';
 const PASSWORD_POLICY_MESSAGE = 'Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a special character.';
 const PASSWORD_POLICY_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$/;
 const GOOGLE_CLIENT_ID_META_KEY = 'wsg-google-client-id';
@@ -337,6 +338,112 @@ function markStarterScenarioSeen() {
   }
   localStorage.setItem(getStarterScenarioSeenKey(state.currentUser.id), 'true');
   sessionStorage.removeItem(ONBOARDING_NEW_USER_KEY);
+}
+
+function getScenarioProgressStorageKey(userId = state.currentUser?.id) {
+  const safeUserId = userId || 'anonymous';
+  return `${SCENARIO_PROGRESS_STORAGE_PREFIX}:${safeUserId}`;
+}
+
+function sanitizeScenarioSessionForSave(scenarioId, session) {
+  const scenario = findScenarioBlueprint(scenarioId);
+  if (!scenario || !session) {
+    return null;
+  }
+
+  const locationIds = new Set(Object.keys(scenario.locations || {}));
+  const hallSet = new Set(scenario.hallOrder || []);
+  const sanitizedAnswers = Object.entries(session.answers || {}).reduce((acc, [locationId, answer]) => {
+    if (!hallSet.has(locationId)) {
+      return acc;
+    }
+    const normalizedAnswer = String(answer || '').trim();
+    if (!normalizedAnswer) {
+      return acc;
+    }
+    acc[locationId] = normalizedAnswer;
+    return acc;
+  }, {});
+
+  const completedHalls = Array.isArray(session.completedHalls)
+    ? session.completedHalls.filter((locationId, index, array) => hallSet.has(locationId) && array.indexOf(locationId) === index)
+    : [];
+  const visitedLocations = Array.isArray(session.visitedLocations)
+    ? session.visitedLocations.filter((locationId, index, array) => locationIds.has(locationId) && array.indexOf(locationId) === index)
+    : [];
+  const currentLocation = locationIds.has(session.currentLocation) ? session.currentLocation : scenario.startLocation;
+  const finalAnswer = String(session.finalAnswer || '').trim();
+  const finalSubmitted = Boolean(session.finalSubmitted && finalAnswer);
+  const finalUnlocked = Boolean(session.finalUnlocked || completedHalls.length === scenario.hallOrder.length);
+
+  return {
+    scenarioId: scenario.id,
+    currentLocation,
+    answers: sanitizedAnswers,
+    visitedLocations: visitedLocations.length ? visitedLocations : [scenario.startLocation],
+    completedHalls,
+    finalUnlocked,
+    finalAnswer,
+    finalSubmitted,
+    completionMessageVisible: Boolean(finalSubmitted),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function readPersistedScenarioProgress() {
+  try {
+    const raw = localStorage.getItem(getScenarioProgressStorageKey());
+    if (!raw) {
+      return {};
+    }
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function persistScenarioProgress(scenarioId) {
+  const session = state.scenarioDetail.sessions[scenarioId];
+  const normalized = sanitizeScenarioSessionForSave(scenarioId, session);
+  if (!normalized) {
+    return;
+  }
+
+  const persisted = readPersistedScenarioProgress();
+  persisted[scenarioId] = normalized;
+  localStorage.setItem(getScenarioProgressStorageKey(), JSON.stringify(persisted));
+}
+
+function restoreScenarioProgress(scenarioId) {
+  const persisted = readPersistedScenarioProgress();
+  const savedSession = persisted?.[scenarioId];
+  return sanitizeScenarioSessionForSave(scenarioId, savedSession);
+}
+
+function resetScenarioProgress(scenarioId) {
+  const scenario = findScenarioBlueprint(scenarioId);
+  if (!scenario) {
+    return;
+  }
+
+  state.scenarioDetail.sessions[scenarioId] = {
+    scenarioId,
+    currentLocation: scenario.startLocation,
+    answers: {},
+    visitedLocations: [scenario.startLocation],
+    completedHalls: [],
+    finalUnlocked: false,
+    finalAnswer: '',
+    finalSubmitted: false,
+    completionMessageVisible: false,
+  };
+
+  const persisted = readPersistedScenarioProgress();
+  if (persisted[scenarioId]) {
+    delete persisted[scenarioId];
+    localStorage.setItem(getScenarioProgressStorageKey(), JSON.stringify(persisted));
+  }
 }
 
 function resolveApiBaseUrl() {
@@ -708,7 +815,7 @@ function ensureScenarioSession(scenarioId) {
     if (!scenario) {
       return null;
     }
-    state.scenarioDetail.sessions[scenarioId] = {
+    const defaultSession = {
       scenarioId,
       currentLocation: scenario.startLocation,
       answers: {},
@@ -719,6 +826,7 @@ function ensureScenarioSession(scenarioId) {
       finalSubmitted: false,
       completionMessageVisible: false,
     };
+    state.scenarioDetail.sessions[scenarioId] = restoreScenarioProgress(scenarioId) || defaultSession;
   }
 
   return state.scenarioDetail.sessions[scenarioId];
@@ -1375,6 +1483,14 @@ function scenarioDetailPage(path) {
           <span style="width:${Math.min((completedCount / totalHalls) * 100, 100)}%;"></span>
         </div>
         <p class="muted scenario-progress-label">${completedCount}/${totalHalls} halls complete</p>
+        ${session.finalSubmitted
+    ? `
+          <div class="scenario-stat-block">
+            <span>Saved Motivation</span>
+            <strong>${escapeHtml(session.finalAnswer)}</strong>
+          </div>
+        `
+    : ''}
         ${answersList ? `<ul class="scenario-answer-log">${answersList}</ul>` : '<p class="muted">Your reflections will be recorded here as you explore.</p>'}
       </aside>
       <section class="scenario-detail-map-area card">
@@ -1421,6 +1537,7 @@ function scenarioDetailPage(path) {
             </form>
           ` : ''}
           ${session.completionMessageVisible ? `<p class="scenario-completion-message">${escapeHtml(scenario.completionMessage)}</p>` : ''}
+          <button type="button" id="scenario-reset-btn" class="pill-btn">Reset Scenario Progress</button>
         </section>
       </section>
     </section>
@@ -1910,6 +2027,7 @@ function setAuthSession({ sessionToken, user }) {
   const normalized = normalizeLayeredProfile(user);
   state.authToken = sessionToken;
   state.currentUser = normalized.user;
+  state.scenarioDetail.sessions = {};
   state.layers = normalized.layers;
   state.availableLayers = normalized.availableLayers;
   state.lockedLayers = normalized.lockedLayers;
@@ -1925,6 +2043,7 @@ function setAuthSession({ sessionToken, user }) {
 function clearAuthSession() {
   state.authToken = '';
   state.currentUser = null;
+  state.scenarioDetail.sessions = {};
   state.layers = {};
   state.availableLayers = ['free'];
   state.lockedLayers = ['professional', 'roleplay'];
@@ -2098,6 +2217,7 @@ function attachScenarioDetailHandlers() {
         session.visitedLocations.push(locationId);
       }
       session.currentLocation = locationId;
+      persistScenarioProgress(scenarioId);
       render();
     };
   });
@@ -2125,6 +2245,7 @@ function attachScenarioDetailHandlers() {
       if (session.finalUnlocked && locationId !== scenario.startLocation) {
         session.currentLocation = scenario.startLocation;
       }
+      persistScenarioProgress(scenarioId);
       render();
     };
   });
@@ -2142,6 +2263,15 @@ function attachScenarioDetailHandlers() {
       session.finalAnswer = value;
       session.finalSubmitted = true;
       session.completionMessageVisible = true;
+      persistScenarioProgress(scenarioId);
+      render();
+    };
+  }
+
+  const resetButton = document.getElementById('scenario-reset-btn');
+  if (resetButton) {
+    resetButton.onclick = () => {
+      resetScenarioProgress(scenarioId);
       render();
     };
   }
