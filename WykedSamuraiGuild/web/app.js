@@ -301,6 +301,7 @@ const state = {
   shell: {
     leftSidebarCollapsed: arenaLayoutPrefs.leftSidebarCollapsed,
     rightSidebarCollapsed: arenaLayoutPrefs.rightSidebarCollapsed,
+    isScenarioStripCollapsed: arenaLayoutPrefs.scenarioStripCollapsed,
     activePaneTab: 'connections',
     selectedConversation: '',
     chatOpen: false,
@@ -340,17 +341,20 @@ function loadArenaLayoutPrefs() {
       return {
         leftSidebarCollapsed: false,
         rightSidebarCollapsed: false,
+        scenarioStripCollapsed: false,
       };
     }
     const parsed = JSON.parse(raw);
     return {
       leftSidebarCollapsed: Boolean(parsed.leftSidebarCollapsed),
       rightSidebarCollapsed: Boolean(parsed.rightSidebarCollapsed),
+      scenarioStripCollapsed: Boolean(parsed.scenarioStripCollapsed),
     };
   } catch {
     return {
       leftSidebarCollapsed: false,
       rightSidebarCollapsed: false,
+      scenarioStripCollapsed: false,
     };
   }
 }
@@ -362,6 +366,7 @@ function persistArenaLayoutPrefs() {
       JSON.stringify({
         leftSidebarCollapsed: state.shell.leftSidebarCollapsed,
         rightSidebarCollapsed: state.shell.rightSidebarCollapsed,
+        scenarioStripCollapsed: state.shell.isScenarioStripCollapsed,
       })
     );
   } catch {
@@ -1432,6 +1437,14 @@ function arenaPage() {
   const activeTrial = getActiveTrial();
   const hasActiveTrial = Boolean(activeTrial);
   const isRoleplayMode = state.mode === 'roleplay';
+  const isScenarioStripCollapsed = state.shell.isScenarioStripCollapsed;
+  const stripTitle = isRoleplayMode ? 'Roleplay Room Strip' : 'Scenario Strip';
+  const stripDescription = isRoleplayMode
+    ? 'Open, resume, or restart shared room sessions.'
+    : 'Launch, resume, or restart your guided trial flow.';
+  const activeSummary = hasActiveTrial
+    ? `${activeTrial.title} · Active`
+    : `No ${isRoleplayMode ? 'room' : 'scenario'} active`;
   const trialCards = (isRoleplayMode ? ROLEPLAY_ROOMS : STARTER_TRIALS)
     .map((trialOrRoom) => {
       const trialId = isRoleplayMode ? trialOrRoom.trialId : trialOrRoom.id;
@@ -1472,12 +1485,27 @@ function arenaPage() {
 
   return `
     <section class="arena-main-column">
-        <section class="arena-selection-tier arena-scenario-strip">
+        <section class="arena-selection-tier arena-scenario-strip ${isScenarioStripCollapsed ? 'is-collapsed' : ''}">
           <div class="arena-selection-head">
-            <h3>${isRoleplayMode ? 'Roleplay Room Strip' : 'Scenario Strip'}</h3>
-            <p class="muted">${isRoleplayMode ? 'Open, resume, or restart shared room sessions.' : 'Launch, resume, or restart your guided trial flow.'}</p>
+            <div class="arena-selection-head-copy">
+              <h3>${stripTitle}</h3>
+              <p class="muted">${isScenarioStripCollapsed ? activeSummary : stripDescription}</p>
+            </div>
+            <button
+              type="button"
+              class="pill-btn arena-strip-toggle-btn"
+              id="arena-strip-toggle-btn"
+              aria-expanded="${isScenarioStripCollapsed ? 'false' : 'true'}"
+              aria-controls="arena-scenario-carousel"
+            >
+              ${isScenarioStripCollapsed ? 'Expand' : 'Collapse'}
+            </button>
           </div>
-          <div class="arena-card-carousel">
+          <div
+            class="arena-card-carousel ${isScenarioStripCollapsed ? 'is-collapsed' : ''}"
+            id="arena-scenario-carousel"
+            ${isScenarioStripCollapsed ? 'hidden' : ''}
+          >
             ${trialCards}
           </div>
         </section>
@@ -2514,6 +2542,15 @@ function attachProfileEditHandler() {
 }
 
 function attachArenaHandlers() {
+  const stripToggleButton = document.getElementById('arena-strip-toggle-btn');
+  if (stripToggleButton) {
+    stripToggleButton.onclick = () => {
+      state.shell.isScenarioStripCollapsed = !state.shell.isScenarioStripCollapsed;
+      persistArenaLayoutPrefs();
+      render();
+    };
+  }
+
   const startButtons = document.querySelectorAll('.start-trial-btn');
   startButtons.forEach((button) => {
     button.onclick = () => {
