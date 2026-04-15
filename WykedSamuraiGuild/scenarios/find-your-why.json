@@ -1,8 +1,8 @@
 {
   "id": "find-your-why",
-  "title": "The First Step: Find Your Why",
-  "description": "An onboarding reflection journey where new guild members uncover the motivation that will guide every future challenge.",
-  "openingSituation": "You arrive at the Compass Dais, where four halls surround you. Each hall asks you to face a different part of yourself before you can name your reason for moving forward.",
+  "title": "The First Step: Forge Your Purpose",
+  "description": "A guild initiation and self-forging rite where new members traverse four halls, define their motivation, and forge a hidden archetype profile.",
+  "openingSituation": "You stand at the Compass Dais of the Wyked Samurai Guild. Four halls call you to the rite. Complete each hall in any order, return to the hub, and seal your purpose.",
   "map": {
     "startLocation": "compass_dais",
     "locations": [
@@ -50,66 +50,66 @@
   "locations": {
     "compass_dais": {
       "name": "Compass Dais",
-      "description": "A circular platform with four radiant paths. You can choose any hall in any order.",
+      "description": "The guild’s central hub where your initiation path is chosen and your final vow is spoken.",
       "spawn": true
     },
     "hall_memory": {
-      "name": "Hall of Memory",
-      "description": "Echoes of your past speak here. Choose what still shapes your steps."
+      "name": "Hall of Origins",
+      "description": "Trace the first forge-marks that still shape who you are."
     },
     "hall_ambition": {
-      "name": "Hall of Ambition",
-      "description": "Visions of tomorrow sharpen into intent. Choose what you are willing to chase."
+      "name": "Hall of Aspiration",
+      "description": "Name the future you pursue with sharpened intent."
     },
     "hall_burden": {
-      "name": "Hall of Burden",
-      "description": "This chamber reveals weight carried in silence. Choose what you are still carrying."
+      "name": "Hall of Weight",
+      "description": "Face the weight you carry and choose how to bear it."
     },
     "hall_connection": {
-      "name": "Hall of Connection",
-      "description": "Threads of purpose bind you to others. Choose who you move forward for."
+      "name": "Hall of Bonds",
+      "description": "Honor the ties that call you forward."
     }
   },
   "prompts": {
     "hall_memory": {
-      "question": "What part of your past still guides you?",
+      "question": "What forged your beginning?",
       "options": [
         "hardship",
         "love",
         "failure",
         "duty"
       ],
-      "saveAs": "scenario.answers.memory"
+      "saveAs": "reflectionProfile.origins"
     },
     "hall_ambition": {
-      "question": "What do you want badly enough to chase?",
+      "question": "What future are you willing to pursue with your whole will?",
       "options": [
         "build something lasting",
         "prove myself",
         "protect others",
         "discover who I can become"
       ],
-      "saveAs": "scenario.answers.ambition"
+      "saveAs": "reflectionProfile.aspiration"
     },
     "hall_burden": {
-      "question": "What weighs on you?",
+      "question": "What burden still rides with you?",
       "options": [
         "fear of failure",
         "responsibility",
         "loss",
         "unfinished purpose"
       ],
-      "saveAs": "scenario.answers.burden"
+      "saveAs": "reflectionProfile.weight"
     },
     "hall_connection": {
-      "question": "Who do you move forward for?",
+      "question": "Whom do you carry in your purpose?",
       "options": [
         "family",
         "community",
         "promise",
         "future companions"
       ],
-      "saveAs": "scenario.answers.connection"
+      "saveAs": "reflectionProfile.bonds"
     },
     "final": {
       "trigger": {
@@ -121,20 +121,20 @@
         ],
         "returnTo": "compass_dais"
       },
-      "question": "What is your why?",
+      "question": "Name the purpose you swear to the guild.",
       "options": [
         "To become someone my younger self would trust.",
-        "To build a life that uplifts others.",
+        "To build a life that lifts others higher.",
         "To turn my pain into purpose.",
         "To leave something meaningful behind."
       ],
       "allowCustomAnswer": true,
-      "saveAs": "profile.motivation"
+      "saveAs": "motivation"
     }
   },
   "completionCondition": {
     "type": "profileFieldSaved",
-    "field": "profile.motivation",
+    "field": "motivation",
     "requireVisitedAll": [
       "hall_memory",
       "hall_ambition",
