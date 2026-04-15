@@ -2,6 +2,8 @@ const routes = {
   '/': { key: 'landing' },
   '/app': { key: 'home', requiresAuth: true },
   '/arena': { key: 'arena', requiresAuth: true },
+  '/guild': { key: 'guild', requiresAuth: true },
+  '/world': { key: 'guild', requiresAuth: true },
   '/guild-world': { key: 'guild', requiresAuth: true },
   '/members': { key: 'members', requiresAuth: true },
   '/profile': { key: 'profile', requiresAuth: true },
@@ -14,16 +16,35 @@ const routes = {
   '/recruiter-console': { key: 'recruiter', requiresAuth: true },
 };
 
-const navItems = [
+const sharedNavItems = [
   { label: 'Home', path: '/app', icon: '🏠' },
   { label: 'Arena', path: '/arena', icon: '⚔️' },
-  { label: 'Guild', path: '/guild-world', icon: '🌌' },
-  { label: 'World RP', path: '/guild-world', icon: '🧭' },
   { label: 'Members', path: '/members', icon: '🧑‍🤝‍🧑' },
   { label: 'Discussions', path: '/profile/scenario-chat', icon: '💬' },
   { label: 'Profile Hub', path: '/profile', icon: '👤' },
   { label: 'Recruiter Console', path: '/recruiter-console', icon: '🛰️' },
 ];
+
+function modeNavItem(mode) {
+  if (mode === 'roleplay') {
+    return { label: 'World RP', path: '/world', icon: '🧭' };
+  }
+  return { label: 'Guild', path: '/guild', icon: '🌌' };
+}
+
+function visibleNavItems(mode) {
+  const modeItem = modeNavItem(mode);
+  return [
+    sharedNavItems[0],
+    sharedNavItems[1],
+    modeItem,
+    ...sharedNavItems.slice(2),
+  ];
+}
+
+function isNavItemActive(pathname, itemPath) {
+  return pathname === itemPath || pathname.startsWith(`${itemPath}/`);
+}
 
 const STARTER_TRIALS = [
   {
@@ -192,7 +213,7 @@ const BRAND_ASSETS = Object.freeze({
 
 function pageBackgroundClass(path, key) {
   if (path === '/arena' || key === 'arena') return 'arena-bg';
-  if (path === '/guild-world' || key === 'guild') return 'guild-bg';
+  if (path === '/guild' || path === '/world' || path === '/guild-world' || key === 'guild') return 'guild-bg';
   if (path === '/recruiter-console' || key === 'recruiter') return 'recruiter-bg';
   if (['scenarioChat', 'areaChat', 'directChat'].includes(key)) return 'scenario-bg';
   if (path === '/members' || key === 'members' || key === 'profile') return 'guild-bg';
@@ -1159,6 +1180,7 @@ function ChatDock() {
 
 function Sidebar(path, key) {
   const isCollapsed = state.shell.leftSidebarCollapsed;
+  const items = visibleNavItems(state.mode);
   return `
     <aside class="left-sidebar panel ${key === 'home' ? 'home-left-sidebar' : ''} ${isCollapsed ? 'is-collapsed' : ''}">
       <div class="left-pane-brand">
@@ -1174,9 +1196,9 @@ function Sidebar(path, key) {
         </div>
       </div>
       <ul class="nav-list">
-        ${navItems.map((item) => `
+        ${items.map((item) => `
           <li>
-            <a href="${linkFor(item.path)}" class="${path === item.path ? 'active' : ''}" title="${escapeAttr(item.label)}">
+            <a href="${linkFor(item.path)}" class="${isNavItemActive(path, item.path) ? 'active' : ''}" title="${escapeAttr(item.label)}">
               <span class="nav-icon">${item.icon}</span>
               <span class="${isCollapsed ? 'hide-collapsed' : ''}">${item.label}</span>
             </a>
@@ -1256,6 +1278,7 @@ function AppShell(path, key, pageHtml, statusMarkup) {
 
 function homePage() {
   const displayName = state.currentUser?.displayName || 'Guild Member';
+  const modeDestination = modeNavItem(state.mode);
   const scenarioCards = [
     {
       title: 'Moon Harbor Intercept',
@@ -1327,7 +1350,7 @@ function homePage() {
       <p>Your watch begins under the silver moon. Track active operations, gather guild intel, and deploy where your presence shifts the story.</p>
       <div class="home-hero-actions">
         <button class="pill-btn cta-primary" type="button">Enter Mission Queue</button>
-        <a class="pill-btn home-secondary-action" href="${linkFor('/guild-world')}">Review Guild World</a>
+        <a class="pill-btn home-secondary-action" href="${linkFor(modeDestination.path)}">Review ${escapeHtml(modeDestination.label)}</a>
       </div>
     </section>
 
@@ -2225,6 +2248,18 @@ async function loadProfileForRoute(path) {
 }
 
 function applyRouteGuards(path) {
+  if (path === '/guild-world') {
+    return state.mode === 'roleplay' ? '/world' : '/guild';
+  }
+
+  if (path === '/guild' && state.mode === 'roleplay') {
+    return '/world';
+  }
+
+  if (path === '/world' && state.mode !== 'roleplay') {
+    return '/guild';
+  }
+
   const isScenarioRoute = path === '/scenario' || path.startsWith('/scenario/');
   const known = routes[path]
     || (path.startsWith('/members/') ? { key: 'profile', requiresAuth: true } : null)
@@ -2846,6 +2881,11 @@ function setMode(nextMode) {
   state.mode = nextMode;
   localStorage.setItem('wsg-mode', state.mode);
   applyModeClass();
+  const currentPath = location.hash.replace('#', '') || '/';
+  if (currentPath === '/guild' || currentPath === '/world' || currentPath === '/guild-world') {
+    location.hash = state.mode === 'roleplay' ? '/world' : '/guild';
+    return;
+  }
   render();
 }
 
