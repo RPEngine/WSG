@@ -312,7 +312,7 @@ const arenaLayoutPrefs = loadArenaLayoutPrefs();
 
 const state = {
   mode: localStorage.getItem('wsg-mode') || 'professional',
-  authToken: localStorage.getItem('wsg-auth-token') || '',
+  authToken: sessionStorage.getItem('wsg-auth-token') || localStorage.getItem('wsg-auth-token') || '',
   currentUser: null,
   members: [],
   activeProfile: null,
@@ -404,7 +404,6 @@ const state = {
   },
 };
 
-const CANONICAL_BACKEND_BASE_URL = 'https://wsg-7hmk.onrender.com';
 const BACKEND_BASE_URL_CONFIG_KEY = 'wsg-backend-base-url';
 const AI_ENDPOINTS = Object.freeze({
   test: '/ai/test',
@@ -844,7 +843,7 @@ function resolveApiBaseUrl() {
   }
 
   if (isLocalDevHost) {
-    return CANONICAL_BACKEND_BASE_URL;
+    return 'http://localhost:3000';
   }
 
   return `${protocol}//${host}`;
@@ -2938,18 +2937,45 @@ function signupPage() {
   `;
 }
 
-function policyPageTemplate({ title, intro, sections = [] }) {
+function policyPageTemplate({ title, intro, lastUpdated = 'April 15, 2026', sections = [] }) {
+  const sectionNav = sections
+    .map((section) => ({
+      heading: section.heading,
+      anchor: String(section.heading || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, ''),
+    }))
+    .filter((item) => item.heading && item.anchor);
+
   return `
-    <section class="card form-card policy-page-card">
-      <h3>${escapeHtml(title)}</h3>
-      <p class="muted">${escapeHtml(intro)}</p>
-      ${sections.map((section) => `
-        <section class="policy-copy-block">
-          <h4>${escapeHtml(section.heading)}</h4>
-          ${section.body ? `<p>${escapeHtml(section.body)}</p>` : ''}
-          ${Array.isArray(section.points) && section.points.length ? `<ul>${section.points.map((point) => `<li>${escapeHtml(point)}</li>`).join('')}</ul>` : ''}
-        </section>
-      `).join('')}
+    <section class="card form-card policy-page-card policy-layout-card">
+      <header class="policy-page-header">
+        <h3>${escapeHtml(title)}</h3>
+        <p class="policy-last-updated"><strong>Last updated:</strong> ${escapeHtml(lastUpdated)}</p>
+        <p class="muted">${escapeHtml(intro)}</p>
+      </header>
+      ${sectionNav.length ? `
+        <nav class="policy-section-nav" aria-label="Policy sections">
+          <h4>On this page</h4>
+          <ul>
+            ${sectionNav.map((item) => `<li><a href="#${escapeAttr(item.anchor)}">${escapeHtml(item.heading)}</a></li>`).join('')}
+          </ul>
+        </nav>
+      ` : ''}
+      ${sections.map((section) => {
+    const sectionAnchor = String(section.heading || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    return `
+          <section class="policy-copy-block" id="${escapeAttr(sectionAnchor)}">
+            <h4>${escapeHtml(section.heading)}</h4>
+            ${section.body ? `<p>${escapeHtml(section.body)}</p>` : ''}
+            ${Array.isArray(section.points) && section.points.length ? `<ul>${section.points.map((point) => `<li>${escapeHtml(point)}</li>`).join('')}</ul>` : ''}
+          </section>
+        `;
+  }).join('')}
     </section>
   `;
 }
@@ -2957,16 +2983,50 @@ function policyPageTemplate({ title, intro, sections = [] }) {
 function codeOfConductPage() {
   return policyPageTemplate({
     title: 'Wyked Samurai Guild Code of Conduct',
-    intro: 'WSG is a professional, Safe for Work environment built for members, recruiters, employers, and moderators.',
+    intro: 'This Code of Conduct sets behavioral expectations for a Safe for Work professional network, job board, scenario platform, and community space.',
     sections: [
       {
-        heading: 'Member Conduct Standards',
+        heading: 'Professional Environment',
+        body: 'WSG is a professional-first platform. Members, recruiters, employers, moderators, and guests are expected to communicate in a workplace-appropriate and respectful manner across all platform features.',
+      },
+      {
+        heading: 'Respectful Conduct',
         points: [
-          'Respect all members, recruiters, employers, and moderators.',
-          'No harassment, hate, bullying, intimidation, or impersonation.',
-          'No spam, trolling, disruption, or fraudulent behavior.',
-          'Roleplay, scenarios, and discussions must remain workplace-appropriate.',
-          'Users must follow moderator instructions and platform safety systems.',
+          'Treat all members with respect, including in disagreements, feedback, and collaboration.',
+          'Communicate clearly and professionally in profiles, chats, scenarios, roleplay spaces, and recruiter interactions.',
+          'Do not intimidate, demean, or attempt to exclude users based on personal characteristics or professional status.',
+        ],
+      },
+      {
+        heading: 'Harassment and Hate Prohibited',
+        points: [
+          'Harassment, abuse, stalking, threats, hate speech, and targeted hostility are prohibited.',
+          'Content or conduct that attacks protected groups is prohibited.',
+          'Coordinated harassment, dogpiling, and repeated unwanted contact are prohibited.',
+        ],
+      },
+      {
+        heading: 'Fraud, Impersonation, and Deception Prohibited',
+        points: [
+          'Users may not impersonate another person, employer, organization, or Guild representative.',
+          'Users may not submit falsified credentials, forged work history, or deceptive claims.',
+          'Scam attempts, phishing attempts, or deceptive recruiting conduct are prohibited.',
+        ],
+      },
+      {
+        heading: 'Roleplay and Scenario Conduct',
+        points: [
+          'Roleplay and scenario participation must remain Safe for Work and within professional boundaries.',
+          'Scenario systems are designed for skill-building and professional growth inside the broader platform environment.',
+          'Participants must respect explicit boundaries, tags, and participation rules set for each scenario.',
+        ],
+      },
+      {
+        heading: 'Moderator Authority and Enforcement',
+        points: [
+          'Guild moderators may review and remove unsafe, disruptive, or fraudulent behavior and content.',
+          'Enforcement may include warnings, content removal, temporary restrictions, suspension, or account removal.',
+          'Repeated or severe violations may result in immediate removal from platform services.',
         ],
       },
     ],
@@ -2976,29 +3036,55 @@ function codeOfConductPage() {
 function contentPolicyPage() {
   return policyPageTemplate({
     title: 'Wyked Samurai Guild Content Policy',
-    intro: 'All user-generated and recruiter-generated content on WSG must remain Safe for Work.',
+    intro: 'WSG content standards are Safe for Work and apply across chats, profiles, usernames, avatars, roleplay, scenarios, recruiter messages, job listings, and uploaded content.',
     sections: [
       {
-        heading: 'Prohibited Content',
+        heading: 'Safe for Work Requirement',
+        body: 'All content on WSG must be workplace-appropriate. If content is not suitable for a professional networking and job-board context, it is not allowed on the platform.',
+      },
+      {
+        heading: 'Prohibited Sexual Content',
         points: [
-          'Sexual or erotic content.',
-          'Nudity or explicit sexual references.',
-          'Sexualized minors.',
-          'Graphic violence or gore.',
-          'Hate speech.',
-          'Targeted harassment.',
-          'Illegal activity promotion.',
-          'Scam or fraud content.',
+          'Sexual or erotic content, explicit sexual language, and pornographic material are prohibited.',
+          'Sexual solicitation, sexualized roleplay, and non-consensual sexual content are prohibited.',
+          'Any sexual content involving minors is strictly prohibited and subject to immediate enforcement action.',
         ],
       },
       {
-        heading: 'Where This Applies',
+        heading: 'Prohibited Violent or Graphic Content',
         points: [
-          'Chat messages',
-          'Profiles',
-          'Roleplay and scenario content',
-          'Usernames and avatars',
-          'Job listings and recruiter messages',
+          'Graphic gore, extreme violence, and content celebrating harm are prohibited.',
+          'Threats of violence and instructions for violent wrongdoing are prohibited.',
+        ],
+      },
+      {
+        heading: 'Harassment and Hate Content',
+        points: [
+          'Harassing, hateful, discriminatory, or degrading content is prohibited.',
+          'Usernames, profile text, avatars, and uploaded media may not contain hate symbols or abusive slurs.',
+        ],
+      },
+      {
+        heading: 'Fraud, Scam, and Illegal Content',
+        points: [
+          'Scam postings, fraudulent recruiter outreach, phishing attempts, and illegal content are prohibited.',
+          'Users may not post fake job listings or misleading compensation and credential requirements.',
+          'Users may not use WSG to facilitate unlawful activity.',
+        ],
+      },
+      {
+        heading: 'Profile, Chat, Roleplay, Scenario, and Job Listing Standards',
+        points: [
+          'This policy applies to profile fields, chat messages, usernames, avatars, roleplay sessions, scenario prompts, recruiter messages, and job listings.',
+          'All submissions must be accurate, professional, and safe for community use.',
+          'The Guild may remove or restrict content that violates these standards.',
+        ],
+      },
+      {
+        heading: 'AI Interaction Safety',
+        points: [
+          'Users may not use AI features to generate prohibited, unsafe, fraudulent, or abusive content.',
+          'Prompts and outputs may be moderated for policy compliance and platform safety.',
         ],
       },
     ],
@@ -3008,17 +3094,62 @@ function contentPolicyPage() {
 function platformRulesPage() {
   return policyPageTemplate({
     title: 'Wyked Samurai Guild Platform Rules',
-    intro: 'WSG is a job board and professional development platform first. All optional scenario systems operate inside that professional context.',
+    intro: 'These platform rules explain how WSG operates and what is expected of users in professional, recruiter, scenario, and community workflows.',
     sections: [
       {
-        heading: 'Platform Integrity Rules',
+        heading: 'Professional Platform First',
         points: [
-          'Users may not misrepresent employers, credentials, or identities.',
-          'Recruiters may not post fraudulent or misleading listings.',
-          'Scenario participation must follow scenario rules.',
-          'Only tagged participants count toward scenario completion.',
-          'Accounts may be suspended or banned for violations.',
-          'The Guild reserves the right to moderate content and remove unsafe or fraudulent activity.',
+          'WSG is a job board and professional development platform first.',
+          'Roleplay and scenario systems exist within that professional environment and must remain Safe for Work.',
+        ],
+      },
+      {
+        heading: 'Account Integrity',
+        points: [
+          'Users may not misrepresent identities, employers, organizations, licenses, or credentials.',
+          'Each account must represent real ownership and must not be shared for deceptive activity.',
+        ],
+      },
+      {
+        heading: 'Recruiter and Employer Rules',
+        points: [
+          'Recruiter and employer outreach must be truthful, relevant, and non-deceptive.',
+          'Job listings must not include scam patterns, false pay claims, or fabricated employer details.',
+        ],
+      },
+      {
+        heading: 'Scenario Participation Rules',
+        points: [
+          'Scenario activity is governed by room and participation controls defined for each session.',
+          'Scenario hosts and moderators may remove disruptive behavior to keep sessions productive and safe.',
+        ],
+      },
+      {
+        heading: 'Tagged Participant Rules',
+        points: [
+          'Only tagged participants count toward scenario progression and completion.',
+          'Observers may view or contribute only where allowed by scenario settings.',
+        ],
+      },
+      {
+        heading: 'Roleplay Boundaries',
+        points: [
+          'Roleplay must stay within professional, Safe for Work boundaries and cannot be used to bypass policy rules.',
+          'Boundary violations, targeted harassment, or coercive behavior are prohibited.',
+        ],
+      },
+      {
+        heading: 'Community Use Rules',
+        points: [
+          'Use chats and community channels for constructive professional engagement.',
+          'Spam, flooding, manipulation, and repeated disruption are prohibited.',
+        ],
+      },
+      {
+        heading: 'Enforcement, Suspension, and Removal',
+        points: [
+          'The Guild may remove unsafe, disruptive, or fraudulent content.',
+          'Violations may result in warnings, restricted access, suspension, or permanent account removal.',
         ],
       },
     ],
@@ -3027,22 +3158,69 @@ function platformRulesPage() {
 
 function privacyPage() {
   return policyPageTemplate({
-    title: 'Wyked Samurai Guild Privacy Policy (Placeholder)',
-    intro: 'This temporary policy explains current data handling while a fuller privacy policy is drafted.',
+    title: 'Wyked Samurai Guild Privacy Policy',
+    intro: 'This policy describes the current data practices used to run WSG safely and reliably today. It may be updated as platform features evolve.',
     sections: [
       {
-        heading: 'Data We May Store',
+        heading: 'What Information We Collect',
+        body: 'WSG collects information needed to provide account access, platform safety, communication features, and scenario participation features.',
+      },
+      {
+        heading: 'Account and Profile Information',
         points: [
-          'Account identity and authentication data',
-          'Policy acceptance timestamp and policy version',
-          'Scenario participation history',
-          'Moderation and safety-related events',
-          'Basic operational logs needed to keep the platform secure and reliable',
+          'Account records may include legal name, display name, email, role, and organization details.',
+          'Profile data may include bio text, skills, profile-layer fields, and account settings updates.',
         ],
       },
       {
-        heading: 'Policy Status',
-        body: 'This is a professional placeholder privacy policy. A complete version with retention periods, legal basis, and contact details can be published in a future update.',
+        heading: 'Policy Acceptance Records',
+        points: [
+          'Policy acceptance status, timestamps, and policy version identifiers may be stored.',
+          'Associated metadata such as IP and user-agent may be logged for safety and compliance operations.',
+        ],
+      },
+      {
+        heading: 'Scenario and Chat Activity',
+        points: [
+          'Scenario participation history, chat messages, and related context may be stored to deliver platform functions.',
+          'Moderation-relevant activity may be retained to investigate abuse, fraud, or policy violations.',
+        ],
+      },
+      {
+        heading: 'Connections and Participation Data',
+        points: [
+          'Connection links between users and scenario participant status may be stored for collaboration features.',
+          'Participation metadata can be used for progression, completion tracking, and safety review.',
+        ],
+      },
+      {
+        heading: 'How Information Is Used',
+        points: [
+          'To operate accounts, maintain sign-in sessions, and deliver requested platform features.',
+          'To personalize professional and scenario workflows based on account settings and activity.',
+        ],
+      },
+      {
+        heading: 'Safety, Moderation, and Fraud Prevention',
+        points: [
+          'Activity and content may be reviewed by automated checks and moderation tools for policy enforcement.',
+          'Signals from content and account behavior may be used to detect abuse, scams, or unsafe conduct.',
+        ],
+      },
+      {
+        heading: 'Third-Party Services and Hosting',
+        points: [
+          'WSG uses third-party infrastructure and service providers for hosting, identity integrations, and platform operations.',
+          'Operational data may be processed by those providers according to their service terms and controls.',
+        ],
+      },
+      {
+        heading: 'Data Retention and Future Updates',
+        points: [
+          'Data retention periods may vary by feature and safety requirements.',
+          'This policy may be updated as WSG evolves. Material changes will be reflected in updated policy text and timestamps.',
+          'Account data, policy acceptance, scenario participation history, moderation-relevant activity, and profile information may be stored to operate the platform safely.',
+        ],
       },
     ],
   });
@@ -3307,7 +3485,8 @@ function setAuthSession({ sessionToken, user }) {
   state.availableLayers = normalized.availableLayers;
   state.lockedLayers = normalized.lockedLayers;
   state.activeLayer = state.availableLayers.includes(state.activeLayer) ? state.activeLayer : (state.availableLayers[0] || 'free');
-  localStorage.setItem('wsg-auth-token', sessionToken);
+  sessionStorage.setItem('wsg-auth-token', sessionToken);
+  localStorage.removeItem('wsg-auth-token');
   console.log('[auth:frontend] session token saved', {
     hasSessionToken: Boolean(sessionToken),
     userId: normalized.user?.id || null,
@@ -3324,6 +3503,8 @@ function clearAuthSession() {
   state.lockedLayers = ['professional', 'roleplay'];
   state.activeLayer = 'free';
   localStorage.removeItem('wsg-auth-token');
+  sessionStorage.removeItem('wsg-auth-token');
+  sessionStorage.removeItem(ONBOARDING_NEW_USER_KEY);
 }
 
 async function bootstrapAuth() {
@@ -4383,7 +4564,12 @@ function attachHeaderActions() {
 
   const logoutButton = document.getElementById('logout-btn');
   if (logoutButton) {
-    logoutButton.onclick = () => {
+    logoutButton.onclick = async () => {
+      try {
+        await apiRequest('/auth/logout', { method: 'POST' });
+      } catch {
+        // ignore logout network errors and clear local auth regardless
+      }
       clearAuthSession();
       setStatusMessage('Signed out successfully.', 'success');
       location.hash = '/login';
