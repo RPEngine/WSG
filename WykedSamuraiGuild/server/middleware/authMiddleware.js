@@ -1,7 +1,8 @@
 import { getSessionWithUser } from "../models/userStore.js";
 import { getUserFromSessionToken, isRecentAuth } from "../services/authService.js";
+import { requiresPolicyReacceptance } from "../config/policy.js";
 
-export async function requireAuth(req, res, next) {
+export async function requireSessionAuth(req, res, next) {
   const authHeader = req.headers.authorization || "";
   const sessionToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
 
@@ -15,6 +16,18 @@ export async function requireAuth(req, res, next) {
   req.user = user;
   req.sessionToken = sessionToken;
   return next();
+}
+
+export async function requireAuth(req, res, next) {
+  await requireSessionAuth(req, res, async () => {
+    if (requiresPolicyReacceptance(req.user)) {
+      return res.status(403).json({
+        error: "Policy acceptance is required before accessing protected resources.",
+        policy_reacceptance_required: true,
+      });
+    }
+    return next();
+  });
 }
 
 export async function requireRecentReauth(req, res, next) {

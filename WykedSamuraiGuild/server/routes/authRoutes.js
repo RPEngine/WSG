@@ -1,5 +1,6 @@
 import express from "express";
 import {
+  acceptPolicies,
   googleAuth,
   login,
   logout,
@@ -8,6 +9,7 @@ import {
   register,
   verifyMfa,
 } from "../controllers/authController.js";
+import { requireSessionAuth } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
@@ -19,5 +21,6 @@ router.post("/mfa/verify", verifyMfa);
 router.post("/re-auth", reauth);
 router.post("/logout", logout);
 router.get("/me", me);
+router.post("/policy/accept", requireSessionAuth, acceptPolicies);
 
 export default router;
