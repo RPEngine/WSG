@@ -49,11 +49,11 @@ function isNavItemActive(pathname, itemPath) {
 const STARTER_TRIALS = [
   {
     id: 'find-your-why',
-    title: 'The First Step: Find Your Why',
-    description: 'Onboarding reflection scenario where you explore four halls and define your core motivation.',
+    title: 'The First Step: Forge Your Purpose',
+    description: 'Guild initiation rite where you traverse four halls, shape your hidden archetype profile, and declare your purpose.',
     category: 'Onboarding',
     difficulty: 'Foundational',
-    openingPrompt: 'Begin at the Compass Dais, visit each hall, and answer the final question to set your profile motivation.',
+    openingPrompt: 'Begin at the Compass Dais, complete each hall in any order, return to the hub, and complete your initiation vow.',
     suggestedRole: 'New Guild Member',
   },
   {
@@ -143,69 +143,130 @@ const ROLEPLAY_ROOMS = [
 ];
 
 const FIRST_SCENARIO_ID = 'find-your-why';
+const ONBOARDING_ARCHETYPES = Object.freeze([
+  'guardian',
+  'builder',
+  'seeker',
+  'oathbound',
+  'steward',
+  'survivor',
+  'wounded_healer',
+  'pathfinder',
+  'challenger',
+  'legacy_bearer',
+]);
+const ONBOARDING_REFLECTION_FIELDS = Object.freeze({
+  hall_memory: 'origins',
+  hall_ambition: 'aspiration',
+  hall_burden: 'weight',
+  hall_connection: 'bonds',
+});
+const ONBOARDING_HALL_SCORING_RULES = Object.freeze({
+  hall_memory: Object.freeze({
+    hardship: Object.freeze({ survivor: 2, wounded_healer: 1, guardian: 1 }),
+    love: Object.freeze({ guardian: 2, builder: 1, steward: 1 }),
+    failure: Object.freeze({ seeker: 2, wounded_healer: 1, challenger: 1 }),
+    duty: Object.freeze({ oathbound: 2, guardian: 1, steward: 1 }),
+  }),
+  hall_ambition: Object.freeze({
+    'build something lasting': Object.freeze({ builder: 2, legacy_bearer: 1, steward: 1 }),
+    'prove myself': Object.freeze({ challenger: 2, survivor: 1, seeker: 1 }),
+    'protect others': Object.freeze({ guardian: 2, oathbound: 1, steward: 1 }),
+    'discover who I can become': Object.freeze({ seeker: 2, pathfinder: 1, challenger: 1 }),
+  }),
+  hall_burden: Object.freeze({
+    'fear of failure': Object.freeze({ survivor: 2, seeker: 1 }),
+    responsibility: Object.freeze({ steward: 2, oathbound: 1, guardian: 1 }),
+    loss: Object.freeze({ wounded_healer: 2, survivor: 1, legacy_bearer: 1 }),
+    'unfinished purpose': Object.freeze({ pathfinder: 1, challenger: 1, legacy_bearer: 2 }),
+  }),
+  hall_connection: Object.freeze({
+    family: Object.freeze({ guardian: 2, steward: 1 }),
+    community: Object.freeze({ steward: 2, builder: 1, guardian: 1 }),
+    promise: Object.freeze({ oathbound: 2, legacy_bearer: 1 }),
+    'future companions': Object.freeze({ pathfinder: 2, guardian: 1, seeker: 1 }),
+  }),
+});
+const ONBOARDING_FINAL_MOTIVATION_WEIGHTS = Object.freeze({
+  'To become someone my younger self would trust.': Object.freeze({ seeker: 2, survivor: 1, wounded_healer: 1 }),
+  'To build a life that lifts others higher.': Object.freeze({ builder: 2, steward: 2, guardian: 1 }),
+  'To turn my pain into purpose.': Object.freeze({ wounded_healer: 2, survivor: 1, challenger: 1 }),
+  'To leave something meaningful behind.': Object.freeze({ legacy_bearer: 2, builder: 1, oathbound: 1 }),
+});
 const SCENARIO_BLUEPRINTS = Object.freeze({
   'find-your-why': {
     id: 'find-your-why',
     slug: 'find-your-why',
-    title: 'The First Step: Find Your Why',
-    description: 'Move through each hall to explore memory, ambition, burden, and connection before naming your core motivation.',
-    objective: 'Visit each hall and gather your reflections, then return to the Compass Dais.',
+    title: 'The First Step: Forge Your Purpose',
+    description: 'A guild initiation and self-forging rite. Face each hall, reveal your hidden archetype pattern, then swear your purpose.',
+    objective: 'Complete all four halls in any order, then return to the Compass Dais for your final vow.',
     startLocation: 'compass_dais',
     locations: {
       compass_dais: {
         id: 'compass_dais',
         name: 'Compass Dais',
-        prompt: 'The compass hums at your feet. Choose a hall to begin your reflection journey.',
+        prompt: 'At the guild’s center stone, four halls await your self-forging rite. Choose any path.',
       },
       hall_memory: {
         id: 'hall_memory',
-        name: 'Hall of Memory',
-        prompt: 'Recall a defining moment from your past. Which memory still guides you?',
+        name: 'Hall of Origins',
+        prompt: 'What forged your beginning?',
         responses: [
-          'A mentor believed in me before I believed in myself.',
-          'A difficult failure taught me resilience and humility.',
-          'A breakthrough moment showed what I can build with others.',
+          'hardship',
+          'love',
+          'failure',
+          'duty',
         ],
       },
       hall_ambition: {
         id: 'hall_ambition',
-        name: 'Hall of Ambition',
-        prompt: 'When you imagine your best future self, what drives that vision?',
+        name: 'Hall of Aspiration',
+        prompt: 'What future are you willing to pursue with your whole will?',
         responses: [
-          'Creating work that leaves a lasting impact.',
-          'Leading teams that thrive under pressure.',
-          'Continuously mastering my craft and passing it on.',
+          'build something lasting',
+          'prove myself',
+          'protect others',
+          'discover who I can become',
         ],
       },
       hall_burden: {
         id: 'hall_burden',
-        name: 'Hall of Burden',
-        prompt: 'Every path has weight. Which burden are you willing to carry?',
+        name: 'Hall of Weight',
+        prompt: 'What burden still rides with you?',
         responses: [
-          'The responsibility of making hard decisions.',
-          'The discipline of growth when comfort is easier.',
-          'The patience required to build trust over time.',
+          'fear of failure',
+          'responsibility',
+          'loss',
+          'unfinished purpose',
         ],
       },
       hall_connection: {
         id: 'hall_connection',
-        name: 'Hall of Connection',
-        prompt: 'Who are you choosing to serve as you grow into leadership?',
+        name: 'Hall of Bonds',
+        prompt: 'Whom do you carry in your purpose?',
         responses: [
-          'My team and the people who rely on our work.',
-          'My family and community who shaped my values.',
-          'Future builders who need a path I can help create.',
+          'family',
+          'community',
+          'promise',
+          'future companions',
         ],
       },
     },
     hallOrder: ['hall_memory', 'hall_ambition', 'hall_burden', 'hall_connection'],
-    finalPrompt: 'What is your why?',
+    scoring: {
+      archetypes: ONBOARDING_ARCHETYPES,
+      reflectionFields: ONBOARDING_REFLECTION_FIELDS,
+      hallRules: ONBOARDING_HALL_SCORING_RULES,
+      finalMotivationRules: ONBOARDING_FINAL_MOTIVATION_WEIGHTS,
+    },
+    finalPrompt: 'Name the purpose you swear to the guild.',
     finalResponses: [
-      'To build meaningful work that lifts others.',
-      'To lead with integrity when pressure rises.',
-      'To turn hardship into guidance for my community.',
+      'To become someone my younger self would trust.',
+      'To build a life that lifts others higher.',
+      'To turn my pain into purpose.',
+      'To leave something meaningful behind.',
     ],
-    completionMessage: 'Scenario complete. Your why is now anchored in your guild profile journey.',
+    completionMessage: 'Initiation complete. Your hidden archetype profile and vow are sealed in your guild record.',
   },
 });
 
@@ -335,6 +396,7 @@ const STARTER_SCENARIO_SEEN_PREFIX = 'wsg-starter-seen';
 const SCENARIO_PROGRESS_STORAGE_PREFIX = 'wsg-scenario-progress';
 const ONBOARDING_KNOWN_RETURNING_PREFIX = 'wsg-known-returning';
 const ONBOARDING_MOTIVATION_PREFIX = 'wsg-onboarding-motivation';
+const ONBOARDING_PROFILE_PREFIX = 'wsg-onboarding-profile';
 const PASSWORD_POLICY_MESSAGE = 'Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a special character.';
 const PASSWORD_POLICY_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$/;
 const GOOGLE_CLIENT_ID_META_KEY = 'wsg-google-client-id';
@@ -462,6 +524,36 @@ function getOnboardingMotivationStorageKey(userId = state.currentUser?.id) {
   return `${ONBOARDING_MOTIVATION_PREFIX}:${userId || 'anonymous'}`;
 }
 
+function getOnboardingProfileStorageKey(userId = state.currentUser?.id) {
+  return `${ONBOARDING_PROFILE_PREFIX}:${userId || 'anonymous'}`;
+}
+
+function readOnboardingProfile(userId = state.currentUser?.id) {
+  try {
+    const raw = localStorage.getItem(getOnboardingProfileStorageKey(userId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveOnboardingProfile(profilePayload, userId = state.currentUser?.id) {
+  if (!userId || !profilePayload || typeof profilePayload !== 'object') {
+    return;
+  }
+  localStorage.setItem(getOnboardingProfileStorageKey(userId), JSON.stringify(profilePayload));
+}
+
+function withPersistedOnboardingProfile(user) {
+  if (!user?.id) {
+    return user;
+  }
+  const onboardingProfile = readOnboardingProfile(user.id);
+  return onboardingProfile ? { ...user, ...onboardingProfile } : user;
+}
+
 function readPersistedScenarioProgressForUser(userId = state.currentUser?.id) {
   try {
     const raw = localStorage.getItem(getScenarioProgressStorageKey(userId));
@@ -551,7 +643,7 @@ function sanitizeScenarioSessionForSave(scenarioId, session) {
   const currentLocation = locationIds.has(session.currentLocation) ? session.currentLocation : scenario.startLocation;
   const finalAnswer = String(session.finalAnswer || '').trim();
   const finalSubmitted = Boolean(session.finalSubmitted && finalAnswer);
-  const finalUnlocked = Boolean(session.finalUnlocked || completedHalls.length === scenario.hallOrder.length);
+  const finalUnlocked = Boolean(session.finalUnlocked && completedHalls.length === scenario.hallOrder.length);
 
   return {
     scenarioId: scenario.id,
@@ -1041,6 +1133,105 @@ function ensureScenarioSession(scenarioId) {
   return state.scenarioDetail.sessions[scenarioId];
 }
 
+function createEmptyArchetypeProfile(archetypes = ONBOARDING_ARCHETYPES) {
+  return archetypes.reduce((acc, archetype) => {
+    acc[archetype] = 0;
+    return acc;
+  }, {});
+}
+
+function applyArchetypeWeights(archetypeProfile, weights = {}, touchedArchetypes = new Set()) {
+  Object.entries(weights || {}).forEach(([archetype, amount]) => {
+    if (!Object.hasOwn(archetypeProfile, archetype)) {
+      return;
+    }
+    archetypeProfile[archetype] += Number(amount) || 0;
+    touchedArchetypes.add(archetype);
+  });
+}
+
+function rankArchetypes(archetypeProfile, { preferredArchetypes = new Set() } = {}) {
+  return Object.entries(archetypeProfile || {})
+    .sort(([aName, aScore], [bName, bScore]) => {
+      if (bScore !== aScore) {
+        return bScore - aScore;
+      }
+      const aPreferred = preferredArchetypes.has(aName);
+      const bPreferred = preferredArchetypes.has(bName);
+      if (aPreferred !== bPreferred) {
+        return aPreferred ? -1 : 1;
+      }
+      return aName.localeCompare(bName);
+    })
+    .map(([name]) => name);
+}
+
+function buildOnboardingProfileFromSession(scenario, session) {
+  const scoringConfig = scenario?.scoring || {};
+  const archetypes = Array.isArray(scoringConfig.archetypes) && scoringConfig.archetypes.length
+    ? scoringConfig.archetypes
+    : ONBOARDING_ARCHETYPES;
+  const reflectionFields = scoringConfig.reflectionFields || ONBOARDING_REFLECTION_FIELDS;
+  const hallRules = scoringConfig.hallRules || ONBOARDING_HALL_SCORING_RULES;
+  const finalMotivationRules = scoringConfig.finalMotivationRules || ONBOARDING_FINAL_MOTIVATION_WEIGHTS;
+  const reflectionProfile = {
+    origins: '',
+    aspiration: '',
+    weight: '',
+    bonds: '',
+  };
+  const archetypeProfile = createEmptyArchetypeProfile(archetypes);
+
+  scenario.hallOrder.forEach((locationId) => {
+    const selectedAnswer = String(session.answers?.[locationId] || '').trim();
+    const reflectionKey = reflectionFields[locationId];
+    if (reflectionKey) {
+      reflectionProfile[reflectionKey] = selectedAnswer;
+    }
+    applyArchetypeWeights(archetypeProfile, hallRules[locationId]?.[selectedAnswer]);
+  });
+
+  const finalMotivation = String(session.finalAnswer || '').trim();
+  const finalTouchedArchetypes = new Set();
+  const finalWeights = finalMotivationRules[finalMotivation];
+  if (finalWeights) {
+    applyArchetypeWeights(archetypeProfile, finalWeights, finalTouchedArchetypes);
+  }
+
+  const ranked = rankArchetypes(archetypeProfile, { preferredArchetypes: finalTouchedArchetypes });
+  const primaryArchetype = ranked[0] || '';
+  const secondaryArchetype = ranked[1] || '';
+
+  return {
+    motivation: finalMotivation,
+    reflectionProfile,
+    archetypeProfile,
+    primaryArchetype,
+    secondaryArchetype,
+    onboarding: {
+      findYourWhyCompleted: true,
+      findYourWhyCompletedAt: new Date().toISOString(),
+    },
+  };
+}
+
+function formatArchetypeLabel(value) {
+  return String(value || '')
+    .split('_')
+    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+    .join(' ');
+}
+
+function onboardingFlavorLine(primaryArchetype, secondaryArchetype) {
+  if (!primaryArchetype) {
+    return '';
+  }
+  if (!secondaryArchetype) {
+    return `Your path begins as a ${formatArchetypeLabel(primaryArchetype)}.`;
+  }
+  return `Your path begins as a ${formatArchetypeLabel(primaryArchetype)}, tempered by the will of a ${formatArchetypeLabel(secondaryArchetype)}.`;
+}
+
 function splitSkills(skills) {
   if (Array.isArray(skills)) {
     return skills.filter(Boolean);
@@ -1359,6 +1550,14 @@ function AppShell(path, key, pageHtml, statusMarkup, pageSet) {
 function homePage() {
   const displayName = state.currentUser?.displayName || 'Guild Member';
   const modeDestination = modeNavItem(state.mode);
+  const onboardingSummary = state.currentUser?.onboarding?.findYourWhyCompleted
+    ? {
+      motivation: String(state.currentUser?.motivation || '').trim(),
+      primary: String(state.currentUser?.primaryArchetype || '').trim(),
+      secondary: String(state.currentUser?.secondaryArchetype || '').trim(),
+      flavor: onboardingFlavorLine(state.currentUser?.primaryArchetype, state.currentUser?.secondaryArchetype),
+    }
+    : null;
   const scenarioCards = [
     {
       title: 'Moon Harbor Intercept',
@@ -1436,6 +1635,19 @@ function homePage() {
 
     <section class="home-body-grid">
       <div class="home-main-column">
+        ${onboardingSummary ? `
+          <section class="card home-section tier-2">
+            <div class="section-heading-row home-section-heading">
+              <h3>Initiation Summary</h3>
+            </div>
+            <ul class="support-list">
+              <li><strong>Motivation</strong><p class="muted">${escapeHtml(onboardingSummary.motivation || 'Not set')}</p></li>
+              <li><strong>Primary Archetype</strong><p class="muted">${escapeHtml(formatArchetypeLabel(onboardingSummary.primary) || 'Unranked')}</p></li>
+              <li><strong>Secondary Archetype</strong><p class="muted">${escapeHtml(formatArchetypeLabel(onboardingSummary.secondary) || 'Unranked')}</p></li>
+            </ul>
+            ${onboardingSummary.flavor ? `<p class="muted" style="margin-top:10px;">${escapeHtml(onboardingSummary.flavor)}</p>` : ''}
+          </section>
+        ` : ''}
         <section class="card home-section tier-2">
           <div class="section-heading-row home-section-heading">
             <h3>Recommended Scenarios</h3>
@@ -1714,7 +1926,7 @@ function scenarioDetailPage(path) {
         <div class="scenario-map-head">
           <div>
             <p class="hero-kicker">Scenario Map</p>
-            <h3>Path of Reflection</h3>
+            <h3>Wyked Samurai Identity</h3>
           </div>
           <p class="muted">Choose a location to continue.</p>
         </div>
@@ -2242,7 +2454,7 @@ function initializeGoogleAuth(routeKey) {
 function setAuthSession({ sessionToken, user }) {
   const normalized = normalizeLayeredProfile(user);
   state.authToken = sessionToken;
-  state.currentUser = normalized.user;
+  state.currentUser = withPersistedOnboardingProfile(normalized.user);
   state.scenarioDetail.sessions = {};
   state.layers = normalized.layers;
   state.availableLayers = normalized.availableLayers;
@@ -2275,7 +2487,7 @@ async function bootstrapAuth() {
   try {
     const data = await apiRequest('/auth/me');
     const normalized = normalizeLayeredProfile(data.user);
-    state.currentUser = normalized.user;
+    state.currentUser = withPersistedOnboardingProfile(normalized.user);
     state.layers = normalized.layers;
     state.availableLayers = normalized.availableLayers;
     state.lockedLayers = normalized.lockedLayers;
@@ -2361,7 +2573,7 @@ async function loadProfileForRoute(path) {
     const result = await apiRequest('/profile/me');
     const normalized = normalizeLayeredProfile(result.profile);
     state.activeProfile = normalized.user;
-    state.currentUser = normalized.user;
+    state.currentUser = withPersistedOnboardingProfile(normalized.user);
     state.layers = normalized.layers;
     state.availableLayers = normalized.availableLayers;
     state.lockedLayers = normalized.lockedLayers;
@@ -2449,6 +2661,9 @@ function attachScenarioDetailHandlers() {
         session.visitedLocations.push(locationId);
       }
       session.currentLocation = locationId;
+      if (locationId === scenario.startLocation && scenario.hallOrder.every((hallId) => session.completedHalls.includes(hallId))) {
+        session.finalUnlocked = true;
+      }
       persistScenarioProgress(scenarioId);
       render();
     };
@@ -2471,12 +2686,6 @@ function attachScenarioDetailHandlers() {
         }
       }
 
-      if (scenario.hallOrder.every((hallId) => session.completedHalls.includes(hallId))) {
-        session.finalUnlocked = true;
-      }
-      if (session.finalUnlocked && locationId !== scenario.startLocation) {
-        session.currentLocation = scenario.startLocation;
-      }
       persistScenarioProgress(scenarioId);
       render();
     };
@@ -2496,10 +2705,16 @@ function attachScenarioDetailHandlers() {
       session.finalSubmitted = true;
       session.completionMessageVisible = true;
       saveOnboardingMotivation(session.finalAnswer);
+      const onboardingProfile = buildOnboardingProfileFromSession(scenario, session);
+      saveOnboardingProfile(onboardingProfile);
+      state.currentUser = {
+        ...(state.currentUser || {}),
+        ...onboardingProfile,
+      };
       markKnownReturningUser();
       persistScenarioProgress(scenarioId);
       if (scenarioId === FIRST_SCENARIO_ID) {
-        setStatusMessage('Onboarding complete. Welcome to Home.', 'success');
+        setStatusMessage('Initiation complete. Welcome to Home.', 'success');
         location.hash = HOME_ROUTE;
         return;
       }
@@ -2608,8 +2823,8 @@ function attachProfileEditHandler() {
       try {
         const result = await apiRequest(`/profile/layers/${layerKey}`, { method: 'PATCH', body: JSON.stringify(payload) });
         const normalized = normalizeLayeredProfile(result.profile);
-        state.currentUser = normalized.user;
-        state.activeProfile = normalized.user;
+        state.currentUser = withPersistedOnboardingProfile(normalized.user);
+        state.activeProfile = state.currentUser;
         state.layers = normalized.layers;
         state.availableLayers = normalized.availableLayers;
         state.lockedLayers = normalized.lockedLayers;
@@ -2642,8 +2857,8 @@ function attachProfileEditHandler() {
       try {
         const result = await apiRequest('/profile/hub', { method: 'PATCH', body: JSON.stringify(payload) });
         const normalized = normalizeLayeredProfile(result.profile);
-        state.currentUser = normalized.user;
-        state.activeProfile = normalized.user;
+        state.currentUser = withPersistedOnboardingProfile(normalized.user);
+        state.activeProfile = state.currentUser;
         state.layers = normalized.layers;
         state.availableLayers = normalized.availableLayers;
         state.lockedLayers = normalized.lockedLayers;
