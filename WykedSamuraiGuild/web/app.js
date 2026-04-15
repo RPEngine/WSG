@@ -390,6 +390,10 @@ const state = {
   },
   scenarioDetail: {
     activeScenarioId: FIRST_SCENARIO_ID,
+    pending: false,
+    error: '',
+    toolsCollapsed: loadRoleplayToolsCollapsedPreference(),
+    activeToolsTab: 'participants',
     sessions: {},
   },
 };
@@ -684,6 +688,7 @@ function resolvePostAuthRoute(user = state.currentUser) {
 
 function sanitizeScenarioSessionForSave(scenarioId, session) {
   const scenario = findScenarioBlueprint(scenarioId);
+  const scenarioConfig = getScenarioConfig(scenarioId);
   if (!scenario || !session) {
     return null;
   }
@@ -712,6 +717,16 @@ function sanitizeScenarioSessionForSave(scenarioId, session) {
   const finalAnswer = String(session.finalAnswer || '').trim();
   const finalSubmitted = Boolean(session.finalSubmitted && finalAnswer);
   const finalUnlocked = Boolean(session.finalUnlocked && completedHalls.length === scenario.hallOrder.length);
+  const participants = Array.isArray(session.participants) ? session.participants : [];
+  const taggedParticipantIds = participants
+    .filter((participant) => participant.isTaggedParticipant)
+    .map((participant) => participant.id);
+  const participantCap = Number.isFinite(Number(session.maxParticipants))
+    ? Number(session.maxParticipants)
+    : Number(scenarioConfig?.maxParticipants || 1);
+  const hasCapacity = taggedParticipantIds.length < participantCap;
+  const scenarioMessages = Array.isArray(session.messages) ? session.messages.slice(-80) : [];
+  const objectives = Array.isArray(session.objectives) ? session.objectives : [];
 
   return {
     scenarioId: scenario.id,
@@ -723,7 +738,18 @@ function sanitizeScenarioSessionForSave(scenarioId, session) {
     finalAnswer,
     finalSubmitted,
     completionMessageVisible: Boolean(finalSubmitted),
+    maxParticipants: participantCap,
+    minParticipants: Number.isFinite(Number(session.minParticipants)) ? Number(session.minParticipants) : Number(scenarioConfig?.minParticipants || 1),
+    allowObservers: session.allowObservers !== false,
+    participants,
+    taggedParticipantIds,
+    observerIds: participants.filter((participant) => !participant.isTaggedParticipant).map((participant) => participant.id),
+    status: session.status || 'pending',
+    messages: scenarioMessages,
+    objectives,
+    senderId: session.senderId || taggedParticipantIds[0] || '',
     updatedAt: new Date().toISOString(),
+    fullMessage: hasCapacity ? '' : 'Session full',
   };
 }
 
@@ -756,17 +782,7 @@ function resetScenarioProgress(scenarioId) {
     return;
   }
 
-  state.scenarioDetail.sessions[scenarioId] = {
-    scenarioId,
-    currentLocation: scenario.startLocation,
-    answers: {},
-    visitedLocations: [scenario.startLocation],
-    completedHalls: [],
-    finalUnlocked: false,
-    finalAnswer: '',
-    finalSubmitted: false,
-    completionMessageVisible: false,
-  };
+  state.scenarioDetail.sessions[scenarioId] = createDefaultScenarioSession(scenarioId);
 
   const persisted = readPersistedScenarioProgress();
   if (persisted[scenarioId]) {
@@ -1152,6 +1168,7 @@ function getRoleplayParticipants() {
         subtitle: 'You • Room Member',
         profileId: currentUser.id,
         isOnline: true,
+        isTaggedParticipant: true,
       }
       : null,
     currentUserCharacter
@@ -1162,6 +1179,7 @@ function getRoleplayParticipants() {
         subtitle: currentUserCharacter.title || currentUserCharacter.archetype || 'Character Persona',
         characterId: currentUserCharacter.id,
         isOnline: true,
+        isTaggedParticipant: true,
       }
       : null,
     {
@@ -1171,10 +1189,38 @@ function getRoleplayParticipants() {
       initials: 'WE',
       subtitle: 'NPC • Scene Guide',
       isOnline: true,
+      isTaggedParticipant: true,
     },
   ].filter(Boolean);
 
   return participants;
+}
+
+function buildParticipantListMarkup(participants, { interactive = true, routeResolver = null } = {}) {
+  return (Array.isArray(participants) ? participants : []).map((participant) => {
+    const participantRoute = typeof routeResolver === 'function' ? routeResolver(participant) : '';
+    const isDisabled = interactive ? !participantRoute : false;
+    const roleBadge = participant.isTaggedParticipant
+      ? '<span class="participant-badge participant-badge--tagged">Participant</span>'
+      : '<span class="participant-badge participant-badge--observer">Observer</span>';
+
+    return `
+      <button
+        type="button"
+        class="roleplay-participant-row ${participant.isOnline ? 'is-online' : ''} ${participant.isTaggedParticipant ? 'is-tagged-participant' : 'is-observer-participant'}"
+        ${interactive ? `data-roleplay-participant-route="${escapeAttr(participantRoute)}"` : ''}
+        ${isDisabled ? 'disabled title="Participant detail route unavailable."' : (interactive ? '' : 'disabled')}
+      >
+        <span class="roleplay-participant-avatar">
+          ${participant.avatarUrl ? `<img src="${escapeAttr(participant.avatarUrl)}" alt="${escapeAttr(participant.displayName)}"/>` : `<span>${escapeHtml(participant.initials || participant.displayName.slice(0, 2).toUpperCase())}</span>`}
+        </span>
+        <span class="roleplay-participant-copy">
+          <strong>${escapeHtml(participant.displayName)} ${roleBadge}</strong>
+          <small>${escapeHtml(participant.subtitle || (participant.type === 'character' ? 'Character' : participant.type || 'Participant'))}</small>
+        </span>
+      </button>
+    `;
+  }).join('');
 }
 
 function roleplayParticipantRoute(participant) {
@@ -1185,6 +1231,29 @@ function roleplayParticipantRoute(participant) {
     return `/characters/${participant.characterId}`;
   }
   return '';
+}
+
+function getScenarioConfig(scenarioId) {
+  const base = findScenarioBlueprint(scenarioId);
+  if (!base) {
+    return null;
+  }
+  if (scenarioId === FIRST_SCENARIO_ID) {
+    return {
+      scenarioId,
+      title: base.title,
+      minParticipants: 1,
+      maxParticipants: 1,
+      allowObservers: true,
+    };
+  }
+  return {
+    scenarioId,
+    title: base.title,
+    minParticipants: 1,
+    maxParticipants: 3,
+    allowObservers: true,
+  };
 }
 
 function slugifyScenario(value) {
@@ -1228,24 +1297,110 @@ function getScenarioRouteIdentifier(path) {
   return null;
 }
 
+function createDefaultScenarioSession(scenarioId) {
+  const scenario = findScenarioBlueprint(scenarioId);
+  const scenarioConfig = getScenarioConfig(scenarioId);
+  const currentUser = state.currentUser;
+  if (!scenario || !scenarioConfig) {
+    return null;
+  }
+  const userParticipant = currentUser
+    ? {
+      id: `user-${currentUser.id}`,
+      type: 'user',
+      displayName: currentUser.displayName || currentUser.username || 'You',
+      avatarUrl: currentUser.avatarUrl || '',
+      initials: (currentUser.displayName || currentUser.username || 'You').slice(0, 2).toUpperCase(),
+      subtitle: 'You',
+      isTaggedParticipant: true,
+      canAffectProgress: true,
+      joinedAt: new Date().toISOString(),
+      isOnline: true,
+      profileId: currentUser.id,
+    }
+    : null;
+  const observerParticipant = {
+    id: 'observer-guest',
+    type: 'user',
+    displayName: 'Observer Seat',
+    initials: 'OS',
+    subtitle: 'Viewer • Not counted',
+    isTaggedParticipant: false,
+    canAffectProgress: false,
+    joinedAt: new Date().toISOString(),
+    isOnline: true,
+  };
+  const participants = [userParticipant, observerParticipant].filter(Boolean);
+  const taggedParticipantIds = participants.filter((participant) => participant.isTaggedParticipant).map((participant) => participant.id);
+
+  return {
+    scenarioId,
+    currentLocation: scenario.startLocation,
+    answers: {},
+    visitedLocations: [scenario.startLocation],
+    completedHalls: [],
+    finalUnlocked: false,
+    finalAnswer: '',
+    finalSubmitted: false,
+    completionMessageVisible: false,
+    status: taggedParticipantIds.length >= Number(scenarioConfig.minParticipants || 1) ? 'active' : 'pending',
+    minParticipants: Number(scenarioConfig.minParticipants || 1),
+    maxParticipants: Number(scenarioConfig.maxParticipants || 1),
+    allowObservers: scenarioConfig.allowObservers !== false,
+    participants,
+    taggedParticipantIds,
+    observerIds: participants.filter((participant) => !participant.isTaggedParticipant).map((participant) => participant.id),
+    senderId: taggedParticipantIds[0] || '',
+    messages: [
+      {
+        id: crypto.randomUUID(),
+        type: 'system',
+        role: 'ai',
+        senderId: 'scenario-ai',
+        senderName: 'Scenario Nexus',
+        canAffectProgress: false,
+        content: scenario.locations[scenario.startLocation]?.prompt || scenario.objective,
+        createdAt: new Date().toISOString(),
+      },
+    ],
+    objectives: scenario.hallOrder.map((locationId) => ({
+      id: locationId,
+      label: `Visit ${scenario.locations[locationId]?.name || locationId}`,
+      completed: false,
+    })),
+    fullMessage: '',
+  };
+}
+
 function ensureScenarioSession(scenarioId) {
   if (!state.scenarioDetail.sessions[scenarioId]) {
-    const scenario = findScenarioBlueprint(scenarioId);
-    if (!scenario) {
-      return null;
-    }
-    const defaultSession = {
-      scenarioId,
-      currentLocation: scenario.startLocation,
-      answers: {},
-      visitedLocations: [scenario.startLocation],
-      completedHalls: [],
-      finalUnlocked: false,
-      finalAnswer: '',
-      finalSubmitted: false,
-      completionMessageVisible: false,
-    };
+    const defaultSession = createDefaultScenarioSession(scenarioId);
+    if (!defaultSession) return null;
     state.scenarioDetail.sessions[scenarioId] = restoreScenarioProgress(scenarioId) || defaultSession;
+  }
+
+  const currentSession = state.scenarioDetail.sessions[scenarioId];
+  const defaultSession = createDefaultScenarioSession(scenarioId);
+  if (defaultSession) {
+    state.scenarioDetail.sessions[scenarioId] = {
+      ...defaultSession,
+      ...currentSession,
+      participants: Array.isArray(currentSession?.participants) && currentSession.participants.length
+        ? currentSession.participants
+        : defaultSession.participants,
+      taggedParticipantIds: Array.isArray(currentSession?.taggedParticipantIds) && currentSession.taggedParticipantIds.length
+        ? currentSession.taggedParticipantIds
+        : defaultSession.taggedParticipantIds,
+      observerIds: Array.isArray(currentSession?.observerIds)
+        ? currentSession.observerIds
+        : defaultSession.observerIds,
+      messages: Array.isArray(currentSession?.messages) && currentSession.messages.length
+        ? currentSession.messages
+        : defaultSession.messages,
+      objectives: Array.isArray(currentSession?.objectives) && currentSession.objectives.length
+        ? currentSession.objectives
+        : defaultSession.objectives,
+    };
   }
 
   return state.scenarioDetail.sessions[scenarioId];
@@ -2107,98 +2262,147 @@ function scenarioDetailPage(path) {
     return card('Scenario unavailable', '<p class="muted">Unable to initialize scenario state.</p>');
   }
   state.scenarioDetail.activeScenarioId = scenario.id;
+  const isToolsCollapsed = Boolean(state.scenarioDetail.toolsCollapsed);
+  const activeToolsTab = state.scenarioDetail.activeToolsTab || 'participants';
+  const participantCount = Array.isArray(session.taggedParticipantIds) ? session.taggedParticipantIds.length : 0;
+  const maxParticipants = Number(session.maxParticipants || 1);
+  const sessionStatus = session.status || 'pending';
 
   const completedCount = session.completedHalls.length;
   const totalHalls = scenario.hallOrder.length;
-  const progressLabel = session.finalSubmitted ? 'Scenario Complete' : `${completedCount}/${totalHalls} halls completed`;
+  const progressLabel = session.finalSubmitted ? 'Scenario complete' : `${completedCount}/${totalHalls} objectives complete`;
   const isDais = session.currentLocation === scenario.startLocation;
   const isFinalPromptVisible = isDais && session.finalUnlocked;
   const activeLocation = scenario.locations[session.currentLocation] || scenario.locations[scenario.startLocation];
   const activePrompt = isFinalPromptVisible ? scenario.finalPrompt : (activeLocation.prompt || '');
-  const responseOptions = isFinalPromptVisible ? scenario.finalResponses : (activeLocation.responses || []);
-  const answersList = Object.entries(session.answers).map(([locationId, answer]) => `
-    <li><span>${escapeHtml(scenario.locations[locationId]?.name || locationId)}</span><strong>${escapeHtml(answer)}</strong></li>
+  const messageMarkup = (Array.isArray(session.messages) ? session.messages : []).map((message) => `
+    <article class="message arena-chat-message ${message.role === 'observer' ? 'observer' : message.type === 'user' ? 'user' : 'system'}">
+      <div class="message-label">${escapeHtml(message.senderName || (message.type === 'user' ? 'Participant' : 'Scenario Nexus'))}${message.canAffectProgress ? ' • Participant' : (message.role === 'observer' ? ' • Observer' : '')}</div>
+      <p>${escapeHtml(message.content || '')}</p>
+    </article>
   `).join('');
-
-  return `
-    <section class="scenario-detail-layout">
-      <aside class="scenario-detail-card card">
-        <p class="hero-kicker">Scenario Card</p>
-        <h3>${escapeHtml(scenario.title)}</h3>
-        <p class="muted">${escapeHtml(scenario.description)}</p>
-        <div class="scenario-stat-block">
-          <span>Current Objective</span>
-          <strong>${escapeHtml(session.finalUnlocked ? 'Return to the Compass Dais and answer the final question.' : scenario.objective)}</strong>
-        </div>
-        <div class="scenario-stat-block">
-          <span>Current Location</span>
-          <strong>${escapeHtml(activeLocation.name)}</strong>
-        </div>
-        <div class="scenario-stat-block">
-          <span>Progress Status</span>
-          <strong>${escapeHtml(progressLabel)}</strong>
-        </div>
-        <div class="scenario-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="${totalHalls}" aria-valuenow="${completedCount}" aria-label="Hall progress">
-          <span style="width:${Math.min((completedCount / totalHalls) * 100, 100)}%;"></span>
-        </div>
-        <p class="muted scenario-progress-label">${completedCount}/${totalHalls} halls complete</p>
-        ${session.finalSubmitted
-    ? `
-          <div class="scenario-stat-block">
-            <span>Saved Motivation</span>
-            <strong>${escapeHtml(session.finalAnswer)}</strong>
-          </div>
-        `
-    : ''}
-        ${answersList ? `<ul class="scenario-answer-log">${answersList}</ul>` : '<p class="muted">Your reflections will be recorded here as you explore.</p>'}
-      </aside>
-      <section class="scenario-detail-map-area card">
-        <div class="scenario-map-head">
-          <div>
-            <p class="hero-kicker">Scenario Map</p>
-            <h3>Wyked Samurai Identity</h3>
-          </div>
-          <p class="muted">Choose a location to continue.</p>
-        </div>
-        <div class="scenario-location-grid">
-          ${['compass_dais', ...scenario.hallOrder].map((locationId) => {
+  const participantOptions = (Array.isArray(session.participants) ? session.participants : []).map((participant) => `
+    <option value="${escapeAttr(participant.id)}" ${session.senderId === participant.id ? 'selected' : ''}>${escapeHtml(participant.displayName)}${participant.isTaggedParticipant ? ' (Participant)' : ' (Observer)'}</option>
+  `).join('');
+  const participantStatusLabel = `${participantCount} / ${maxParticipants} participants`;
+  const objectives = scenario.hallOrder.map((locationId) => ({
+    id: locationId,
+    label: `Visit ${scenario.locations[locationId]?.name || locationId}`,
+    completed: session.completedHalls.includes(locationId),
+  }));
+  objectives.push({
+    id: 'return-dais',
+    label: 'Return to the Compass Dais',
+    completed: Boolean(session.finalUnlocked),
+  });
+  objectives.push({
+    id: 'declare-purpose',
+    label: 'Declare your purpose',
+    completed: Boolean(session.finalSubmitted),
+  });
+  const objectivesMarkup = objectives.map((objective) => `
+    <li class="${objective.completed ? 'is-complete' : ''}">
+      <span>${objective.completed ? '✅' : '⬜'}</span>
+      <span>${escapeHtml(objective.label)}</span>
+    </li>
+  `).join('');
+  const participantsMarkup = buildParticipantListMarkup(session.participants, { interactive: false });
+  const stateRows = Object.entries({
+    currentPhase: session.finalSubmitted ? 'completed' : (session.finalUnlocked ? 'final_vow' : 'hall_traversal'),
+    currentLocation: activeLocation.name,
+    taggedParticipants: participantCount,
+    sessionStatus,
+    completionStatus: progressLabel,
+    visitedLocations: session.visitedLocations.join(', '),
+    answersSaved: Object.keys(session.answers || {}).length,
+    finalQuestionUnlocked: session.finalUnlocked ? 'true' : 'false',
+    completionReady: session.finalUnlocked && !session.finalSubmitted ? 'true' : 'false',
+  }).map(([label, value]) => `
+    <li><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong></li>
+  `).join('');
+  const locationButtons = ['compass_dais', ...scenario.hallOrder].map((locationId) => {
     const location = scenario.locations[locationId];
     const isCurrent = session.currentLocation === locationId;
     const isCompleted = session.completedHalls.includes(locationId);
-    const isHall = locationId !== scenario.startLocation;
     const isLockedDais = locationId === scenario.startLocation && !session.finalUnlocked && completedCount < totalHalls;
     return `
-              <button
-                type="button"
-                class="scenario-location-btn ${isCurrent ? 'is-current' : ''} ${isCompleted ? 'is-completed' : ''}"
-                data-location-id="${locationId}"
-                ${isLockedDais ? 'disabled' : ''}
-              >
-                <span>${escapeHtml(location.name)}</span>
-                <small>${isCompleted ? 'Visited' : (isHall ? 'Unvisited' : 'Central node')}</small>
-              </button>
-            `;
-  }).join('')}
-        </div>
-        <section class="scenario-prompt-panel">
-          <p class="hero-kicker">Current Prompt</p>
-          <h4>${escapeHtml(activeLocation.name)}</h4>
-          <p class="scenario-prompt">${escapeHtml(activePrompt)}</p>
-          <div class="scenario-response-stack">
-            ${responseOptions.map((choice, index) => `
-              <button type="button" class="pill-btn scenario-response-btn" data-response-value="${escapeAttr(choice)}">${index + 1}. ${escapeHtml(choice)}</button>
-            `).join('')}
+      <button
+        type="button"
+        class="scenario-location-btn ${isCurrent ? 'is-current' : ''} ${isCompleted ? 'is-completed' : ''}"
+        data-location-id="${locationId}"
+        ${isLockedDais ? 'disabled' : ''}
+      >
+        <span>${escapeHtml(location.name)}</span>
+        <small>${isCompleted ? 'Visited' : 'Open'}</small>
+      </button>
+    `;
+  }).join('');
+  const responseOptions = isFinalPromptVisible ? scenario.finalResponses : (activeLocation.responses || []);
+  const quickResponsesMarkup = responseOptions.map((choice, index) => `
+    <button type="button" class="pill-btn scenario-response-btn" data-response-value="${escapeAttr(choice)}">${index + 1}. ${escapeHtml(choice)}</button>
+  `).join('');
+
+  return `
+    <section class="roleplay-nexus-layout scenario-nexus-layout">
+      <section class="roleplay-nexus-main panel-surface panel-surface--transparent scenario-nexus-main">
+        <header class="roleplay-nexus-header scenario-nexus-header">
+          <h2>${escapeHtml(scenario.title)}</h2>
+          <div class="scenario-mini-meta">
+            <span>Status: ${escapeHtml(sessionStatus)}</span>
+            <span>${escapeHtml(participantStatusLabel)}</span>
+            <span>${escapeHtml(progressLabel)}</span>
           </div>
-          ${isFinalPromptVisible && !session.finalSubmitted ? `
-            <form id="scenario-final-form" class="scenario-final-form">
-              <input id="scenario-final-input" name="finalAnswer" placeholder="Or write your why in your own words..." value="${escapeAttr(session.finalAnswer || '')}" />
-              <button class="pill-btn cta-primary" type="submit">Submit Final Answer</button>
-            </form>
-          ` : ''}
+          <p class="muted">${escapeHtml(scenario.description)}</p>
+          ${session.fullMessage ? `<p class="muted" style="color:#ffb36b;">${escapeHtml(session.fullMessage)}</p>` : ''}
+        </header>
+        <div class="roleplay-nexus-chat-shell">
+          <div id="scenario-conversation-log" class="conversation-log roleplay-chat-log scenario-chat-log">
+            ${messageMarkup || '<p class="muted">Scenario awaits your first move.</p>'}
+          </div>
+          <form id="scenario-input-form" class="arena-input roleplay-input-form">
+            <select id="scenario-sender-select" class="scenario-sender-select" ${state.scenarioDetail.pending ? 'disabled' : ''}>
+              ${participantOptions}
+            </select>
+            <input id="scenario-input" name="message" placeholder="Respond in-scenario..." ${state.scenarioDetail.pending ? 'disabled' : ''} />
+            <button class="pill-btn cta-primary" type="submit" ${state.scenarioDetail.pending ? 'disabled' : ''}>${state.scenarioDetail.pending ? 'Sending...' : 'Send'}</button>
+          </form>
+          <div class="scenario-response-stack">
+            ${quickResponsesMarkup}
+          </div>
           ${session.completionMessageVisible ? `<p class="scenario-completion-message">${escapeHtml(scenario.completionMessage)}</p>` : ''}
-          <button type="button" id="scenario-reset-btn" class="pill-btn">Reset Scenario Progress</button>
-        </section>
+        </div>
+        ${state.scenarioDetail.error ? `<p class="muted" style="color:#ff7b7b;margin-top:8px;" role="alert">${escapeHtml(state.scenarioDetail.error)}</p>` : ''}
       </section>
+      <aside class="roleplay-nexus-side roleplay-tools-panel panel-surface panel-surface--soft ${isToolsCollapsed ? 'is-collapsed' : ''}">
+        <div class="roleplay-tools-head">
+          <h3>${isToolsCollapsed ? 'Scenario' : 'Scenario Tools'}</h3>
+          <button type="button" class="panel-toggle-btn roleplay-tools-collapse-btn" id="scenario-tools-toggle" aria-label="${isToolsCollapsed ? 'Expand scenario tools' : 'Collapse scenario tools'}">${isToolsCollapsed ? '⟨' : '⟩'}</button>
+        </div>
+        <div class="roleplay-tools-tabs ${isToolsCollapsed ? 'is-collapsed' : ''}" role="tablist" aria-label="Scenario tools tabs">
+          <button type="button" class="roleplay-tools-tab ${activeToolsTab === 'participants' ? 'active' : ''}" data-scenario-tools-tab="participants" role="tab" aria-selected="${activeToolsTab === 'participants'}">👥<span>Participants</span></button>
+          <button type="button" class="roleplay-tools-tab ${activeToolsTab === 'objectives' ? 'active' : ''}" data-scenario-tools-tab="objectives" role="tab" aria-selected="${activeToolsTab === 'objectives'}">🎯<span>Objectives</span></button>
+          <button type="button" class="roleplay-tools-tab ${activeToolsTab === 'state' ? 'active' : ''}" data-scenario-tools-tab="state" role="tab" aria-selected="${activeToolsTab === 'state'}">🧠<span>State</span></button>
+          <button type="button" class="roleplay-tools-tab ${activeToolsTab === 'tools' ? 'active' : ''}" data-scenario-tools-tab="tools" role="tab" aria-selected="${activeToolsTab === 'tools'}">🛠️<span>Tools</span></button>
+        </div>
+        ${isToolsCollapsed ? '' : `
+          <div class="roleplay-tools-content" role="tabpanel">
+            ${activeToolsTab === 'participants' ? `
+              <p class="muted">${escapeHtml(participantStatusLabel)} ${participantCount >= maxParticipants ? '• Session full' : ''}</p>
+              <div class="roleplay-participant-list">${participantsMarkup || '<p class="muted">No participants tagged.</p>'}</div>
+            ` : ''}
+            ${activeToolsTab === 'objectives' ? `
+              <ul class="scenario-objectives-list">${objectivesMarkup}</ul>
+            ` : ''}
+            ${activeToolsTab === 'state' ? `
+              <ul class="scenario-state-list">${stateRows}</ul>
+              <div class="scenario-location-grid">${locationButtons}</div>
+              <p class="scenario-prompt muted" style="margin-top:10px;"><strong>Prompt:</strong> ${escapeHtml(activePrompt)}</p>
+            ` : ''}
+            ${activeToolsTab === 'tools' ? '<p class="muted">Scenario tools are coming soon.</p>' : ''}
+            <button type="button" id="scenario-reset-btn" class="pill-btn">Reset Scenario Progress</button>
+          </div>
+        `}
+      </aside>
     </section>
   `;
 }
@@ -2236,26 +2440,7 @@ function roleplayHubPage() {
   const isToolsCollapsed = Boolean(state.roleplay.toolsCollapsed);
   const activeToolsTab = state.roleplay.activeToolsTab || 'participants';
   const messages = Array.isArray(session.messages) ? session.messages : [];
-  const participantsMarkup = getRoleplayParticipants().map((participant) => {
-    const participantRoute = roleplayParticipantRoute(participant);
-    const isDisabled = !participantRoute;
-    return `
-      <button
-        type="button"
-        class="roleplay-participant-row ${participant.isOnline ? 'is-online' : ''}"
-        data-roleplay-participant-route="${escapeAttr(participantRoute)}"
-        ${isDisabled ? 'disabled title="NPC detail cards are coming soon."' : ''}
-      >
-        <span class="roleplay-participant-avatar">
-          ${participant.avatarUrl ? `<img src="${escapeAttr(participant.avatarUrl)}" alt="${escapeAttr(participant.displayName)}"/>` : `<span>${escapeHtml(participant.initials || participant.displayName.slice(0, 2).toUpperCase())}</span>`}
-        </span>
-        <span class="roleplay-participant-copy">
-          <strong>${escapeHtml(participant.displayName)}</strong>
-          <small>${escapeHtml(participant.subtitle || (participant.type === 'character' ? 'Character' : participant.type))}</small>
-        </span>
-      </button>
-    `;
-  }).join('');
+  const participantsMarkup = buildParticipantListMarkup(getRoleplayParticipants(), { interactive: true, routeResolver: roleplayParticipantRoute });
   const messagesMarkup = messages.map((message) => `
     <article class="message arena-chat-message ${message.type === 'user' ? 'user' : 'system'}">
       <div class="message-label">${message.type === 'user' ? 'You' : 'Roleplay Nexus'}</div>
@@ -3007,6 +3192,118 @@ function applyRouteGuards(path) {
   return path;
 }
 
+function appendScenarioMessage(session, message) {
+  session.messages = Array.isArray(session.messages) ? session.messages : [];
+  session.messages.push({
+    id: crypto.randomUUID(),
+    createdAt: new Date().toISOString(),
+    ...message,
+  });
+  session.messages = session.messages.slice(-120);
+}
+
+function updateScenarioObjectivesFromSession(scenario, session) {
+  session.objectives = [
+    ...scenario.hallOrder.map((locationId) => ({
+      id: locationId,
+      label: `Visit ${scenario.locations[locationId]?.name || locationId}`,
+      completed: session.completedHalls.includes(locationId),
+    })),
+    {
+      id: 'return-dais',
+      label: 'Return to the Compass Dais',
+      completed: Boolean(session.finalUnlocked),
+    },
+    {
+      id: 'declare-purpose',
+      label: 'Declare your purpose',
+      completed: Boolean(session.finalSubmitted),
+    },
+  ];
+}
+
+async function processScenarioParticipantInput(scenario, session, text, senderId) {
+  const normalized = String(text || '').trim();
+  if (!normalized) return;
+  const lower = normalized.toLowerCase();
+  const locationEntries = Object.values(scenario.locations || {});
+  const matchedLocation = locationEntries.find((location) => lower.includes(String(location.name || '').toLowerCase()));
+  if (matchedLocation && scenario.locations[matchedLocation.id]) {
+    if (!session.visitedLocations.includes(matchedLocation.id)) {
+      session.visitedLocations.push(matchedLocation.id);
+    }
+    session.currentLocation = matchedLocation.id;
+    appendScenarioMessage(session, {
+      type: 'system',
+      role: 'ai',
+      senderId: 'scenario-ai',
+      senderName: 'Scenario Nexus',
+      canAffectProgress: false,
+      content: scenario.locations[matchedLocation.id]?.prompt || 'Location updated.',
+    });
+    return;
+  }
+
+  const isFinalPromptVisible = session.currentLocation === scenario.startLocation && session.finalUnlocked;
+  const options = isFinalPromptVisible
+    ? (scenario.finalResponses || [])
+    : (scenario.locations[session.currentLocation]?.responses || []);
+  const matchedOption = options.find((option) => String(option).toLowerCase() === lower);
+  if (matchedOption) {
+    if (isFinalPromptVisible) {
+      session.finalAnswer = matchedOption;
+      session.finalSubmitted = true;
+      session.completionMessageVisible = true;
+      session.status = 'completed';
+    } else if (scenario.hallOrder.includes(session.currentLocation)) {
+      session.answers[session.currentLocation] = matchedOption;
+      if (!session.completedHalls.includes(session.currentLocation)) {
+        session.completedHalls.push(session.currentLocation);
+      }
+      if (scenario.hallOrder.every((hallId) => session.completedHalls.includes(hallId))) {
+        session.finalUnlocked = true;
+      }
+    }
+    updateScenarioObjectivesFromSession(scenario, session);
+    appendScenarioMessage(session, {
+      type: 'system',
+      role: 'ai',
+      senderId: 'scenario-ai',
+      senderName: 'Scenario Nexus',
+      canAffectProgress: false,
+      content: isFinalPromptVisible
+        ? (scenario.completionMessage || 'Scenario complete.')
+        : `Recorded. ${scenario.locations[session.currentLocation]?.prompt || 'Continue when ready.'}`,
+    });
+  }
+
+  if (session.finalSubmitted && scenario.id === FIRST_SCENARIO_ID) {
+    saveOnboardingMotivation(session.finalAnswer);
+    const onboardingProfile = buildOnboardingProfileFromSession(scenario, session);
+    saveOnboardingProfile(onboardingProfile);
+    state.currentUser = {
+      ...(state.currentUser || {}),
+      ...onboardingProfile,
+    };
+    try {
+      const completion = await submitScenarioCompletion(scenario, session);
+      if (completion && state.currentUser) {
+        const existing = Array.isArray(state.currentUser.scenarioHistory) ? state.currentUser.scenarioHistory : [];
+        state.currentUser = {
+          ...state.currentUser,
+          scenarioHistory: [completion, ...existing.filter((entry) => entry.scenarioId !== completion.scenarioId)].slice(0, 10),
+        };
+      }
+    } catch (error) {
+      console.warn('[scenario] completion handoff failed', {
+        scenarioId: scenario.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+    markKnownReturningUser();
+  }
+}
+
 function attachScenarioDetailHandlers() {
   const scenarioId = state.scenarioDetail.activeScenarioId;
   if (!scenarioId) {
@@ -3018,6 +3315,30 @@ function attachScenarioDetailHandlers() {
     return;
   }
 
+  const chatLog = document.getElementById('scenario-conversation-log');
+  if (chatLog) {
+    chatLog.scrollTop = chatLog.scrollHeight;
+  }
+
+  const toolsToggle = document.getElementById('scenario-tools-toggle');
+  if (toolsToggle) {
+    toolsToggle.onclick = () => {
+      state.scenarioDetail.toolsCollapsed = !state.scenarioDetail.toolsCollapsed;
+      render();
+    };
+  }
+  document.querySelectorAll('[data-scenario-tools-tab]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const tab = button.getAttribute('data-scenario-tools-tab');
+      if (!tab) return;
+      state.scenarioDetail.activeToolsTab = tab;
+      if (state.scenarioDetail.toolsCollapsed) {
+        state.scenarioDetail.toolsCollapsed = false;
+      }
+      render();
+    });
+  });
+
   document.querySelectorAll('.scenario-location-btn').forEach((button) => {
     button.onclick = () => {
       const locationId = String(button.getAttribute('data-location-id') || '');
@@ -3028,9 +3349,18 @@ function attachScenarioDetailHandlers() {
         session.visitedLocations.push(locationId);
       }
       session.currentLocation = locationId;
+      appendScenarioMessage(session, {
+        type: 'system',
+        role: 'ai',
+        senderId: 'scenario-ai',
+        senderName: 'Scenario Nexus',
+        canAffectProgress: false,
+        content: scenario.locations[locationId]?.prompt || 'Location updated.',
+      });
       if (locationId === scenario.startLocation && scenario.hallOrder.every((hallId) => session.completedHalls.includes(hallId))) {
         session.finalUnlocked = true;
       }
+      updateScenarioObjectivesFromSession(scenario, session);
       persistScenarioProgress(scenarioId);
       render();
     };
@@ -3043,62 +3373,70 @@ function attachScenarioDetailHandlers() {
       if (!selectedResponse) {
         return;
       }
-
-      if (locationId === scenario.startLocation && session.finalUnlocked) {
-        session.finalAnswer = selectedResponse;
-      } else if (scenario.hallOrder.includes(locationId)) {
-        session.answers[locationId] = selectedResponse;
-        if (!session.completedHalls.includes(locationId)) {
-          session.completedHalls.push(locationId);
-        }
-      }
-
+      const taggedSenderId = session.taggedParticipantIds?.[0];
+      if (!taggedSenderId) return;
+      appendScenarioMessage(session, {
+        type: 'user',
+        role: 'participant',
+        senderId: taggedSenderId,
+        senderName: session.participants.find((participant) => participant.id === taggedSenderId)?.displayName || 'Participant',
+        canAffectProgress: true,
+        content: selectedResponse,
+      });
+      processScenarioParticipantInput(scenario, session, selectedResponse, taggedSenderId);
       persistScenarioProgress(scenarioId);
       render();
     };
   });
-
-  const finalAnswerForm = document.getElementById('scenario-final-form');
-  if (finalAnswerForm) {
-    finalAnswerForm.onsubmit = async (event) => {
+  const scenarioForm = document.getElementById('scenario-input-form');
+  if (scenarioForm) {
+    scenarioForm.onsubmit = async (event) => {
       event.preventDefault();
-      const input = document.getElementById('scenario-final-input');
-      const value = String(input?.value || session.finalAnswer || '').trim();
-      if (!value) {
+      const input = document.getElementById('scenario-input');
+      const senderSelect = document.getElementById('scenario-sender-select');
+      const value = String(input?.value || '').trim();
+      const senderId = String(senderSelect?.value || session.senderId || '');
+      if (!value || !senderId || state.scenarioDetail.pending) {
         return;
       }
+      session.senderId = senderId;
+      const sender = session.participants.find((participant) => participant.id === senderId);
+      const isTagged = Boolean(sender?.isTaggedParticipant && session.taggedParticipantIds.includes(senderId));
+      if (!isTagged && !session.allowObservers) {
+        state.scenarioDetail.error = 'Only tagged participants can message in this scenario.';
+        render();
+        return;
+      }
+      state.scenarioDetail.error = '';
+      appendScenarioMessage(session, {
+        type: 'user',
+        role: isTagged ? 'participant' : 'observer',
+        senderId,
+        senderName: sender?.displayName || 'Unknown',
+        canAffectProgress: isTagged,
+        content: value,
+      });
+      if (input) input.value = '';
+      state.scenarioDetail.pending = true;
+      render();
 
-      session.finalAnswer = value;
-      session.finalSubmitted = true;
-      session.completionMessageVisible = true;
-      saveOnboardingMotivation(session.finalAnswer);
-      const onboardingProfile = buildOnboardingProfileFromSession(scenario, session);
-      saveOnboardingProfile(onboardingProfile);
-      state.currentUser = {
-        ...(state.currentUser || {}),
-        ...onboardingProfile,
-      };
-      try {
-        const completion = await submitScenarioCompletion(scenario, session);
-        if (completion && state.currentUser) {
-          const existing = Array.isArray(state.currentUser.scenarioHistory) ? state.currentUser.scenarioHistory : [];
-          state.currentUser = {
-            ...state.currentUser,
-            scenarioHistory: [completion, ...existing.filter((entry) => entry.scenarioId !== completion.scenarioId)].slice(0, 10),
-          };
-        }
-      } catch (error) {
-        console.warn('[scenario] completion handoff failed', {
-          scenarioId,
-          error: error instanceof Error ? error.message : String(error),
+      if (isTagged) {
+        await processScenarioParticipantInput(scenario, session, value, senderId);
+      } else {
+        appendScenarioMessage(session, {
+          type: 'system',
+          role: 'ai',
+          senderId: 'scenario-ai',
+          senderName: 'Scenario Nexus',
+          canAffectProgress: false,
+          content: 'Observer message recorded. Scenario progress remains unchanged.',
         });
       }
-      markKnownReturningUser();
+
+      state.scenarioDetail.pending = false;
       persistScenarioProgress(scenarioId);
-      if (scenarioId === FIRST_SCENARIO_ID) {
+      if (scenarioId === FIRST_SCENARIO_ID && session.finalSubmitted) {
         setStatusMessage('Initiation complete. Welcome to Home.', 'success');
-        location.hash = HOME_ROUTE;
-        return;
       }
       render();
     };
