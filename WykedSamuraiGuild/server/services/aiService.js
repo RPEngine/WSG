@@ -6,6 +6,99 @@ import {
   requireFriendliConfig,
 } from "../config/ai.js";
 
+const HEARTBEAT_INTERVAL_MS = 4 * 60 * 1000;
+const HEARTBEAT_IDLE_TIMEOUT_MS = 20 * 60 * 1000;
+
+let lastAiActivityAt = 0;
+let heartbeatIntervalId = null;
+let heartbeatRunning = false;
+
+const heartbeatRequestPayload = (endpointId) => ({
+  model: endpointId,
+  messages: [
+    { role: "system", content: "ping" },
+    { role: "user", content: "keep alive" },
+  ],
+  max_tokens: 1,
+  temperature: 0,
+});
+
+const sendAiHeartbeatPing = async () => {
+  let config;
+  try {
+    config = requireFriendliConfig();
+  } catch {
+    console.log("[ai-heartbeat] ping failed");
+    return;
+  }
+
+  const baseUrl = String(process.env.FRIENDLI_API_BASE_URL || config.baseUrl || "").replace(/\/+$/, "");
+  const endpoint = `${baseUrl}/chat/completions`;
+  const token = String(process.env.FRIENDLI_API_TOKEN || config.token || "").trim();
+  const body = heartbeatRequestPayload(config.endpointId);
+
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (response.ok) {
+      console.log("[ai-heartbeat] ping success");
+      return;
+    }
+
+    console.log("[ai-heartbeat] ping failed");
+  } catch {
+    console.log("[ai-heartbeat] ping failed");
+  }
+};
+
+export const shouldKeepHeartbeatRunning = () => {
+  if (!lastAiActivityAt) return false;
+  return (Date.now() - lastAiActivityAt) < HEARTBEAT_IDLE_TIMEOUT_MS;
+};
+
+export const stopAiHeartbeat = ({ dueToInactivity = false } = {}) => {
+  if (heartbeatIntervalId) {
+    clearInterval(heartbeatIntervalId);
+    heartbeatIntervalId = null;
+  }
+
+  heartbeatRunning = false;
+  if (dueToInactivity) {
+    console.log("[ai-heartbeat] stopped after inactivity");
+  }
+};
+
+export const startAiHeartbeat = () => {
+  if (heartbeatRunning) return;
+
+  heartbeatIntervalId = setInterval(async () => {
+    if (!shouldKeepHeartbeatRunning()) {
+      stopAiHeartbeat({ dueToInactivity: true });
+      return;
+    }
+
+    await sendAiHeartbeatPing();
+  }, HEARTBEAT_INTERVAL_MS);
+
+  heartbeatRunning = true;
+  console.log("[ai-heartbeat] started");
+};
+
+export const markAiActive = () => {
+  lastAiActivityAt = Date.now();
+
+  if (!heartbeatRunning) {
+    startAiHeartbeat();
+  }
+};
+
 const scenarioOutputSchema = {
   title: "string",
   premise: "string",

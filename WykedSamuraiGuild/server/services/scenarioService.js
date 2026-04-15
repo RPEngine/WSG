@@ -1,4 +1,4 @@
-import { generateScenarioFromAI } from "./aiService.js";
+import { generateScenarioFromAI, markAiActive } from "./aiService.js";
 import {
   allowedScenarioStatuses,
   createScenarioWithInitialVersion,
@@ -22,6 +22,7 @@ const createdResponse = (scenario) => ({
 });
 
 export const generateAndSaveScenario = async ({ prompt, genre, tone, constraints }) => {
+  markAiActive();
   const generated = await generateScenarioFromAI({ prompt, genre, tone, constraints });
   const duplicateHash = buildScenarioDuplicateHash(generated);
 
