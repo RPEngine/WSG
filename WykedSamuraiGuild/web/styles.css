@@ -33,6 +33,12 @@
 
 * { box-sizing: border-box; }
 
+html,
+body,
+#app {
+  height: 100%;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -74,10 +80,11 @@ body {
     "header header header"
     "left main right";
   min-height: 100vh;
+  height: 100vh;
   gap: 14px;
   padding: 14px;
-  padding-bottom: 260px;
   position: relative;
+  overflow: hidden;
 }
 
 .app-shell.is-left-sidebar-collapsed {
@@ -188,16 +195,43 @@ body {
 .icon-btn { width: 38px; height: 38px; border-radius: 12px; cursor: pointer; }
 .avatar { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-weight: 600; }
 
-.left-sidebar { grid-area: left; padding: 16px; overflow: hidden; }
+.left-sidebar { grid-area: left; padding: 16px; overflow: hidden; min-height: 0; }
 .right-sidebar {
   grid-area: right;
   padding: 12px;
-  overflow: auto;
+  overflow: hidden;
+  min-height: 0;
   background: rgba(33, 40, 50, 0.76);
   border-color: var(--accent-border);
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04), 0 0 22px var(--accent-glow);
 }
-.main-content { grid-area: main; padding: 16px; overflow: auto; }
+.main-content {
+  grid-area: main;
+  padding: 16px;
+  overflow: auto;
+  min-height: 0;
+}
+
+.main-content-body {
+  min-height: 0;
+}
+
+.arena-main-shell {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.arena-main-shell .page-hero {
+  flex: 0 0 auto;
+}
+
+.arena-main-shell .arena-content-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
 
 .nav-list { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 8px; }
 .nav-list a {
@@ -661,16 +695,18 @@ body {
 }
 
 .arena-main-column {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: 14px;
-  min-height: 72vh;
-  height: calc(100vh - 210px);
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .arena-selection-tier {
   display: grid;
   gap: 10px;
+  flex: 0 0 auto;
+  min-height: 0;
 }
 
 .arena-selection-head h3 {
@@ -687,7 +723,9 @@ body {
   grid-auto-columns: minmax(360px, 460px);
   gap: 12px;
   overflow-x: auto;
+  overflow-y: hidden;
   padding-bottom: 8px;
+  min-height: 0;
   scrollbar-width: thin;
 }
 
@@ -771,15 +809,16 @@ body {
   background: rgba(0, 0, 0, 0.2);
   padding: 10px;
   overflow: auto;
-  max-height: 470px;
   display: grid;
   gap: 10px;
+  min-height: 0;
 }
 
 .arena-chat-panel {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
   gap: 12px;
+  flex: 1 1 auto;
   min-height: 0;
   padding: 14px;
   border-radius: 14px;
@@ -792,13 +831,14 @@ body {
 }
 
 .arena-chat-log {
-  max-height: none;
-  min-height: 52vh;
+  flex: 1 1 auto;
+  min-height: 0;
   background: rgba(6, 10, 15, 0.62);
   align-content: start;
   padding: 16px;
   border: 1px solid rgba(255, 255, 255, 0.09);
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .message {
@@ -841,12 +881,13 @@ body {
 
 .arena-empty {
   display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
   place-items: center;
   text-align: center;
   border: 1px dashed var(--border);
   border-radius: 10px;
   padding: 30px 18px;
-  min-height: 52vh;
   background: rgba(8, 13, 18, 0.55);
 }
 
@@ -870,10 +911,11 @@ body {
 }
 
 .arena-chat-panel .arena-input {
-  position: sticky;
-  bottom: 0;
-  background: linear-gradient(180deg, rgba(15, 19, 24, 0), rgba(15, 19, 24, 0.95) 35%);
+  flex: 0 0 auto;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
   padding-top: 10px;
+  margin-top: auto;
+  background: linear-gradient(180deg, rgba(15, 19, 24, 0.2), rgba(15, 19, 24, 0.95) 35%);
 }
 
 .utility-pane-head {
@@ -1414,9 +1456,10 @@ body {
 }
 
 .global-utility-pane {
+  height: 100%;
   min-height: 100%;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: 10px;
 }
 
@@ -1507,6 +1550,8 @@ body {
   border-radius: 12px;
   padding: 8px;
   background: linear-gradient(170deg, rgba(13, 22, 32, 0.9), rgba(7, 13, 19, 0.79));
+  overflow: auto;
+  min-height: 0;
 }
 
 .rail-search {
@@ -1909,7 +1954,7 @@ select:focus-visible {
   }
 
   .arena-main-column {
-    min-height: 68vh;
+    min-height: 0;
   }
 
   .arena-card-carousel {

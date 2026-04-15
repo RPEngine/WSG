@@ -1222,13 +1222,14 @@ function PageHero({ title, subtitle, kicker = 'Nexus Command' }) {
 
 function MainContent(key, title, subtitle, statusMarkup, pageHtml) {
   const hideDefaultHeader = key === 'home';
+  const isArena = key === 'arena';
   return `
-    <main class="main-content panel">
+    <main class="main-content panel ${isArena ? 'arena-main-shell' : ''}">
       ${hideDefaultHeader ? '' : `
         ${PageHero({ title, subtitle, kicker: key === 'recruiter' ? 'Recruiter Intelligence' : 'Guild Nexus' })}
       `}
       ${statusMarkup}
-      <section style="margin-top:${hideDefaultHeader ? '0' : '14px'};">${pageHtml}</section>
+      <section class="main-content-body ${isArena ? 'arena-content-body' : ''}" style="margin-top:${hideDefaultHeader ? '0' : '14px'};">${pageHtml}</section>
     </main>
   `;
 }
@@ -2905,7 +2906,7 @@ function renderLayout(path, key, pageHtml) {
   document.getElementById('app').innerHTML = `
     ${AppShell(path, key, pageHtml, statusMarkup)}
     ${starterScenarioModalMarkup()}
-    ${SiteFooter()}
+    ${key === 'arena' ? '' : SiteFooter()}
   `;
 
   attachHeaderActions();
