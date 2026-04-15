@@ -8,8 +8,10 @@ function normalizeEnvValue(value) {
   return trimmed;
 }
 
-const viteSupabaseUrl = normalizeEnvValue(import.meta.env.VITE_SUPABASE_URL);
-const viteSupabaseAnonKey = normalizeEnvValue(import.meta.env.VITE_SUPABASE_ANON_KEY);
+const viteEnv = (typeof import.meta !== 'undefined' && import.meta?.env) ? import.meta.env : {};
+
+const viteSupabaseUrl = normalizeEnvValue(viteEnv.VITE_SUPABASE_URL);
+const viteSupabaseAnonKey = normalizeEnvValue(viteEnv.VITE_SUPABASE_ANON_KEY);
 
 // Runtime fallbacks for static deployments that inject values via window/meta.
 const runtimeSupabaseUrl = normalizeEnvValue(

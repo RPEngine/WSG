@@ -280,8 +280,8 @@ const SCENARIO_BLUEPRINTS = Object.freeze({
 });
 
 const BRAND_ASSETS = Object.freeze({
-  logo: '/assets/WGSGuildLogo.png',
-  compactLogo: '/assets/WSLogo.png',
+  logo: './assets/branding/wyked-samurai-guild-logo-design.svg',
+  compactLogo: './assets/branding/wyked-samurai-under-the-glowing-moon.svg',
 });
 
 
@@ -323,6 +323,7 @@ const state = {
     session: null,
     loading: true,
   },
+  startupError: '',
   supabaseConfigMissing: false,
   members: [],
   activeProfile: null,
@@ -2963,6 +2964,21 @@ function configRequiredPage() {
   `;
 }
 
+function startupErrorPage(errorMessage) {
+  return `
+    <div class="public-shell">
+      <main class="public-container public-content panel">
+        <section class="card form-card">
+          <h3>Startup Error</h3>
+          <p class="muted">The app could not finish authentication/bootstrap setup.</p>
+          <p class="muted" role="alert"><strong>Details:</strong> ${escapeHtml(errorMessage || 'Unknown startup error.')}</p>
+          <p class="muted">Try refreshing this page. If this continues, confirm your frontend Supabase configuration and deployment settings.</p>
+        </section>
+      </main>
+    </div>
+  `;
+}
+
 function policyPageTemplate({ title, intro, lastUpdated = 'April 15, 2026', sections = [] }) {
   const sectionNav = sections
     .map((section) => ({
@@ -3523,6 +3539,7 @@ function clearAuthSession() {
 
 async function bootstrapAuth() {
   state.auth.loading = true;
+  state.startupError = '';
   state.supabaseConfigMissing = !(supabaseConfig.urlPresent && supabaseConfig.keyPresent);
 
   if (state.supabaseConfigMissing || !supabase) {
@@ -3543,7 +3560,9 @@ async function bootstrapAuth() {
       render();
     });
   } catch (error) {
-    console.warn('[auth:frontend] Supabase bootstrap threw unexpectedly', error instanceof Error ? error.message : String(error));
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.warn('[auth:frontend] Supabase bootstrap threw unexpectedly', errorMessage);
+    state.startupError = errorMessage || 'Supabase bootstrap failed.';
     clearAuthSession();
   }
 }
@@ -4773,6 +4792,11 @@ async function render() {
 
     if (state.auth.loading) {
       document.getElementById('app').innerHTML = authLoadingPage();
+      return;
+    }
+
+    if (state.startupError) {
+      document.getElementById('app').innerHTML = startupErrorPage(state.startupError);
       return;
     }
 
