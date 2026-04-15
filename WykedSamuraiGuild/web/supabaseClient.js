@@ -8,34 +8,37 @@ function normalizeEnvValue(value) {
   return trimmed;
 }
 
-const envSupabaseUrl = normalizeEnvValue(import.meta.env?.VITE_SUPABASE_URL);
-const envSupabaseAnonKey = normalizeEnvValue(import.meta.env?.VITE_SUPABASE_ANON_KEY);
+const viteSupabaseUrl = normalizeEnvValue(import.meta.env.VITE_SUPABASE_URL);
+const viteSupabaseAnonKey = normalizeEnvValue(import.meta.env.VITE_SUPABASE_ANON_KEY);
 
-// Runtime fallback for static deployments (e.g. Render static site without Vite build-time env injection).
+// Runtime fallbacks for static deployments that inject values via window/meta.
 const runtimeSupabaseUrl = normalizeEnvValue(
-  window.WSG_SUPABASE_URL || document.querySelector('meta[name="wsg-supabase-url"]')?.content,
+  window.WSG_SUPABASE_URL
+  || window.VITE_SUPABASE_URL
+  || document.querySelector('meta[name="wsg-supabase-url"]')?.content,
 );
 const runtimeSupabaseAnonKey = normalizeEnvValue(
-  window.WSG_SUPABASE_ANON_KEY || document.querySelector('meta[name="wsg-supabase-anon-key"]')?.content,
+  window.WSG_SUPABASE_ANON_KEY
+  || window.VITE_SUPABASE_ANON_KEY
+  || document.querySelector('meta[name="wsg-supabase-anon-key"]')?.content,
 );
 
-const SUPABASE_URL = envSupabaseUrl || runtimeSupabaseUrl;
-const SUPABASE_ANON_KEY = envSupabaseAnonKey || runtimeSupabaseAnonKey;
+const SUPABASE_URL = viteSupabaseUrl || runtimeSupabaseUrl;
+const SUPABASE_ANON_KEY = viteSupabaseAnonKey || runtimeSupabaseAnonKey;
 
 export const supabaseConfig = {
   urlPresent: Boolean(SUPABASE_URL),
   keyPresent: Boolean(SUPABASE_ANON_KEY),
-  usingViteEnvUrl: Boolean(envSupabaseUrl),
-  usingViteEnvKey: Boolean(envSupabaseAnonKey),
+  usingViteEnvUrl: Boolean(viteSupabaseUrl),
+  usingViteEnvKey: Boolean(viteSupabaseAnonKey),
 };
 
 console.info(`[supabase] Supabase URL present: ${supabaseConfig.urlPresent ? 'yes' : 'no'}`);
 console.info(`[supabase] Supabase key present: ${supabaseConfig.keyPresent ? 'yes' : 'no'}`);
-console.info(`[supabase] Supabase URL from Vite env: ${supabaseConfig.usingViteEnvUrl ? 'yes' : 'no'}`);
-console.info(`[supabase] Supabase key from Vite env: ${supabaseConfig.usingViteEnvKey ? 'yes' : 'no'}`);
+console.info(`[supabase] Supabase URL length: ${SUPABASE_URL.length}`);
 
 if (!supabaseConfig.urlPresent || !supabaseConfig.keyPresent) {
-  console.warn('[supabase] Missing Supabase URL or anon key. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in frontend runtime env.');
+  console.warn('[supabase] Missing Supabase URL or anon key. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in frontend environment and redeploy.');
 }
 
 export const supabase = (supabaseConfig.urlPresent && supabaseConfig.keyPresent)
