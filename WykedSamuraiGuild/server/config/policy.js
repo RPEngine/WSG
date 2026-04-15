@@ -1,6 +1,6 @@
 export const CURRENT_POLICY_VERSION = "v1.0";
 
-const REQUIRED_POLICY_KEYS = ["codeOfConduct", "contentPolicy", "platformRules"];
+const REQUIRED_POLICY_KEYS = ["codeOfConduct", "contentPolicy", "platformRules", "privacyPolicy"];
 
 export function normalizePolicyAcceptance(policyAcceptance) {
   if (!policyAcceptance || typeof policyAcceptance !== "object") {
@@ -39,6 +39,7 @@ export function createPolicyAcceptanceRecord({ acceptedAt = new Date().toISOStri
     codeOfConduct: buildEntry(),
     contentPolicy: buildEntry(),
     platformRules: buildEntry(),
+    privacyPolicy: buildEntry(),
   };
 }
 
