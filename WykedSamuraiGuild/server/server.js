@@ -42,6 +42,9 @@ app.get("/", (req, res) => {
 
 async function startServer() {
   try {
+    if (!process.env.HUGGINGFACE_API_KEY?.trim()) {
+      console.error("HUGGINGFACE_API_KEY not configured");
+    }
     await connectDatabase();
     console.log("[db] database connection established");
     await initializeDatabase();
