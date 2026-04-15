@@ -9,8 +9,10 @@ export const testAiConnection = async (req, res) => {
       ok: true,
       backend: "ok",
       provider: friendli?.provider || "friendli",
-      model: friendli?.model || "mistralai/Mistral-7B-Instruct-v0.3",
-      baseUrl: friendli?.baseUrl || "https://api.friendli.ai/dedicated",
+      model: friendli?.model || process.env.FRIENDLI_ENDPOINT_ID || "dep94342bhagvi8",
+      endpointId: friendli?.endpointId || process.env.FRIENDLI_ENDPOINT_ID || "dep94342bhagvi8",
+      deployedModelName: friendli?.deployedModelName || process.env.FRIENDLI_MODEL || "mistralai/Mistral-7B-Instruct-v0.3",
+      baseUrl: friendli?.baseUrl || "https://api.friendli.ai/dedicated/v1",
       timestamp: friendli?.timestamp || new Date().toISOString(),
     });
   } catch (error) {
@@ -18,8 +20,10 @@ export const testAiConnection = async (req, res) => {
       ok: false,
       backend: "error",
       provider: "friendli",
-      model: "mistralai/Mistral-7B-Instruct-v0.3",
-      baseUrl: "https://api.friendli.ai/dedicated",
+      model: process.env.FRIENDLI_ENDPOINT_ID || "dep94342bhagvi8",
+      endpointId: process.env.FRIENDLI_ENDPOINT_ID || "dep94342bhagvi8",
+      deployedModelName: process.env.FRIENDLI_MODEL || "mistralai/Mistral-7B-Instruct-v0.3",
+      baseUrl: "https://api.friendli.ai/dedicated/v1",
       timestamp: new Date().toISOString(),
       error: error instanceof Error ? error.message : "Provider test failed.",
     });

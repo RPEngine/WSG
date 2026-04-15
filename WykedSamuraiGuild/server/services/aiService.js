@@ -1,9 +1,11 @@
 const FRIENDLI_PROVIDER = "friendli";
-const DEFAULT_AI_MODEL = "mistralai/Mistral-7B-Instruct-v0.3";
-const FRIENDLI_MODEL = process.env.FRIENDLI_MODEL || DEFAULT_AI_MODEL;
-const DEFAULT_FRIENDLI_BASE_URL = "https://api.friendli.ai/dedicated";
+const DEFAULT_DEPLOYED_MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.3";
+const FRIENDLI_DEPLOYED_MODEL_NAME = (process.env.FRIENDLI_MODEL || DEFAULT_DEPLOYED_MODEL_NAME).trim();
+const DEFAULT_FRIENDLI_ENDPOINT_ID = "dep94342bhagvi8";
+const FRIENDLI_ENDPOINT_ID = (process.env.FRIENDLI_ENDPOINT_ID || DEFAULT_FRIENDLI_ENDPOINT_ID).trim();
+const DEFAULT_FRIENDLI_BASE_URL = "https://api.friendli.ai/dedicated/v1";
 const FRIENDLI_BASE_URL = (process.env.FRIENDLI_API_BASE_URL || DEFAULT_FRIENDLI_BASE_URL).trim();
-const FRIENDLI_CHAT_COMPLETIONS_PATH = "/v1/chat/completions";
+const FRIENDLI_CHAT_COMPLETIONS_PATH = "/chat/completions";
 const FRIENDLI_CHAT_COMPLETIONS_ENDPOINT = `${FRIENDLI_BASE_URL.replace(/\/+$/, "")}${FRIENDLI_CHAT_COMPLETIONS_PATH}`;
 
 const scenarioOutputSchema = {
@@ -75,6 +77,19 @@ const resolveFriendliToken = () => {
   };
 };
 
+const resolveFriendliEndpointId = () => {
+  const rawFriendliEndpointId = process.env.FRIENDLI_ENDPOINT_ID;
+  const endpointId = typeof rawFriendliEndpointId === "string"
+    ? rawFriendliEndpointId.trim()
+    : FRIENDLI_ENDPOINT_ID;
+
+  return {
+    endpointId,
+    envName: endpointId ? "FRIENDLI_ENDPOINT_ID" : null,
+    endpointPresent: Boolean(endpointId),
+  };
+};
+
 const validateFriendliToken = (token) => {
   if (typeof token !== "string") {
     throw new Error("Invalid Friendli token: token must be a string.");
@@ -84,6 +99,18 @@ const validateFriendliToken = (token) => {
   }
   if (!token.trim()) {
     throw new Error("Invalid Friendli token: token is empty after trim.");
+  }
+};
+
+const validateFriendliEndpointId = (endpointId) => {
+  if (typeof endpointId !== "string") {
+    throw new Error("Invalid Friendli endpoint ID: endpoint ID must be a string.");
+  }
+  if (!endpointId) {
+    throw new Error("Missing Friendli endpoint ID. Set FRIENDLI_ENDPOINT_ID.");
+  }
+  if (!endpointId.trim()) {
+    throw new Error("Invalid Friendli endpoint ID: endpoint ID is empty after trim.");
   }
 };
 
@@ -101,16 +128,16 @@ const extractProviderErrorMessage = (payload, fallbackText = "") => {
 };
 
 const callFriendli = async ({
-  model,
   messages,
   parameters = {},
 }) => {
   const { token, envName, tokenPresent } = resolveFriendliToken();
+  const { endpointId } = resolveFriendliEndpointId();
   validateFriendliToken(token);
+  validateFriendliEndpointId(endpointId);
   const endpoint = FRIENDLI_CHAT_COMPLETIONS_ENDPOINT;
-  const requestModel = model || FRIENDLI_MODEL;
   const requestBody = {
-    model: requestModel,
+    model: endpointId,
     messages,
     max_tokens: parameters?.max_new_tokens ?? 300,
     temperature: parameters?.temperature ?? 0.7,
@@ -119,7 +146,8 @@ const callFriendli = async ({
   console.log("[ai:request] Provider diagnostics", {
     provider: FRIENDLI_PROVIDER,
     baseUrl: FRIENDLI_BASE_URL,
-    model: requestModel,
+    endpointId,
+    deployedModelName: FRIENDLI_DEPLOYED_MODEL_NAME,
     tokenPresent,
   });
 
@@ -136,7 +164,8 @@ const callFriendli = async ({
   } catch (error) {
     console.error("[ai:generate] Friendli network failure", {
       endpoint,
-      model: requestModel,
+      endpointId,
+      deployedModelName: FRIENDLI_DEPLOYED_MODEL_NAME,
       tokenEnvName: envName,
       error: error instanceof Error ? error.message : String(error),
     });
@@ -164,7 +193,8 @@ const callFriendli = async ({
     });
     console.error("[ai:generate] Friendli request failed", {
       endpoint,
-      model: requestModel,
+      endpointId,
+      deployedModelName: FRIENDLI_DEPLOYED_MODEL_NAME,
       tokenEnvName: envName,
       status: response.status,
       reason: message,
@@ -174,7 +204,9 @@ const callFriendli = async ({
 
   return {
     payload,
-    model: requestModel,
+    model: endpointId,
+    endpointId,
+    deployedModelName: FRIENDLI_DEPLOYED_MODEL_NAME,
     endpoint,
     method: "POST",
     tokenEnvName: envName,
@@ -183,9 +215,7 @@ const callFriendli = async ({
 };
 
 export const testFriendliConnection = async () => {
-  const healthModel = process.env.FRIENDLI_HEALTH_MODEL || FRIENDLI_MODEL;
-  const { payload, model, endpoint, method, tokenEnvName, requestBody } = await callFriendli({
-    model: healthModel,
+  const { payload, model, endpointId, deployedModelName, endpoint, method, tokenEnvName, requestBody } = await callFriendli({
     messages: [
       {
         role: "system",
@@ -207,6 +237,8 @@ export const testFriendliConnection = async () => {
     status: "ok",
     provider: FRIENDLI_PROVIDER,
     model,
+    endpointId,
+    deployedModelName,
     baseUrl: FRIENDLI_BASE_URL,
     endpoint,
     method,
@@ -226,31 +258,42 @@ export const testFriendliConnection = async () => {
 
 export const checkFriendliHealth = async () => {
   const { token, envName, tokenPresent } = resolveFriendliToken();
+  const { endpointId, envName: endpointEnvName, endpointPresent } = resolveFriendliEndpointId();
 
   try {
     validateFriendliToken(token);
+    validateFriendliEndpointId(endpointId);
   } catch (error) {
     const failureReason = error instanceof Error
       ? error.message
-      : "Missing token. Configure FRIENDLI_API_TOKEN.";
+      : "Missing config. Configure FRIENDLI_API_TOKEN and FRIENDLI_ENDPOINT_ID.";
     console.error("[ai:test] Friendli provider test failed:", {
       reason: failureReason,
       endpoint: FRIENDLI_CHAT_COMPLETIONS_ENDPOINT,
       baseUrl: FRIENDLI_BASE_URL,
-      model: FRIENDLI_MODEL,
-      tokenEnvName: null,
-      tokenPresent: false,
+      endpointId,
+      deployedModelName: FRIENDLI_DEPLOYED_MODEL_NAME,
+      tokenEnvName: tokenPresent ? envName : null,
+      endpointEnvName: endpointPresent ? endpointEnvName : null,
+      tokenPresent,
+      endpointPresent,
     });
     return {
       provider: FRIENDLI_PROVIDER,
       status: "degraded",
-      model: FRIENDLI_MODEL,
+      model: endpointId,
+      endpointId,
+      deployedModelName: FRIENDLI_DEPLOYED_MODEL_NAME,
       baseUrl: FRIENDLI_BASE_URL,
       endpoint: FRIENDLI_CHAT_COMPLETIONS_ENDPOINT,
       method: "POST",
       token: {
-        present: false,
-        envName: null,
+        present: tokenPresent,
+        envName: tokenPresent ? envName : null,
+      },
+      endpointIdConfig: {
+        present: endpointPresent,
+        envName: endpointPresent ? endpointEnvName : null,
       },
       failureReason,
       timestamp: new Date().toISOString(),
@@ -258,7 +301,7 @@ export const checkFriendliHealth = async () => {
   }
 
   const requestBody = {
-    model: FRIENDLI_MODEL,
+    model: endpointId,
     messages: [
       {
         role: "system",
@@ -277,7 +320,8 @@ export const checkFriendliHealth = async () => {
     console.log("[ai:test] Provider diagnostics", {
       provider: FRIENDLI_PROVIDER,
       baseUrl: FRIENDLI_BASE_URL,
-      model: FRIENDLI_MODEL,
+      endpointId,
+      deployedModelName: FRIENDLI_DEPLOYED_MODEL_NAME,
       tokenPresent,
     });
 
@@ -313,13 +357,19 @@ export const checkFriendliHealth = async () => {
     return {
       provider: FRIENDLI_PROVIDER,
       status: "ok",
-      model: FRIENDLI_MODEL,
+      model: endpointId,
+      endpointId,
+      deployedModelName: FRIENDLI_DEPLOYED_MODEL_NAME,
       baseUrl: FRIENDLI_BASE_URL,
       endpoint: FRIENDLI_CHAT_COMPLETIONS_ENDPOINT,
       method: "POST",
       token: {
         present: true,
         envName,
+      },
+      endpointIdConfig: {
+        present: true,
+        envName: endpointEnvName,
       },
       failureReason: null,
       timestamp: new Date().toISOString(),
@@ -330,20 +380,27 @@ export const checkFriendliHealth = async () => {
       reason: failureReason,
       endpoint: FRIENDLI_CHAT_COMPLETIONS_ENDPOINT,
       baseUrl: FRIENDLI_BASE_URL,
-      model: FRIENDLI_MODEL,
+      endpointId,
+      deployedModelName: FRIENDLI_DEPLOYED_MODEL_NAME,
       tokenEnvName: envName,
       tokenPresent: true,
     });
     return {
       provider: FRIENDLI_PROVIDER,
       status: "degraded",
-      model: FRIENDLI_MODEL,
+      model: endpointId,
+      endpointId,
+      deployedModelName: FRIENDLI_DEPLOYED_MODEL_NAME,
       baseUrl: FRIENDLI_BASE_URL,
       endpoint: FRIENDLI_CHAT_COMPLETIONS_ENDPOINT,
       method: "POST",
       token: {
         present: true,
         envName,
+      },
+      endpointIdConfig: {
+        present: true,
+        envName: endpointEnvName,
       },
       failureReason,
       timestamp: new Date().toISOString(),
@@ -356,7 +413,6 @@ export const generateScenarioFromAI = async ({ prompt, genre, tone, constraints 
 
   try {
     const { payload: result } = await callFriendli({
-      model: FRIENDLI_MODEL,
       messages: [
         {
           role: "system",
@@ -384,7 +440,8 @@ export const generateScenarioFromAI = async ({ prompt, genre, tone, constraints 
     console.error("[ai:generate] Failed to generate scenario", {
       provider: FRIENDLI_PROVIDER,
       baseUrl: FRIENDLI_BASE_URL,
-      model: FRIENDLI_MODEL,
+      endpointId: FRIENDLI_ENDPOINT_ID,
+      deployedModelName: FRIENDLI_DEPLOYED_MODEL_NAME,
       hasPrompt: Boolean(prompt),
       genre: genre || null,
       tone: tone || null,
