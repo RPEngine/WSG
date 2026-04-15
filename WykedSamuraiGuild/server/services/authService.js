@@ -26,7 +26,8 @@ const PASSWORD_POLICY_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).
 const GOOGLE_ISSUERS = new Set(["accounts.google.com", "https://accounts.google.com"]);
 const GOOGLE_CLIENT_ID = String(process.env.GOOGLE_CLIENT_ID || "").trim();
 const googleOauthClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
-const MFA_CODE = String(process.env.MFA_TEST_CODE || "000000");
+const isProduction = process.env.NODE_ENV === "production";
+const MFA_CODE = String(process.env.MFA_TEST_CODE || (isProduction ? "" : "000000"));
 const REAUTH_WINDOW_MS = Number(process.env.REAUTH_WINDOW_MS || (1000 * 60 * 15));
 
 function validatePassword(password) {
@@ -247,6 +248,9 @@ export async function acceptCurrentPolicies(payload = {}) {
 }
 
 function verifyMfaCode(code) {
+  if (!MFA_CODE) {
+    return false;
+  }
   return String(code || "").trim() === MFA_CODE;
 }
 

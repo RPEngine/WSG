@@ -1,54 +1,50 @@
-# Wyked Samurai Guild Security Baseline (First Pass)
+# Repository: WykedSamurai/WSG
+
+# WSG Security Baseline (Security Hardening Pass)
 
 Last updated: 2026-04-15
 
-## Protections currently in place
+## Current protections
 
-- **Route and auth protections**
-  - Protected backend endpoints require authenticated sessions via `requireAuth` or `requireSessionAuth`.
-  - Policy acceptance guard is enforced on protected APIs.
-  - Recent re-authentication checks are required for sensitive profile updates.
-- **Frontend session handling**
-  - Auth token is stored in `sessionStorage` (not long-term local storage) and is cleared on logout.
-  - Legacy token key cleanup is run during logout.
+- **Route guards + policy gating**
+  - Protected frontend routes are guarded by stable helpers: `isAuthenticated()`, `hasAcceptedCurrentPolicies(user)`, and `requiresPolicyAcceptance(user)`.
+  - Authenticated users missing current policy acceptance are redirected to `/policy/accept`.
+  - Protected backend APIs enforce session auth and policy acceptance checks.
+- **Session cleanup**
+  - Logout clears auth token/session state and removes user-scoped onboarding/scenario cache keys from client storage.
+  - Session continuity data is scoped and minimized to required state only.
 - **Security headers**
-  - Content-Security-Policy
-  - X-Frame-Options
-  - X-Content-Type-Options
-  - Referrer-Policy
-  - Permissions-Policy
-- **CORS hardening**
-  - Allowed origins are constrained via `WSG_FRONTEND_ORIGIN`.
-  - Production no longer allows wildcard-style dynamic Render origins.
-- **Payload safety and sanitization**
-  - Structured request body checks (`requireObjectBody`).
-  - Field-level string sanitization and max-length limits (`sanitizeBody`).
-  - Content-safety gates for profile/chat/scenario/AI/recruiter-like payloads.
-- **Abuse detection hooks**
-  - Basic flood detection middleware for high-frequency activity.
-  - Basic unsafe-content and scam/fraud keyword checks.
-- **Rate limiting**
-  - Login attempts
-  - Signup attempts
-  - Policy acceptance submissions
-  - Chat/message sends
-  - Scenario creation/completion actions
-  - AI prompt submissions
-- **Error handling**
-  - Centralized safe error responder for server-level unhandled errors.
-  - 5xx responses return generic user-safe messages.
+  - `Content-Security-Policy`
+  - `X-Frame-Options: DENY`
+  - `X-Content-Type-Options: nosniff`
+  - `Referrer-Policy`
+  - `Permissions-Policy`
+- **Validation + sanitization**
+  - Backend requires object JSON payloads and enforces strict field schemas for active auth/profile/chat/scenario/AI inputs.
+  - Text inputs are sanitized server-side (HTML/script patterns removed, control chars trimmed, max lengths enforced).
+  - Invalid/empty submissions are rejected with safe 4xx responses.
+- **Rate limiting + throttling**
+  - Sensitive actions are rate limited: login, signup, policy acceptance, chat sends, scenario generation/completion, AI request paths.
+  - Additional flood/spam throttling is applied through moderation hooks.
+- **CORS restrictions**
+  - CORS allowlist is origin-based and environment-aware (`WSG_FRONTEND_ORIGIN` / `WSG_FRONTEND_ORIGINS`).
+  - No permissive wildcard production behavior.
+- **Production-safe error handling**
+  - Server unhandled errors return safe generic messages for 5xx responses.
+  - Frontend presents user-safe generic messages for network/parse failures.
+  - Detailed error diagnostics stay in server logs.
+- **Moderation/security middleware hooks**
+  - Pluggable moderation hooks are wired in request/message processing for:
+    - message validation hook
+    - spam/flood detection hook
+    - unsafe content detection hook
+    - scam/fraud keyword detection hook
 
-## Remaining gaps / next steps
+## Future planned protections (not implemented in this pass)
 
-- Replace in-memory rate-limit and abuse trackers with a distributed store (Redis) for multi-instance deployments.
-- Expand moderation classifiers beyond keyword matching (context-aware model + human review queues).
-- Add CSRF protections if cookie-based auth is introduced.
-- Add request signing / anti-automation protections for auth endpoints (captcha or bot score).
-- Add structured security audit logging and anomaly alerting.
-- Add formal data retention schedules and deletion workflows.
-- Add secure secrets management and rotation policy documentation.
-- Add comprehensive security test coverage (unit + integration + DAST baseline).
-
-## Future work (not implemented in this pass)
-
-- Optional identity verification workflows for high-trust accounts (e.g., providers like **ID.me** or **VerifyMe**) with explicit user consent, clear purpose limitation, and regional compliance controls.
+- Identity verification provider integration (documented only; not implemented now).
+- Recruiter verification workflow with trust tiers.
+- Stronger moderation pipeline (contextual classifiers + human review queue).
+- Security audit logging and tamper-aware monitoring.
+- Additional abuse detection signals and anomaly detection.
+- Distributed/global rate limiting storage for multi-instance deployments.

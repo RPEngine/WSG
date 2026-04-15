@@ -11,20 +11,24 @@ import { applySecurityHeaders } from "./middleware/securityHeaders.js";
 const app = express();
 const isProduction = process.env.NODE_ENV === "production";
 
-const configuredOrigins = (process.env.WSG_FRONTEND_ORIGIN || "")
-  .split(",")
-  .map((origin) => origin.trim())
-  .filter(Boolean);
+function parseOrigins(value) {
+  return String(value || "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+}
 
+const configuredOrigins = parseOrigins(process.env.WSG_FRONTEND_ORIGIN || process.env.WSG_FRONTEND_ORIGINS);
 const localDevOrigins = [
   "http://localhost:5173",
   "http://localhost:3000",
 ];
 
-const allowedOrigins = isProduction
+const allowedOrigins = Array.from(new Set(isProduction
   ? [...configuredOrigins]
-  : [...configuredOrigins, ...localDevOrigins];
+  : [...configuredOrigins, ...localDevOrigins]));
 
+app.set("trust proxy", 1);
 app.disable("x-powered-by");
 app.use(applySecurityHeaders);
 app.use(cors({
@@ -37,8 +41,10 @@ app.use(cors({
       return callback(null, true);
     }
 
-    return callback(new Error("CORS blocked for origin."));
+    return callback(Object.assign(new Error("CORS blocked for origin."), { status: 403 }));
   },
+  methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
 }));
 app.use(express.json({ limit: "100kb" }));
 
@@ -57,6 +63,7 @@ app.use((err, req, res, next) => {
     message: err?.message || "Unknown error",
     path: req?.path,
     method: req?.method,
+    status,
   });
 
   if (res.headersSent) {
@@ -64,10 +71,10 @@ app.use((err, req, res, next) => {
   }
 
   if (status >= 500) {
-    return res.status(status).json({ error: "An internal server error occurred." });
+    return res.status(status).json({ error: "Something went wrong. Please try again." });
   }
 
-  return res.status(status).json({ error: err?.message || "Request failed." });
+  return res.status(status).json({ error: err?.message || "We could not process your request." });
 });
 
 async function startServer() {

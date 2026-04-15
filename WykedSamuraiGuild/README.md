@@ -40,13 +40,13 @@ Backend (`/server`):
 
 Frontend (`/web`):
 - Configure Google Sign-In by setting `<meta name="wsg-google-client-id" content="YOUR_GOOGLE_CLIENT_ID">` in `web/index.html` (or set `window.WSG_GOOGLE_CLIENT_ID` before `app.js` loads).
-- Render deployments default to `https://wsg-7hmk.onrender.com` unless overridden.
+- Render deployments use same-origin API by default unless `wsg-backend-base-url` / runtime backend vars are explicitly configured.
 - Production-safe override order on Render:
   1. `<meta name="wsg-backend-base-url" content="">`
   2. `window.WSG_BACKEND_BASE_URL`
   3. `window.WSG_API_BASE_URL`
   4. `<meta name="wsg-api-base-url" content="">`
-  5. hardcoded Render fallback (`https://wsg-7hmk.onrender.com`)
+  5. same-origin API fallback (`window.location.origin`)
 - Local development override order:
   1. `<meta name="wsg-backend-base-url" content="">`
   2. `window.WSG_BACKEND_BASE_URL`

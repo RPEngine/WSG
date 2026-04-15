@@ -544,9 +544,17 @@ function hasAcceptedCurrentPolicies(user) {
   });
 }
 
-function requiresPolicyReacceptance(user) {
+function isAuthenticated() {
+  return Boolean(state.currentUser && state.authToken);
+}
+
+function requiresPolicyAcceptance(user) {
   if (!user) return false;
   return !hasAcceptedCurrentPolicies(user);
+}
+
+function requiresPolicyReacceptance(user) {
+  return requiresPolicyAcceptance(user);
 }
 
 function normalizeLayeredProfile(profilePayload) {
@@ -828,7 +836,10 @@ function resolveApiBaseUrl() {
       || window.WSG_API_BASE_URL
       || configuredMetaBase
       || '';
-    return (renderConfiguredBase || CANONICAL_BACKEND_BASE_URL).replace(/\/$/, '');
+    if (renderConfiguredBase) {
+      return renderConfiguredBase.replace(/\/$/, '');
+    }
+    return `${protocol}//${host}`;
   }
 
   const configuredBase = configuredBackendBase
@@ -888,7 +899,8 @@ async function apiRequest(path, options = {}) {
       });
     }
     const message = error instanceof Error ? error.message : 'Unknown network error.';
-    throw new Error(`Network error calling ${requestUrl}: ${message}`);
+    console.warn('[api:frontend] network error', { path, method: options.method || 'GET', message });
+    throw new Error('Something went wrong. Please try again.');
   }
   if (response.status === 204) {
     return null;
@@ -911,7 +923,7 @@ async function apiRequest(path, options = {}) {
           errorMessage: `Expected JSON response but received: ${bodyText.slice(0, 120)}`,
         });
       }
-      throw new Error(`Expected JSON response but received: ${bodyText.slice(0, 120)}`);
+      throw new Error('We could not process your request.');
     }
 
     try {
@@ -927,7 +939,7 @@ async function apiRequest(path, options = {}) {
           errorMessage: error instanceof Error ? error.message : String(error),
         });
       }
-      throw new Error(`Received malformed JSON response: ${bodyText.slice(0, 120)}`);
+      throw new Error('We could not process your request.');
     }
   }
 
@@ -947,7 +959,7 @@ async function apiRequest(path, options = {}) {
         error: data?.error || null,
       });
     }
-    throw new Error(data?.error || `Request failed (${response.status}) at ${requestUrl}.`);
+    throw new Error(data?.error || 'We could not process your request.');
   }
 
   return data;
@@ -3494,6 +3506,24 @@ function setAuthSession({ sessionToken, user }) {
   });
 }
 
+function clearClientSecurityState() {
+  const prefixesToClear = [
+    ONBOARDING_PROFILE_PREFIX,
+    ONBOARDING_MOTIVATION_PREFIX,
+    ONBOARDING_KNOWN_RETURNING_PREFIX,
+    SCENARIO_PROGRESS_STORAGE_PREFIX,
+    STARTER_SCENARIO_SEEN_PREFIX,
+  ];
+
+  const userId = state.currentUser?.id;
+  for (const prefix of prefixesToClear) {
+    const userScopedKey = userId ? `${prefix}:${userId}` : null;
+    if (userScopedKey) {
+      localStorage.removeItem(userScopedKey);
+    }
+  }
+}
+
 function clearAuthSession() {
   state.authToken = '';
   state.currentUser = null;
@@ -3505,6 +3535,7 @@ function clearAuthSession() {
   localStorage.removeItem('wsg-auth-token');
   sessionStorage.removeItem('wsg-auth-token');
   sessionStorage.removeItem(ONBOARDING_NEW_USER_KEY);
+  clearClientSecurityState();
 }
 
 async function bootstrapAuth() {
@@ -3665,19 +3696,19 @@ function applyRouteGuards(path) {
     return path;
   }
 
-  if (known.requiresAuth && !state.currentUser && path !== POLICY_ACCEPT_ROUTE) {
+  if (known.requiresAuth && !isAuthenticated() && path !== POLICY_ACCEPT_ROUTE) {
     return '/login';
   }
 
-  if (state.currentUser && requiresPolicyReacceptance(state.currentUser) && !known.bypassPolicyGuard) {
+  if (isAuthenticated() && requiresPolicyAcceptance(state.currentUser) && !known.bypassPolicyGuard) {
     return POLICY_ACCEPT_ROUTE;
   }
 
-  if (known.guestOnly && state.currentUser) {
+  if (known.guestOnly && isAuthenticated()) {
     return resolvePostAuthRoute(state.currentUser);
   }
 
-  if (path === '/' && state.currentUser) {
+  if (path === '/' && isAuthenticated()) {
     return resolvePostAuthRoute(state.currentUser);
   }
 
