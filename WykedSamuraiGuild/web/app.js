@@ -429,8 +429,8 @@ const SCENARIO_PROGRESS_STORAGE_PREFIX = 'wsg-scenario-progress';
 const ONBOARDING_KNOWN_RETURNING_PREFIX = 'wsg-known-returning';
 const ONBOARDING_MOTIVATION_PREFIX = 'wsg-onboarding-motivation';
 const ONBOARDING_PROFILE_PREFIX = 'wsg-onboarding-profile';
-const PASSWORD_POLICY_MESSAGE = 'Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a special character.';
-const PASSWORD_POLICY_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$/;
+const PASSWORD_POLICY_MESSAGE = 'Password must be at least 12 characters and include an uppercase letter, a lowercase letter, a number, and a special character.';
+const PASSWORD_POLICY_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{12,}$/;
 const GOOGLE_CLIENT_ID_META_KEY = 'wsg-google-client-id';
 const SHELL_LAYOUT_STORAGE_KEY = 'wsg-shell-layout';
 const HEADER_COLLAPSED_STORAGE_KEY = 'ui.headerCollapsed';
@@ -2931,11 +2931,11 @@ function signupPage() {
           </label>
           <p class="muted">Primary email secures daily account access and login verification.</p>
           <label>Password
-            <input name="password" type="password" minlength="8" required />
+            <input name="password" type="password" minlength="12" required />
           </label>
           <p class="muted">${PASSWORD_POLICY_MESSAGE}</p>
           <label>Confirm Password
-            <input name="confirmPassword" type="password" minlength="8" required />
+            <input name="confirmPassword" type="password" minlength="12" required />
           </label>
         </section>
         <section class="form-section">
@@ -4785,94 +4785,95 @@ function renderPublicLayout(path, key, pageHtml) {
 }
 
 async function render() {
-  let path = location.hash.replace('#', '') || '/';
+  try {
+    let path = location.hash.replace('#', '') || '/';
 
-  if (state.supabaseConfigMissing) {
-    document.getElementById('app').innerHTML = '<div class="public-shell"><main class="public-container public-content panel"><h2>Configuration Required</h2><p class="muted">Supabase configuration is missing. Check frontend environment variables and redeploy.</p></main></div>';
-    return;
-  }
-
-  if (state.auth.loading) {
-    document.getElementById('app').innerHTML = '<div class="public-shell"><main class="public-container public-content panel"><p class="muted">Authenticating session...</p></main></div>';
-    return;
-  }
-
-  path = applyRouteGuards(path);
-
-  if (location.hash.replace('#', '') !== path) {
-    location.hash = path;
-    return;
-  }
-
-  if (path === '/members') {
-    await ensureMembersLoaded();
-  }
-  if (path === '/profile' || /^\/(?:members|profile)\/[^/]+$/.test(path)) {
-    await loadProfileForRoute(path);
-  }
-  const isPolicyAcceptRoute = path === POLICY_ACCEPT_ROUTE;
-  const isPublicRoute = ['/', '/login', '/signup', '/code-of-conduct', '/content-policy', '/platform-rules', '/privacy'].includes(path);
-  if (state.currentUser && !isPublicRoute && !isPolicyAcceptRoute) {
-    await loadConnections();
-  }
-  if (path === '/recruiter-console' || path === '/members') {
-    await ensureMembersLoaded();
-  }
-  if (path === '/arena' || path === '/profile/scenario-chat' || path === '/discussions') {
-    await loadScenarioChat();
-  }
-  if (path === '/profile/area-chat') {
-    await loadAreaChat();
-  }
-  if (path === '/roleplay') {
-    ensureRoleplaySession();
-  }
-  if (path !== '/profile') {
-    state.onboarding.starterModalOpen = false;
-  } else {
-    state.onboarding.starterModalOpen = isFirstArrivalAfterSignup();
-    if (state.onboarding.starterModalOpen) {
-      setStatusMessage('Starter scenario loaded. Begin onboarding to continue.', 'info');
+    if (state.supabaseConfigMissing) {
+      document.getElementById('app').innerHTML = '<div class="public-shell"><main class="public-container public-content panel"><h2>Configuration Required</h2><p class="muted">Supabase configuration is missing. Set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code>, then redeploy.</p></main></div>';
+      return;
     }
-  }
 
-  const route = routes[path]
-    || (/^\/(?:members|profile)\/[^/]+$/.test(path) ? { key: 'profile', requiresAuth: true } : null)
-    || (/^\/characters\/[^/]+$/.test(path) ? { key: 'characterDetail', requiresAuth: true } : null)
-    || { key: 'fallback' };
-  const isScenarioRoute = path === '/scenario' || path.startsWith('/scenario/');
-  const resolvedRoute = isScenarioRoute ? { key: 'scenarioDetail', requiresAuth: true } : route;
-  const pageHtml = {
-    landing: landingPage,
-    home: homePage,
-    arena: arenaPage,
-    guild: guildPage,
-    roleplayHub: roleplayHubPage,
-    members: membersPage,
-    profile: profilePage,
-    characterDetail: () => characterDetailPage(path),
-    directChat: directChatPage,
-    scenarioChat: scenarioChatPage,
-    areaChat: areaChatPage,
-    scenarioDetail: () => scenarioDetailPage(path),
-    profileEdit: profileEditPage,
-    login: loginPage,
-    signup: signupPage,
-    policyAccept: policyAcceptPage,
-    codeOfConduct: codeOfConductPage,
-    contentPolicy: contentPolicyPage,
-    platformRules: platformRulesPage,
-    privacy: privacyPage,
-    recruiter: recruiterPage,
-    fallback: fallbackPage,
-  }[resolvedRoute.key]();
+    if (state.auth.loading) {
+      document.getElementById('app').innerHTML = '<div class="public-shell"><main class="public-container public-content panel"><p class="muted">Authenticating session...</p></main></div>';
+      return;
+    }
 
-  if (['landing', 'login', 'signup', 'codeOfConduct', 'contentPolicy', 'platformRules', 'privacy', 'policyAccept'].includes(resolvedRoute.key)) {
-    renderPublicLayout(path, resolvedRoute.key, pageHtml);
-  } else {
-    renderLayout(path, resolvedRoute.key, pageHtml);
-  }
-  initializeGoogleAuth(resolvedRoute.key);
+    path = applyRouteGuards(path);
+
+    if (location.hash.replace('#', '') !== path) {
+      location.hash = path;
+      return;
+    }
+
+    if (path === '/members') {
+      await ensureMembersLoaded();
+    }
+    if (path === '/profile' || /^\/(?:members|profile)\/[^/]+$/.test(path)) {
+      await loadProfileForRoute(path);
+    }
+    const isPolicyAcceptRoute = path === POLICY_ACCEPT_ROUTE;
+    const isPublicRoute = ['/', '/login', '/signup', '/code-of-conduct', '/content-policy', '/platform-rules', '/privacy'].includes(path);
+    if (state.currentUser && !isPublicRoute && !isPolicyAcceptRoute) {
+      await loadConnections();
+    }
+    if (path === '/recruiter-console' || path === '/members') {
+      await ensureMembersLoaded();
+    }
+    if (path === '/arena' || path === '/profile/scenario-chat' || path === '/discussions') {
+      await loadScenarioChat();
+    }
+    if (path === '/profile/area-chat') {
+      await loadAreaChat();
+    }
+    if (path === '/roleplay') {
+      ensureRoleplaySession();
+    }
+    if (path !== '/profile') {
+      state.onboarding.starterModalOpen = false;
+    } else {
+      state.onboarding.starterModalOpen = isFirstArrivalAfterSignup();
+      if (state.onboarding.starterModalOpen) {
+        setStatusMessage('Starter scenario loaded. Begin onboarding to continue.', 'info');
+      }
+    }
+
+    const route = routes[path]
+      || (/^\/(?:members|profile)\/[^/]+$/.test(path) ? { key: 'profile', requiresAuth: true } : null)
+      || (/^\/characters\/[^/]+$/.test(path) ? { key: 'characterDetail', requiresAuth: true } : null)
+      || { key: 'fallback' };
+    const isScenarioRoute = path === '/scenario' || path.startsWith('/scenario/');
+    const resolvedRoute = isScenarioRoute ? { key: 'scenarioDetail', requiresAuth: true } : route;
+    const pageHtml = {
+      landing: landingPage,
+      home: homePage,
+      arena: arenaPage,
+      guild: guildPage,
+      roleplayHub: roleplayHubPage,
+      members: membersPage,
+      profile: profilePage,
+      characterDetail: () => characterDetailPage(path),
+      directChat: directChatPage,
+      scenarioChat: scenarioChatPage,
+      areaChat: areaChatPage,
+      scenarioDetail: () => scenarioDetailPage(path),
+      profileEdit: profileEditPage,
+      login: loginPage,
+      signup: signupPage,
+      policyAccept: policyAcceptPage,
+      codeOfConduct: codeOfConductPage,
+      contentPolicy: contentPolicyPage,
+      platformRules: platformRulesPage,
+      privacy: privacyPage,
+      recruiter: recruiterPage,
+      fallback: fallbackPage,
+    }[resolvedRoute.key]();
+
+    if (['landing', 'login', 'signup', 'codeOfConduct', 'contentPolicy', 'platformRules', 'privacy', 'policyAccept'].includes(resolvedRoute.key)) {
+      renderPublicLayout(path, resolvedRoute.key, pageHtml);
+    } else {
+      renderLayout(path, resolvedRoute.key, pageHtml);
+    }
+    initializeGoogleAuth(resolvedRoute.key);
 
   const loginForm = document.getElementById('login-form');
   if (loginForm) {
@@ -5063,7 +5064,21 @@ async function render() {
   attachScenarioDetailHandlers();
   attachHomeChatHandlers();
   attachChatPaneHandlers();
-  console.log('[wsg] render complete');
+    console.log('[wsg] render complete');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown render failure.';
+    console.error('[wsg] render failure fallback', error);
+    document.getElementById('app').innerHTML = `
+      <div class="public-shell">
+        <main class="public-container public-content panel">
+          <h2>Unable to render this page</h2>
+          <p class="muted">The app hit a rendering error and showed this fallback instead of a blank screen.</p>
+          <p class="muted" role="alert"><strong>Details:</strong> ${escapeHtml(message)}</p>
+          <p><a href="#/login">Go to Sign In</a> · <a href="#/signup">Create Account</a></p>
+        </main>
+      </div>
+    `;
+  }
 }
 
 function attachRoleplayHandlers() {
