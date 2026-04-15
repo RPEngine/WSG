@@ -336,6 +336,21 @@ body {
 }
 .card h3 { margin: 0 0 10px; font-size: 1rem; }
 
+.panel-surface {
+  background: rgba(10, 15, 22, 0.72);
+  border: 1px solid var(--border);
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(10px);
+}
+
+.panel-surface--soft {
+  background: linear-gradient(160deg, rgba(17, 23, 32, 0.74), rgba(11, 16, 23, 0.62));
+}
+
+.panel-surface--transparent {
+  background: rgba(10, 15, 22, 0.56);
+}
+
 .list { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
 .list li { display: flex; justify-content: space-between; gap: 10px; padding: 8px; border-radius: 10px; background: rgba(255,255,255,0.03); }
 .muted { color: var(--text-muted); font-size: 0.9rem; }
@@ -596,6 +611,20 @@ body {
 .profile-display-hero {
   display: grid;
   gap: 12px;
+  position: relative;
+  overflow: hidden;
+}
+
+.guild-identity-hero::after {
+  content: '';
+  position: absolute;
+  inset: auto -44px -44px auto;
+  width: 170px;
+  height: 170px;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0.2;
+  background: radial-gradient(circle, var(--mode-highlight-secondary), transparent 72%);
 }
 
 .profile-display-bio {
@@ -989,7 +1018,7 @@ body {
   border: 1px solid var(--ring);
   border-radius: 16px;
   padding: 18px;
-  background: linear-gradient(140deg, var(--accent-soft), rgba(255, 255, 255, 0.01));
+  background: rgba(11, 16, 23, 0.58);
   margin-bottom: 12px;
 }
 
@@ -1058,7 +1087,7 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 14px;
   padding: 16px;
-  background: linear-gradient(180deg, rgba(5, 8, 14, 0.72), rgba(5, 8, 14, 0.45));
+  background: rgba(8, 12, 19, 0.55);
 }
 
 .scenario-panel-head {
@@ -1147,7 +1176,7 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 12px;
   padding: 11px;
-  background: linear-gradient(150deg, rgba(255, 255, 255, 0.04), rgba(0, 0, 0, 0.25));
+  background: rgba(12, 17, 24, 0.58);
 }
 
 .candidate-rank {
@@ -2245,9 +2274,7 @@ h1, h2, h3, h4, .title, .lockup-title { font-family: var(--heading-font); }
 }
 
 .home-hero,
-.page-hero,
-.scenario-hero,
-.recruiter-hero {
+.page-hero {
   border-color: var(--mode-border-glow);
   background:
     radial-gradient(circle at 82% 16%, var(--mode-highlight-secondary), transparent 34%),
