@@ -2,6 +2,7 @@ const routes = {
   '/': { key: 'landing' },
   '/app': { key: 'home', requiresAuth: true },
   '/arena': { key: 'arena', requiresAuth: true },
+  '/roleplay': { key: 'roleplayHub', requiresAuth: true },
   '/guild': { key: 'guild', requiresAuth: true },
   '/world': { key: 'guild', requiresAuth: true },
   '/guild-world': { key: 'guild', requiresAuth: true },
@@ -28,7 +29,7 @@ const sharedNavItems = [
 
 function modeNavItem(mode) {
   if (mode === 'roleplay') {
-    return { label: 'World RP', path: '/world', icon: '🧭' };
+    return { label: 'Roleplay Nexus', path: '/roleplay', icon: '🧭' };
   }
   return { label: 'Guild', path: '/guild', icon: '🌌' };
 }
@@ -279,7 +280,7 @@ const BRAND_ASSETS = Object.freeze({
 function pageSetClass(path, key) {
   if (path === '/arena' || key === 'arena') return 'page-set--arena';
   if (path === '/guild' || path === '/guild-world' || key === 'guild') return 'page-set--guild';
-  if (path === '/world') return 'page-set--world-rp';
+  if (path === '/world' || path === '/roleplay' || key === 'roleplayHub') return 'page-set--world-rp';
   if (path === '/recruiter-console' || key === 'recruiter') return 'page-set--recruiter';
   if (path === '/profile' || path === '/members' || key === 'profile' || key === 'members' || ['scenarioChat', 'areaChat', 'directChat'].includes(key)) {
     return 'page-set--profile';
@@ -360,6 +361,11 @@ const state = {
     error: '',
     mobileLeftOpen: false,
     mobileRightOpen: false,
+  },
+  roleplay: {
+    session: null,
+    pending: false,
+    error: '',
   },
   homeChat: {
     messages: [],
@@ -1356,6 +1362,53 @@ async function requestHomeAssistantReply(userMessage) {
   return content;
 }
 
+function ensureRoleplaySession({ resetMessages = false } = {}) {
+  const previousSession = state.roleplay.session;
+  if (!previousSession || previousSession.mode !== 'roleplay' || previousSession.sessionType !== 'ai_roleplay') {
+    state.roleplay.session = {
+      mode: 'roleplay',
+      sessionType: 'ai_roleplay',
+      activeRoomId: null,
+      activeNpcIds: [],
+      messages: [],
+    };
+  } else if (resetMessages) {
+    state.roleplay.session.messages = [];
+  }
+
+  return state.roleplay.session;
+}
+
+async function requestRoleplayAssistantReply(userMessage, session) {
+  const history = (session?.messages || [])
+    .slice(-6)
+    .map((message) => `${message.type === 'user' ? 'Player' : 'Narrator'}: ${message.content}`)
+    .join('\n');
+  const payload = {
+    prompt: [
+      'Roleplay mode is active.',
+      'You are the narrator, scene responder, world emulator, and character interaction engine.',
+      'Keep continuity with prior turns and move the scene forward with concrete sensory detail.',
+      history ? `Recent exchange:\n${history}` : 'Recent exchange: (none yet)',
+      `Player action: ${userMessage}`,
+    ].join('\n\n'),
+    genre: 'Interactive Roleplay',
+    tone: 'Immersive World Narration',
+    constraints: 'Stay in-world, concise, responsive, and offer clear hooks for the next action.',
+  };
+
+  const data = await apiRequest(AI_ENDPOINTS.chat, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  const content = parseAiChatResponse(data);
+  if (!content) {
+    throw new Error('AI roleplay response did not include usable message text.');
+  }
+
+  return content;
+}
+
 function getConnectionDisplayName(connection) {
   return connection?.displayName || connection?.username || 'Guild Member';
 }
@@ -2022,6 +2075,47 @@ function guildPage() {
   `;
 }
 
+function roleplayHubPage() {
+  const session = ensureRoleplaySession();
+  const messages = Array.isArray(session.messages) ? session.messages : [];
+  const messagesMarkup = messages.map((message) => `
+    <article class="message arena-chat-message ${message.type === 'user' ? 'user' : 'system'}">
+      <div class="message-label">${message.type === 'user' ? 'You' : 'Roleplay Nexus'}</div>
+      <p>${escapeHtml(message.content)}</p>
+    </article>
+  `).join('');
+
+  return `
+    <section class="roleplay-nexus-layout">
+      <section class="roleplay-nexus-main panel-surface panel-surface--transparent">
+        <header class="roleplay-nexus-header">
+          <h2>Roleplay Nexus</h2>
+          <p class="muted">Enter the story and speak to the world.</p>
+        </header>
+        <div class="roleplay-nexus-chat-shell">
+          <div id="roleplay-conversation-log" class="conversation-log roleplay-chat-log">
+            ${messagesMarkup || '<p class="muted">Your scene is quiet. Speak to begin the story.</p>'}
+          </div>
+          <form id="roleplay-input-form" class="arena-input roleplay-input-form">
+            <input id="roleplay-input" name="message" placeholder="Speak, act, or describe what you do..." ${state.roleplay.pending ? 'disabled' : ''} />
+            <button class="pill-btn cta-primary" type="submit" ${state.roleplay.pending ? 'disabled' : ''}>${state.roleplay.pending ? 'Sending...' : 'Send'}</button>
+          </form>
+          <div class="roleplay-input-examples muted">
+            <span>I step into the ruined shrine and look for movement.</span>
+            <span>I bow slightly and ask the innkeeper what he knows.</span>
+            <span>I draw my blade but do not attack.</span>
+          </div>
+        </div>
+        ${state.roleplay.error ? `<p class="muted" style="color:#ff7b7b;margin-top:8px;" role="alert">${escapeHtml(state.roleplay.error)}</p>` : ''}
+      </section>
+      <aside class="roleplay-nexus-side panel-surface panel-surface--soft">
+        <h3>Future Tools</h3>
+        <p class="muted">Rooms, NPCs, and scene tools will be added later.</p>
+      </aside>
+    </section>
+  `;
+}
+
 function membersPage() {
   if (state.loading && !state.membersLoaded) {
     return card('Members', '<p class="muted">Loading members...</p>');
@@ -2656,15 +2750,23 @@ async function loadProfileForRoute(path) {
 
 function applyRouteGuards(path) {
   if (path === '/guild-world') {
-    return state.mode === 'roleplay' ? '/world' : '/guild';
+    return state.mode === 'roleplay' ? '/roleplay' : '/guild';
   }
 
   if (path === '/guild' && state.mode === 'roleplay') {
-    return '/world';
+    return '/roleplay';
   }
 
-  if (path === '/world' && state.mode !== 'roleplay') {
+  if (path === '/world' && state.mode === 'roleplay') {
+    return '/roleplay';
+  }
+
+  if (path === '/roleplay' && state.mode !== 'roleplay') {
     return '/guild';
+  }
+
+  if (path === '/arena' && state.mode === 'roleplay') {
+    return '/roleplay';
   }
 
   const isScenarioRoute = path === '/scenario' || path.startsWith('/scenario/');
@@ -3437,9 +3539,16 @@ function setMode(nextMode) {
   state.mode = nextMode;
   localStorage.setItem('wsg-mode', state.mode);
   applyModeClass();
+  if (state.mode === 'roleplay') {
+    ensureRoleplaySession();
+  }
   const currentPath = location.hash.replace('#', '') || '/';
-  if (currentPath === '/guild' || currentPath === '/world' || currentPath === '/guild-world') {
-    location.hash = state.mode === 'roleplay' ? '/world' : '/guild';
+  if (state.mode === 'roleplay') {
+    location.hash = '/roleplay';
+    return;
+  }
+  if (currentPath === '/guild' || currentPath === '/world' || currentPath === '/guild-world' || currentPath === '/roleplay') {
+    location.hash = '/guild';
     return;
   }
   render();
@@ -3536,6 +3645,9 @@ async function render() {
   if (path === '/profile/area-chat') {
     await loadAreaChat();
   }
+  if (path === '/roleplay') {
+    ensureRoleplaySession();
+  }
   if (path !== '/profile') {
     state.onboarding.starterModalOpen = false;
   } else {
@@ -3553,6 +3665,7 @@ async function render() {
     home: homePage,
     arena: arenaPage,
     guild: guildPage,
+    roleplayHub: roleplayHubPage,
     members: membersPage,
     profile: profilePage,
     directChat: directChatPage,
@@ -3693,10 +3806,55 @@ async function render() {
     });
   });
   attachArenaHandlers();
+  attachRoleplayHandlers();
   attachScenarioDetailHandlers();
   attachHomeChatHandlers();
   attachChatPaneHandlers();
   console.log('[wsg] render complete');
+}
+
+function attachRoleplayHandlers() {
+  const roleplayForm = document.getElementById('roleplay-input-form');
+  if (!roleplayForm) {
+    return;
+  }
+
+  roleplayForm.onsubmit = async (event) => {
+    event.preventDefault();
+    const session = ensureRoleplaySession();
+    const input = document.getElementById('roleplay-input');
+    const value = String(input?.value || '').trim();
+    if (!value || state.roleplay.pending) {
+      return;
+    }
+
+    state.roleplay.error = '';
+    session.messages.push({ id: crypto.randomUUID(), type: 'user', content: value });
+    if (input) input.value = '';
+    state.roleplay.pending = true;
+    render();
+
+    try {
+      const aiReply = await requestRoleplayAssistantReply(value, session);
+      session.messages.push({ id: crypto.randomUUID(), type: 'system', content: aiReply });
+    } catch (error) {
+      console.error('[ai:frontend] roleplay response failed', { error, message: value });
+      state.roleplay.error = getArenaFriendlyErrorMessage(error);
+      session.messages.push({
+        id: crypto.randomUUID(),
+        type: 'system',
+        content: 'The world goes silent for a moment. Try again.',
+      });
+    }
+
+    state.roleplay.pending = false;
+    render();
+  };
+
+  const chatLog = document.getElementById('roleplay-conversation-log');
+  if (chatLog) {
+    chatLog.scrollTop = chatLog.scrollHeight;
+  }
 }
 
 window.addEventListener('hashchange', render);

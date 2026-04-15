@@ -1207,6 +1207,58 @@ body {
   background: transparent;
 }
 
+.roleplay-nexus-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
+  gap: 14px;
+  min-height: calc(100vh - 220px);
+}
+
+.roleplay-nexus-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 16px;
+}
+
+.roleplay-nexus-header h2 {
+  margin: 0;
+  font-size: var(--font-h2);
+}
+
+.roleplay-nexus-header p {
+  margin: 8px 0 0;
+}
+
+.roleplay-nexus-chat-shell {
+  margin-top: 12px;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.roleplay-chat-log {
+  flex: 1;
+  min-height: 380px;
+}
+
+.roleplay-input-form {
+  margin-top: auto;
+}
+
+.roleplay-input-examples {
+  display: grid;
+  gap: 6px;
+  font-size: 0.9rem;
+}
+
+.roleplay-nexus-side {
+  align-self: start;
+  padding: 16px;
+}
+
 .utility-pane-head {
   display: flex;
   justify-content: space-between;
@@ -2506,5 +2558,13 @@ h1, h2, h3, h4, .title, .lockup-title { font-family: var(--heading-font); }
   .create-room-form button,
   .create-room-form label:nth-child(4) {
     grid-column: span 1;
+  }
+
+  .roleplay-nexus-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .roleplay-nexus-side {
+    order: -1;
   }
 }
