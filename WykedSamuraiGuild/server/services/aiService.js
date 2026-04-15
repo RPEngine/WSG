@@ -2,7 +2,6 @@ const DEFAULT_AI_MODEL = "HuggingFaceH4/zephyr-7b-beta";
 const HF_MODEL = process.env.HUGGING_FACE_MODEL || DEFAULT_AI_MODEL;
 const HF_ROUTER_ENDPOINT = "https://router.huggingface.co/v1/chat/completions";
 const HF_ROUTER_MODEL = process.env.HUGGING_FACE_ROUTER_MODEL || HF_MODEL;
-const HF_ROUTER_TOKEN_ENVS = ["HUGGINGFACE_API_KEY", "HUGGINGFACE_API_TOKEN"];
 
 const scenarioOutputSchema = {
   title: "string",
@@ -62,18 +61,32 @@ const validateGeneratedScenario = (payload) => {
 };
 
 const resolveHuggingFaceToken = () => {
-  const hfToken = process.env.HUGGINGFACE_API_KEY || process.env.HUGGINGFACE_API_TOKEN;
-  if (typeof hfToken === "string" && hfToken.trim()) {
-    const envName = HF_ROUTER_TOKEN_ENVS.find((name) => process.env[name]?.trim()) || null;
-    return {
-      token: hfToken.trim(),
-      envName,
-    };
-  }
+  const rawApiKey = process.env.HUGGINGFACE_API_KEY;
+  const rawApiToken = process.env.HUGGINGFACE_API_TOKEN;
+  const trimmedApiKey = typeof rawApiKey === "string" ? rawApiKey.trim() : "";
+  const trimmedApiToken = typeof rawApiToken === "string" ? rawApiToken.trim() : "";
+  const hfToken = trimmedApiKey || trimmedApiToken;
+  const envName = trimmedApiKey ? "HUGGINGFACE_API_KEY" : trimmedApiToken ? "HUGGINGFACE_API_TOKEN" : null;
+
   return {
-    token: "",
-    envName: null,
+    token: hfToken,
+    envName,
   };
+};
+
+const validateHuggingFaceToken = (token) => {
+  if (typeof token !== "string") {
+    throw new Error("Invalid Hugging Face token: token must be a string.");
+  }
+  if (!token) {
+    throw new Error("Missing Hugging Face token. Set HUGGINGFACE_API_KEY or HUGGINGFACE_API_TOKEN.");
+  }
+  if (!token.trim()) {
+    throw new Error("Invalid Hugging Face token: token is empty after trim.");
+  }
+  if (!token.startsWith("hf_")) {
+    throw new Error("Invalid Hugging Face token: expected a token starting with \"hf_\".");
+  }
 };
 
 const extractProviderErrorMessage = (payload, fallbackText = "") => {
@@ -95,9 +108,7 @@ const callHuggingFace = async ({
   parameters = {},
 }) => {
   const { token, envName } = resolveHuggingFaceToken();
-  if (!token) {
-    throw new Error("Missing Hugging Face token. Set HUGGINGFACE_API_KEY or HUGGINGFACE_API_TOKEN.");
-  }
+  validateHuggingFaceToken(token);
   const endpoint = HF_ROUTER_ENDPOINT;
   const requestModel = model || HF_ROUTER_MODEL;
   const userContent = typeof inputs === "string" ? inputs : JSON.stringify(inputs);
@@ -148,7 +159,11 @@ const callHuggingFace = async ({
     const reason = extractProviderErrorMessage(payload, response.statusText);
     const routerHint = response.status === 410 ? " Verify requests are sent to https://router.huggingface.co." : "";
     const message = `Provider rejected request: ${reason}.${routerHint}`.trim();
-    console.error("HuggingFace API Error:", bodyText || reason);
+    console.error("[ai:generate] Hugging Face router HTTP error details", {
+      status: response.status,
+      statusText: response.statusText,
+      bodyText,
+    });
     console.error("[ai:generate] Hugging Face router request failed", {
       endpoint,
       model: requestModel,
@@ -204,8 +219,12 @@ export const testHuggingFaceConnection = async () => {
 export const checkHuggingFaceHealth = async () => {
   const { token, envName } = resolveHuggingFaceToken();
 
-  if (!token) {
-    const failureReason = "Missing token. Configure HUGGINGFACE_API_KEY or HUGGINGFACE_API_TOKEN.";
+  try {
+    validateHuggingFaceToken(token);
+  } catch (error) {
+    const failureReason = error instanceof Error
+      ? error.message
+      : "Missing token. Configure HUGGINGFACE_API_KEY or HUGGINGFACE_API_TOKEN.";
     console.error("[ai:test] Hugging Face router provider test failed:", {
       reason: failureReason,
       endpoint: HF_ROUTER_ENDPOINT,
@@ -261,6 +280,11 @@ export const checkHuggingFaceHealth = async () => {
     }
 
     if (!response.ok) {
+      console.error("[ai:test] Hugging Face router HTTP error details", {
+        status: response.status,
+        statusText: response.statusText,
+        bodyText: responseText,
+      });
       const reason = payload?.error?.message || payload?.error || payload?.message || response.statusText || "Unknown Hugging Face router error.";
       throw new Error(`Hugging Face router request failed (${response.status}): ${reason}`);
     }

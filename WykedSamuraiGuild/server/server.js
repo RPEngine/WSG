@@ -42,16 +42,22 @@ app.get("/", (req, res) => {
 
 async function startServer() {
   try {
-    const hfToken = process.env.HUGGINGFACE_API_KEY || process.env.HUGGINGFACE_API_TOKEN;
-    const hfTokenPresent = Boolean(hfToken?.trim());
-    const hfTokenEnvName = process.env.HUGGINGFACE_API_KEY?.trim()
+    const rawApiKey = process.env.HUGGINGFACE_API_KEY;
+    const rawApiToken = process.env.HUGGINGFACE_API_TOKEN;
+    const trimmedApiKey = typeof rawApiKey === "string" ? rawApiKey.trim() : "";
+    const trimmedApiToken = typeof rawApiToken === "string" ? rawApiToken.trim() : "";
+    const hfToken = trimmedApiKey || trimmedApiToken;
+    const hfTokenEnvName = trimmedApiKey
       ? "HUGGINGFACE_API_KEY"
-      : process.env.HUGGINGFACE_API_TOKEN?.trim()
+      : trimmedApiToken
         ? "HUGGINGFACE_API_TOKEN"
         : null;
     console.log("[startup] Hugging Face token configured:", {
-      tokenPresent: hfTokenPresent,
+      apiKeyExists: typeof rawApiKey === "string",
+      apiTokenExists: typeof rawApiToken === "string",
+      tokenPresent: Boolean(hfToken),
       tokenEnvName: hfTokenEnvName,
+      tokenLength: hfToken.length,
     });
     await connectDatabase();
     console.log("[db] database connection established");
