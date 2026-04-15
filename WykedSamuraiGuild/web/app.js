@@ -1512,27 +1512,13 @@ function Sidebar(path, key) {
   `;
 }
 
-function PageHero({ title, subtitle, kicker = 'Nexus Command' }) {
-  return `
-    <section class="page-hero panel">
-      <div class="moon-orb"></div>
-      <p class="hero-kicker">${escapeHtml(kicker)}</p>
-      <h1>${escapeHtml(title)}</h1>
-      <p>${escapeHtml(subtitle)}</p>
-    </section>
-  `;
-}
-
-function MainContent(key, title, subtitle, statusMarkup, pageHtml) {
-  const hideDefaultHeader = key === 'home' || (key === 'arena' && state.mode === 'roleplay');
+function MainContent(key, statusMarkup, pageHtml) {
   const isArena = key === 'arena';
+  const compactTopSpacing = 10;
   return `
     <main class="main-content panel ${isArena ? 'arena-main-shell' : ''}">
-      ${hideDefaultHeader ? '' : `
-        ${PageHero({ title, subtitle, kicker: key === 'recruiter' ? 'Recruiter Intelligence' : 'Guild Nexus' })}
-      `}
       ${statusMarkup}
-      <section class="main-content-body ${isArena ? 'arena-content-body' : ''}" style="margin-top:${hideDefaultHeader ? '0' : '14px'};">${pageHtml}</section>
+      <section class="main-content-body ${isArena ? 'arena-content-body' : ''}" style="margin-top:${compactTopSpacing}px;">${pageHtml}</section>
     </main>
   `;
 }
@@ -1569,12 +1555,11 @@ function Header() {
 }
 
 function AppShell(path, key, pageHtml, statusMarkup, pageSet) {
-  const [title, subtitle] = pageTitle(key);
   return `
     <div class="app-shell page-set ${pageSet} ${state.shell.leftSidebarCollapsed ? 'is-left-sidebar-collapsed' : ''} ${state.shell.rightSidebarCollapsed ? 'is-right-sidebar-collapsed' : ''} ${state.shell.headerCollapsed ? 'is-header-collapsed' : ''}">
       ${Header()}
       ${Sidebar(path, key)}
-      ${MainContent(key, title, subtitle, statusMarkup, pageHtml)}
+      ${MainContent(key, statusMarkup, pageHtml)}
       <aside class="right-sidebar panel ${key === 'home' ? 'home-right-sidebar' : ''}">${SocialSidebar()}</aside>
       ${ChatDock()}
     </div>

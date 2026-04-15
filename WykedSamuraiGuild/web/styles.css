@@ -323,10 +323,6 @@ body {
   overflow: hidden;
 }
 
-.arena-main-shell .page-hero {
-  flex: 0 0 auto;
-}
-
 .arena-main-shell .arena-content-body {
   flex: 1 1 auto;
   min-height: 0;
@@ -2495,8 +2491,7 @@ h1, h2, h3, h4, .title, .lockup-title { font-family: var(--heading-font); }
   box-shadow: 0 0 16px var(--mode-accent-glow);
 }
 
-.home-hero,
-.page-hero {
+.home-hero {
   border-color: var(--mode-border-glow);
   background:
     radial-gradient(circle at 82% 16%, var(--mode-highlight-secondary), transparent 34%),
