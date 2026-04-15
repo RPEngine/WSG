@@ -1,10 +1,9 @@
 const FRIENDLI_PROVIDER = "friendli";
 const DEFAULT_DEPLOYED_MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.3";
 const FRIENDLI_DEPLOYED_MODEL_NAME = (process.env.FRIENDLI_MODEL || DEFAULT_DEPLOYED_MODEL_NAME).trim();
-const DEFAULT_FRIENDLI_ENDPOINT_ID = "dep94342bhagvi8";
-const FRIENDLI_ENDPOINT_ID = (process.env.FRIENDLI_ENDPOINT_ID || DEFAULT_FRIENDLI_ENDPOINT_ID).trim();
+const FRIENDLI_ENDPOINT_ID = (process.env.FRIENDLI_ENDPOINT_ID || "").trim();
 const DEFAULT_FRIENDLI_BASE_URL = "https://api.friendli.ai/dedicated/v1";
-const FRIENDLI_BASE_URL = (process.env.FRIENDLI_API_BASE_URL || DEFAULT_FRIENDLI_BASE_URL).trim();
+const FRIENDLI_BASE_URL = DEFAULT_FRIENDLI_BASE_URL;
 const FRIENDLI_CHAT_COMPLETIONS_PATH = "/chat/completions";
 const FRIENDLI_CHAT_COMPLETIONS_ENDPOINT = `${FRIENDLI_BASE_URL.replace(/\/+$/, "")}${FRIENDLI_CHAT_COMPLETIONS_PATH}`;
 
@@ -100,6 +99,9 @@ const validateFriendliToken = (token) => {
   if (!token.trim()) {
     throw new Error("Invalid Friendli token: token is empty after trim.");
   }
+  if (token.length < 20) {
+    throw new Error("Invalid Friendli token: token looks too short. Use the full FRIENDLI_API_TOKEN secret value.");
+  }
 };
 
 const validateFriendliEndpointId = (endpointId) => {
@@ -133,6 +135,12 @@ const callFriendli = async ({
 }) => {
   const { token, envName, tokenPresent } = resolveFriendliToken();
   const { endpointId } = resolveFriendliEndpointId();
+  console.log("[ai:request] Friendli auth config", {
+    tokenPresent,
+    tokenLength: token.length,
+    endpointId,
+    baseUrl: FRIENDLI_BASE_URL,
+  });
   validateFriendliToken(token);
   validateFriendliEndpointId(endpointId);
   const endpoint = FRIENDLI_CHAT_COMPLETIONS_ENDPOINT;
@@ -142,14 +150,6 @@ const callFriendli = async ({
     max_tokens: parameters?.max_new_tokens ?? 300,
     temperature: parameters?.temperature ?? 0.7,
   };
-
-  console.log("[ai:request] Provider diagnostics", {
-    provider: FRIENDLI_PROVIDER,
-    baseUrl: FRIENDLI_BASE_URL,
-    endpointId,
-    deployedModelName: FRIENDLI_DEPLOYED_MODEL_NAME,
-    tokenPresent,
-  });
 
   let response;
   try {
@@ -184,6 +184,9 @@ const callFriendli = async ({
   }
 
   if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error("Friendli authentication failed. Check FRIENDLI_API_TOKEN.");
+    }
     const reason = extractProviderErrorMessage(payload, response.statusText);
     const message = `Provider rejected request: ${reason}.`.trim();
     console.error("[ai:generate] Friendli HTTP error details", {
@@ -317,12 +320,19 @@ export const checkFriendliHealth = async () => {
   };
 
   try {
+    console.log("[ai:test] Friendli auth config", {
+      tokenPresent,
+      tokenLength: token.length,
+      endpointId,
+      baseUrl: FRIENDLI_BASE_URL,
+    });
     console.log("[ai:test] Provider diagnostics", {
       provider: FRIENDLI_PROVIDER,
       baseUrl: FRIENDLI_BASE_URL,
       endpointId,
       deployedModelName: FRIENDLI_DEPLOYED_MODEL_NAME,
       tokenPresent,
+      tokenLength: token.length,
     });
 
     const response = await fetch(FRIENDLI_CHAT_COMPLETIONS_ENDPOINT, {
@@ -345,6 +355,9 @@ export const checkFriendliHealth = async () => {
     }
 
     if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error("Friendli authentication failed. Check FRIENDLI_API_TOKEN.");
+      }
       console.error("[ai:test] Friendli HTTP error details", {
         status: response.status,
         statusText: response.statusText,
