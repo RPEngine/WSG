@@ -280,16 +280,18 @@ const SCENARIO_BLUEPRINTS = Object.freeze({
 });
 
 const BRAND_ASSETS = Object.freeze({
-  logo: '/assets/WSLogo.png',
+  logo: '/assets/WGSGuildLogo.png',
+  compactLogo: '/assets/WSLogo.png',
 });
 
 
 function pageSetClass(path, key) {
   if (path === '/arena' || key === 'arena') return 'page-set--arena';
+  if (path === '/scenario' || path.startsWith('/scenario/') || ['scenarioDetail', 'scenarioChat', 'areaChat'].includes(key)) return 'page-set--scenario';
   if (path === '/guild' || path === '/guild-world' || key === 'guild') return 'page-set--guild';
   if (path === '/world' || path === '/roleplay' || key === 'roleplayHub') return 'page-set--world-rp';
   if (path === '/recruiter-console' || key === 'recruiter') return 'page-set--recruiter';
-  if (path === '/profile' || path === '/members' || key === 'profile' || key === 'members' || ['scenarioChat', 'areaChat', 'directChat'].includes(key)) {
+  if (path === '/profile' || path === '/members' || key === 'profile' || key === 'members' || ['directChat'].includes(key)) {
     return 'page-set--profile';
   }
   return 'page-set--home';
@@ -298,7 +300,7 @@ function pageSetClass(path, key) {
 function guildBrandMark({ compact = false, className = '' } = {}) {
   return `
     <div class="guild-brand-mark ${compact ? 'is-compact' : ''} ${className}">
-      <img src="${BRAND_ASSETS.logo}" alt="Wyked Samurai Guild logo" loading="eager" decoding="async" />
+      <img src="${compact ? BRAND_ASSETS.compactLogo : BRAND_ASSETS.logo}" alt="Wyked Samurai Guild logo" loading="eager" decoding="async" />
     </div>
   `;
 }
@@ -2884,9 +2886,9 @@ function loginPage() {
     ? `ERROR: ${state.authForms.login.message}`
     : (state.authForms.login.message || 'Enter your account email and password to sign in.');
   return `
-    <section class="card form-card">
-      <h3>Log in</h3>
-      <p class="muted">Note: accounts are currently stored in volatile in-memory server storage and may reset when the backend restarts.</p>
+    <section class="auth-signin-stage" aria-label="Sign in scene">
+      <section class="card form-card auth-signin-card">
+      <h3>Sign In</h3>
       <form id="login-form" class="form-stack">
         <p id="login-feedback" class="status-banner ${state.authForms.login.message ? `status-${state.authForms.login.tone}` : 'status-info'}${loginHasError ? ' auth-error-banner' : ''}" role="alert" aria-live="assertive">${escapeHtml(loginFeedbackMessage)}</p>
         <label>Email
@@ -2900,6 +2902,8 @@ function loginPage() {
         <div id="google-login-button" aria-label="Continue with Google"></div>
       </form>
       <p class="muted">New here? <a href="#/signup">Create an account.</a></p>
+      <p class="muted auth-signin-meta-links"><a href="#/privacy">Privacy</a> · <a href="#/platform-rules">Terms</a> · <a href="#/content-policy">Policy</a></p>
+      </section>
     </section>
   `;
 }
@@ -4743,14 +4747,15 @@ function renderPublicLayout(path, key, pageHtml) {
   const [title, subtitle] = pageTitle(key);
   applyModeClass();
   const pageSet = pageSetClass(path, key);
-  const showPageHeader = key !== 'landing';
+  const isAuthRoute = key === 'login' || key === 'signup';
+  const showPageHeader = key !== 'landing' && !isAuthRoute;
 
   const statusMarkup = state.statusMessage
     ? `<p class="status-banner status-${state.statusMessage.tone}" role="status">${escapeHtml(state.statusMessage.message)}</p>`
     : '';
 
   document.getElementById('app').innerHTML = `
-    <div class="public-shell page-set ${pageSet}">
+    <div class="public-shell page-set ${pageSet} ${isAuthRoute ? 'auth-shell' : ''}">
       <header class="public-header panel">
         <div class="public-container public-header-inner">
           <div class="brand">
@@ -4767,10 +4772,10 @@ function renderPublicLayout(path, key, pageHtml) {
         </div>
       </header>
 
-      <main class="public-container public-content panel">
+      <main class="public-container public-content panel ${isAuthRoute ? 'auth-public-content' : ''}">
         ${showPageHeader ? `<section class="main-header"><h2>${title}</h2><p>${subtitle}</p></section>` : ''}
         ${statusMarkup}
-        <section style="margin-top:${showPageHeader ? '14px' : '0'};">${pageHtml}</section>
+        <section class="${isAuthRoute ? 'auth-public-section' : ''}" style="margin-top:${showPageHeader ? '14px' : '0'};">${pageHtml}</section>
       </main>
       ${SiteFooter()}
     </div>

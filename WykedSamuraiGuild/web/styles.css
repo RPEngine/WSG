@@ -3010,3 +3010,147 @@ h1, h2, h3, h4, .title, .lockup-title { font-family: var(--heading-font); }
 .policy-copy-block li {
   color: rgba(232, 238, 255, 0.95);
 }
+
+/* --- Cinematic re-theme shells and auth composition --- */
+:root {
+  --panel-left-frame: url("/assets/panels/panel_left_transparent.png");
+  --panel-center-frame: url("/assets/panels/panel_center_transparent.png");
+  --panel-right-frame: url("/assets/panels/panel_right_transparent.png");
+  --panel-main-frame: url("/assets/panels/panel-main.png");
+  --panel-nav-frame: url("/assets/panels/panel-nav.png");
+}
+
+.header {
+  background:
+    linear-gradient(180deg, rgba(6, 11, 18, 0.8), rgba(6, 10, 16, 0.84)),
+    var(--panel-nav-frame);
+  background-size: cover, 100% 100%;
+  background-position: center;
+}
+
+.left-sidebar {
+  background:
+    linear-gradient(170deg, rgba(7, 12, 20, 0.82), rgba(6, 10, 16, 0.9)),
+    var(--panel-left-frame);
+  background-size: cover, 100% 100%;
+  background-position: center;
+  border-color: var(--mode-border-glow);
+}
+
+.main-content {
+  background:
+    linear-gradient(170deg, rgba(7, 12, 19, 0.8), rgba(6, 10, 16, 0.86)),
+    var(--panel-center-frame);
+  background-size: cover, 100% 100%;
+  background-position: center;
+}
+
+.right-sidebar {
+  background:
+    linear-gradient(170deg, rgba(7, 12, 20, 0.82), rgba(6, 10, 16, 0.9)),
+    var(--panel-right-frame);
+  background-size: cover, 100% 100%;
+  background-position: center;
+}
+
+.card,
+.panel-surface,
+.form-section,
+.global-chat-dock,
+.active-chat-dock {
+  background:
+    linear-gradient(170deg, rgba(9, 14, 22, 0.78), rgba(7, 11, 17, 0.9)),
+    var(--panel-main-frame);
+  background-size: cover, 100% 100%;
+  background-position: center;
+}
+
+.nav-list a {
+  background:
+    linear-gradient(120deg, rgba(8, 13, 20, 0.54), rgba(7, 11, 17, 0.76)),
+    var(--panel-nav-frame);
+  background-size: cover, 100% 100%;
+  border-color: rgba(201, 215, 230, 0.1);
+}
+
+.page-set::after {
+  opacity: 0.36;
+}
+
+.page-set--world-rp {
+  --page-scene-image: url("/assets/backgrounds/bg-guild-temple.webp");
+  --page-scene-overlay: linear-gradient(165deg, rgba(7, 15, 24, 0.56), rgba(4, 9, 14, 0.86));
+}
+
+.page-set--scenario {
+  --page-scene-image: url("/assets/backgrounds/bg-scenario.webp");
+  --page-scene-overlay: linear-gradient(165deg, rgba(7, 17, 26, 0.55), rgba(4, 10, 16, 0.87));
+}
+
+.auth-shell.page-set::before,
+.auth-shell.page-set::after {
+  content: none;
+}
+
+.auth-shell {
+  background:
+    linear-gradient(180deg, rgba(4, 8, 14, 0.5), rgba(4, 8, 14, 0.78)),
+    url("/assets/backgrounds/signin/Signin.webp");
+  background-size: cover;
+  background-position: center 18%;
+  background-repeat: no-repeat;
+}
+
+.auth-public-content {
+  width: min(100%, 1200px);
+  margin-top: 6px;
+  flex: 1 1 auto;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.auth-public-section {
+  margin-top: 0 !important;
+}
+
+.auth-signin-stage {
+  min-height: clamp(520px, 68vh, 780px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: clamp(130px, 22vh, 240px);
+}
+
+.auth-signin-card {
+  width: min(440px, 94%);
+  border-color: var(--mode-border-glow);
+  box-shadow: 0 0 0 1px rgba(220, 232, 243, 0.08), 0 12px 44px rgba(0, 0, 0, 0.5), 0 0 28px var(--mode-accent-glow);
+  backdrop-filter: blur(9px);
+  background:
+    linear-gradient(170deg, rgba(7, 12, 20, 0.74), rgba(6, 10, 16, 0.88)),
+    var(--panel-main-frame);
+  background-size: cover, 100% 100%;
+}
+
+.auth-signin-card h3 {
+  margin-bottom: 14px;
+}
+
+.auth-signin-meta-links {
+  margin-top: 12px;
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+@media (max-width: 900px) {
+  .auth-shell {
+    background-position: 60% center;
+  }
+
+  .auth-signin-stage {
+    justify-content: flex-end;
+    padding-top: clamp(120px, 18vh, 220px);
+  }
+}
