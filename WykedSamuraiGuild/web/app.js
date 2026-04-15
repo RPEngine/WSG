@@ -107,33 +107,37 @@ const ROLEPLAY_ROOMS = [
   {
     id: 'ember-crossing',
     trialId: 'team-conflict',
-    title: 'Ember Crossing Council',
+    name: 'Ember Crossing Council',
     description: 'Open council room where guild officers resolve faction disputes and keep fragile alliances intact.',
-    roleFocus: 'Diplomat',
+    tag: 'Diplomat',
+    roomType: 'public',
     players: 7,
   },
   {
     id: 'dock-47',
     trialId: 'customer-escalation',
-    title: 'Dock 47 Distress Channel',
+    name: 'Dock 47 Distress Channel',
     description: 'High-pressure response room reacting to incoming merchant convoy failures and sponsor complaints.',
-    roleFocus: 'Incident Commander',
+    tag: 'Incident Commander',
+    roomType: 'public',
     players: 11,
   },
   {
     id: 'shadow-forge',
     trialId: 'leadership-decision',
-    title: 'Shadow Forge War Room',
+    name: 'Shadow Forge War Room',
     description: 'Strategy room balancing delivery speed against defense readiness during active threat windows.',
-    roleFocus: 'Strategist',
+    tag: 'Strategist',
+    roomType: 'private',
     players: 5,
   },
   {
     id: 'aurora-gate',
     trialId: 'operational-crisis',
-    title: 'Aurora Gate Operations',
+    name: 'Aurora Gate Operations',
     description: 'Live operations room coordinating logistics, medical supply routes, and response priorities.',
-    roleFocus: 'Operations Lead',
+    tag: 'Operations Lead',
+    roomType: 'system',
     players: 9,
   },
 ];
@@ -286,6 +290,9 @@ const state = {
   loading: false,
   arena: {
     activeTrialId: '',
+    activeRoomId: '',
+    roleplayRooms: ROLEPLAY_ROOMS.map((room) => ({ ...room })),
+    isCreateRoomOpen: false,
     messages: [],
     pending: false,
     error: '',
@@ -898,6 +905,14 @@ function getActiveTrial() {
   return STARTER_TRIALS.find((trial) => trial.id === state.arena.activeTrialId) || null;
 }
 
+function getRoleplayRooms() {
+  return Array.isArray(state.arena.roleplayRooms) ? state.arena.roleplayRooms : [];
+}
+
+function getActiveRoleplayRoom() {
+  return getRoleplayRooms().find((room) => room.id === state.arena.activeRoomId) || null;
+}
+
 function slugifyScenario(value) {
   return String(value || '')
     .toLowerCase()
@@ -1221,7 +1236,7 @@ function PageHero({ title, subtitle, kicker = 'Nexus Command' }) {
 }
 
 function MainContent(key, title, subtitle, statusMarkup, pageHtml) {
-  const hideDefaultHeader = key === 'home';
+  const hideDefaultHeader = key === 'home' || (key === 'arena' && state.mode === 'roleplay');
   const isArena = key === 'arena';
   return `
     <main class="main-content panel ${isArena ? 'arena-main-shell' : ''}">
@@ -1436,37 +1451,43 @@ function arenaPage() {
   const activeTrial = getActiveTrial();
   const hasActiveTrial = Boolean(activeTrial);
   const isRoleplayMode = state.mode === 'roleplay';
+  const roleplayRooms = getRoleplayRooms();
+  const activeRoleplayRoom = getActiveRoleplayRoom();
   const isScenarioStripCollapsed = state.shell.isScenarioStripCollapsed;
-  const stripTitle = isRoleplayMode ? 'Roleplay Room Strip' : 'Scenario Strip';
+  const stripTitle = isRoleplayMode ? 'Roleplay Rooms' : 'Scenario Strip';
   const stripDescription = isRoleplayMode
-    ? 'Open, resume, or restart shared room sessions.'
+    ? 'Enter an active room or create a new one for live guild roleplay.'
     : 'Launch, resume, or restart your guided trial flow.';
-  const activeSummary = hasActiveTrial
-    ? `${activeTrial.title} · Active`
-    : `No ${isRoleplayMode ? 'room' : 'scenario'} active`;
-  const activeSummaryName = hasActiveTrial ? activeTrial.title : 'None active';
-  const trialCards = (isRoleplayMode ? ROLEPLAY_ROOMS : STARTER_TRIALS)
+  const activeSummary = isRoleplayMode
+    ? (activeRoleplayRoom ? `${activeRoleplayRoom.name} · Active` : 'No room active')
+    : (hasActiveTrial ? `${activeTrial.title} · Active` : 'No scenario active');
+  const activeSummaryName = isRoleplayMode
+    ? (activeRoleplayRoom ? activeRoleplayRoom.name : 'None active')
+    : (hasActiveTrial ? activeTrial.title : 'None active');
+  const trialCards = (isRoleplayMode ? roleplayRooms : STARTER_TRIALS)
     .map((trialOrRoom) => {
       const trialId = isRoleplayMode ? trialOrRoom.trialId : trialOrRoom.id;
-      const isActive = trialId === state.arena.activeTrialId;
+      const isActive = isRoleplayMode
+        ? trialOrRoom.id === state.arena.activeRoomId
+        : trialId === state.arena.activeTrialId;
       return `
-        <article class="trial-card arena-carousel-card ${isActive ? 'active' : ''}">
+        <article class="trial-card arena-carousel-card roleplay-room-row ${isActive ? 'active' : ''}" ${isRoleplayMode ? `data-room-id="${escapeAttr(trialOrRoom.id)}"` : ''}>
           <div class="trial-card-head">
-            <h4>${trialOrRoom.title}</h4>
+            <h4>${isRoleplayMode ? trialOrRoom.name : trialOrRoom.title}</h4>
             ${isActive ? `<span class="trial-state-chip">${isRoleplayMode ? 'Active Room' : 'Active Trial'}</span>` : ''}
           </div>
           <p class="muted">${trialOrRoom.description}</p>
           <div class="trial-meta">
             ${isRoleplayMode
-    ? `<span>Players: ${trialOrRoom.players}</span><span>${trialOrRoom.roleFocus}</span>`
+    ? `<span>${escapeHtml((trialOrRoom.roomType || 'public').toUpperCase())}</span><span>${escapeHtml(trialOrRoom.tag || 'Open RP')}</span><span>Players: ${trialOrRoom.players || 0}</span>`
     : `<span>${trialOrRoom.difficulty}</span><span>${trialOrRoom.suggestedRole || 'Open role'}</span>`}
           </div>
-          <button class="pill-btn start-trial-btn" data-trial-id="${trialId}">
+          <button class="pill-btn ${isRoleplayMode ? 'select-room-btn' : 'start-trial-btn'}" ${isRoleplayMode ? `data-room-id="${escapeAttr(trialOrRoom.id)}"` : `data-trial-id="${trialId}"`}>
             ${isRoleplayMode
-    ? (isActive ? 'Resume Room' : 'Start Room')
+    ? (isActive ? 'Re-enter Room' : 'Enter Room')
     : (isActive ? 'Restart Trial' : 'Start Trial')}
           </button>
-          ${isActive ? `<button class="pill-btn start-trial-btn" data-trial-id="${trialId}" data-restart="true">${isRoleplayMode ? 'Restart Room' : 'Resume Trial'}</button>` : ''}
+          ${isActive && !isRoleplayMode ? `<button class="pill-btn start-trial-btn" data-trial-id="${trialId}" data-restart="true">Resume Trial</button>` : ''}
         </article>
       `;
     })
@@ -1485,6 +1506,12 @@ function arenaPage() {
 
   return `
     <section class="arena-main-column">
+        ${isRoleplayMode ? `
+          <section class="arena-page-indicator panel-surface panel-surface--soft">
+            <p class="hero-kicker">Roleplay</p>
+            <h3>Room Hub</h3>
+          </section>
+        ` : ''}
         <section class="arena-selection-tier arena-scenario-strip panel-surface panel-surface--soft ${isScenarioStripCollapsed ? 'is-collapsed' : ''}">
           <div class="arena-selection-head">
             <div class="arena-selection-head-copy">
@@ -1492,6 +1519,11 @@ function arenaPage() {
               <p class="muted">${isScenarioStripCollapsed ? activeSummary : stripDescription}</p>
             </div>
             <p class="arena-strip-active-summary">Active: ${escapeHtml(activeSummaryName)}</p>
+            ${isRoleplayMode ? `
+              <button type="button" class="pill-btn cta-primary" id="create-room-toggle-btn">
+                ${state.arena.isCreateRoomOpen ? 'Close' : 'Create Room'}
+              </button>
+            ` : ''}
             <button
               type="button"
               class="pill-btn arena-strip-toggle-btn"
@@ -1503,18 +1535,38 @@ function arenaPage() {
             </button>
           </div>
           <div
-            class="arena-card-carousel ${isScenarioStripCollapsed ? 'is-collapsed' : ''}"
+            class="arena-card-carousel ${isRoleplayMode ? 'roleplay-room-list' : ''} ${isScenarioStripCollapsed ? 'is-collapsed' : ''}"
             id="arena-scenario-carousel"
             ${isScenarioStripCollapsed ? 'hidden' : ''}
           >
-            ${trialCards}
+            ${trialCards || (isRoleplayMode ? `
+              <div class="arena-empty roleplay-room-empty-state">
+                <h4>No active rooms yet</h4>
+                <p class="muted">Create your first room to start a new roleplay scene.</p>
+                <button type="button" class="pill-btn cta-primary" id="create-room-empty-btn">Create Room</button>
+              </div>
+            ` : '')}
           </div>
+          ${isRoleplayMode && state.arena.isCreateRoomOpen ? `
+            <form id="create-room-form" class="create-room-form">
+              <label>Room Name<input name="roomName" maxlength="60" required placeholder="Moon Harbor Council" /></label>
+              <label>Description<input name="roomDescription" maxlength="140" required placeholder="Briefly describe the room scene or objective." /></label>
+              <label>Visibility
+                <select name="roomVisibility">
+                  <option value="public">Public</option>
+                  <option value="private">Private</option>
+                </select>
+              </label>
+              <label>Theme / Tag (optional)<input name="roomTag" maxlength="40" placeholder="Diplomacy, Strategy, Ops..." /></label>
+              <button type="submit" class="pill-btn cta-primary">Create & Enter Room</button>
+            </form>
+          ` : ''}
         </section>
         <section class="scenario-experience-panel arena-chat-panel panel-surface panel-surface--transparent">
           <div class="scenario-panel-head arena-chat-head">
             <div>
               <p class="hero-kicker">${isRoleplayMode ? 'Room Chat' : 'Arena Chat'}</p>
-              <h4>${hasActiveTrial ? activeTrial.title : `No ${isRoleplayMode ? 'room' : 'scenario'} active`}</h4>
+              <h4>${hasActiveTrial ? (activeRoleplayRoom?.name || activeTrial.title) : `No ${isRoleplayMode ? 'room' : 'scenario'} active`}</h4>
             </div>
             <p class="muted">${state.mode === 'roleplay' ? 'Immersive roleplay lane' : 'Structured decision lane'} · ${state.arena.messages.length} messages</p>
           </div>
@@ -2545,6 +2597,21 @@ function attachProfileEditHandler() {
 }
 
 function attachArenaHandlers() {
+  function enterRoleplayRoom(roomId) {
+    const selectedRoom = getRoleplayRooms().find((room) => room.id === roomId);
+    if (!selectedRoom) {
+      return;
+    }
+    const selectedTrial = STARTER_TRIALS.find((trial) => trial.id === selectedRoom.trialId) || STARTER_TRIALS[0];
+    if (!selectedTrial) {
+      return;
+    }
+    state.arena.activeRoomId = selectedRoom.id;
+    state.arena.activeTrialId = selectedTrial.id;
+    state.arena.messages = [{ id: crypto.randomUUID(), type: 'system', content: selectedTrial.openingPrompt }];
+    render();
+  }
+
   const stripToggleButton = document.getElementById('arena-strip-toggle-btn');
   if (stripToggleButton) {
     stripToggleButton.onclick = () => {
@@ -2564,10 +2631,79 @@ function attachArenaHandlers() {
       }
 
       state.arena.activeTrialId = selectedTrial.id;
+      state.arena.activeRoomId = '';
       state.arena.messages = [{ id: crypto.randomUUID(), type: 'system', content: selectedTrial.openingPrompt }];
       render();
     };
   });
+
+  const roleplayRows = document.querySelectorAll('.roleplay-room-row[data-room-id]');
+  roleplayRows.forEach((row) => {
+    row.onclick = (event) => {
+      const clickedButton = event.target?.closest?.('button');
+      if (clickedButton) {
+        return;
+      }
+      const roomId = row.getAttribute('data-room-id');
+      if (roomId) {
+        enterRoleplayRoom(roomId);
+      }
+    };
+  });
+
+  const selectRoomButtons = document.querySelectorAll('.select-room-btn[data-room-id]');
+  selectRoomButtons.forEach((button) => {
+    button.onclick = () => {
+      const roomId = button.getAttribute('data-room-id');
+      if (roomId) {
+        enterRoleplayRoom(roomId);
+      }
+    };
+  });
+
+  const createRoomToggleButton = document.getElementById('create-room-toggle-btn');
+  if (createRoomToggleButton) {
+    createRoomToggleButton.onclick = () => {
+      state.arena.isCreateRoomOpen = !state.arena.isCreateRoomOpen;
+      render();
+    };
+  }
+
+  const createRoomEmptyButton = document.getElementById('create-room-empty-btn');
+  if (createRoomEmptyButton) {
+    createRoomEmptyButton.onclick = () => {
+      state.arena.isCreateRoomOpen = true;
+      render();
+    };
+  }
+
+  const createRoomForm = document.getElementById('create-room-form');
+  if (createRoomForm) {
+    createRoomForm.onsubmit = (event) => {
+      event.preventDefault();
+      const formData = new FormData(createRoomForm);
+      const roomName = String(formData.get('roomName') || '').trim();
+      const roomDescription = String(formData.get('roomDescription') || '').trim();
+      const roomVisibility = String(formData.get('roomVisibility') || 'public').trim() || 'public';
+      const roomTag = String(formData.get('roomTag') || '').trim();
+      if (!roomName || !roomDescription) {
+        return;
+      }
+      const fallbackTrial = STARTER_TRIALS[0];
+      const newRoom = {
+        id: `custom-${slugifyScenario(roomName)}-${Date.now()}`,
+        trialId: fallbackTrial?.id || '',
+        name: roomName,
+        description: roomDescription,
+        tag: roomTag || 'Custom RP',
+        roomType: roomVisibility === 'private' ? 'private' : 'public',
+        players: 1,
+      };
+      state.arena.roleplayRooms = [newRoom, ...getRoleplayRooms()];
+      state.arena.isCreateRoomOpen = false;
+      enterRoleplayRoom(newRoom.id);
+    };
+  }
 
   const inputForm = document.getElementById('arena-input-form');
   if (inputForm) {
