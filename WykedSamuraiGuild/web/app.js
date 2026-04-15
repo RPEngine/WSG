@@ -2912,80 +2912,54 @@ function signupPage() {
   const signupHasError = state.authForms.signup.tone === 'error' && Boolean(state.authForms.signup.message);
   const signupFeedbackMessage = signupHasError
     ? `ERROR: ${state.authForms.signup.message}`
-    : (state.authForms.signup.message || 'Complete all required fields to create your account.');
+    : (state.authForms.signup.message || 'Create your account with email and password.');
   return `
-    <section class="card form-card">
-      <h3>Create account</h3>
-      <p class="muted">Use your legal identity details so employers and recruiters can verify your profile.</p>
-      <p class="muted">Storage note: account records currently use in-memory backend storage for this environment.</p>
-      <p class="muted">Wyked Samurai Guild is a Safe for Work professional network, scenario platform, and job board. Access to the platform requires agreement with the Guild’s conduct and content standards.</p>
+    <section class="card form-card auth-signin-card">
+      <h3>Create Account</h3>
       <form id="signup-form" class="form-stack">
         <p id="signup-feedback" class="status-banner ${state.authForms.signup.message ? `status-${state.authForms.signup.tone}` : 'status-info'}${signupHasError ? ' auth-error-banner' : ''}" role="alert" aria-live="assertive">${escapeHtml(signupFeedbackMessage)}</p>
-        <section class="form-section">
-          <h4>Account Identity</h4>
-          <label>Legal Name
-            <input name="legalName" minlength="2" required />
-          </label>
-          <label>Primary Email
-            <input name="email" type="email" required />
-          </label>
-          <p class="muted">Primary email secures daily account access and login verification.</p>
-          <label>Password
-            <input name="password" type="password" minlength="12" required />
-          </label>
-          <p class="muted">${PASSWORD_POLICY_MESSAGE}</p>
-          <label>Confirm Password
-            <input name="confirmPassword" type="password" minlength="12" required />
-          </label>
-        </section>
-        <section class="form-section">
-          <h4>Role</h4>
-          <p class="muted">Select the role that best fits your guild access.</p>
-          <div class="radio-group">
-            <label class="radio-option">
-              <input type="radio" name="role" value="employee_member" required />
-              <span>Employee / Member</span>
-            </label>
-            <label class="radio-option">
-              <input type="radio" name="role" value="employer" />
-              <span>Employer</span>
-            </label>
-            <label class="radio-option">
-              <input type="radio" name="role" value="recruiter" />
-              <span>Recruiter</span>
-            </label>
-          </div>
-        </section>
-        <section class="form-section">
-          <h4>Organization</h4>
-          <label>Organization / Guild Name (optional)
-            <input name="organizationName" />
-          </label>
-        </section>
-        <section class="form-section">
-          <h4>Account Recovery</h4>
-          <label>Backup Email Address
-            <input name="backupEmail" type="email" />
-          </label>
-          <p class="muted">Backup email receives recovery and verification codes if you lose access to your primary email.</p>
-        </section>
-        <section class="form-section policy-consent-section">
-          <h4>Required Policy Agreement</h4>
-          <p class="muted">Wyked Samurai Guild is a Safe for Work professional platform. By creating an account, you agree to follow the Guild’s Code of Conduct, Content Policy, Platform Rules, and Privacy Policy.</p>
-          <label class="checkbox-option">
-            <input type="checkbox" name="policyAgreement" value="yes" />
-            <span>I have read and agree to the Wyked Samurai Guild Code of Conduct, Content Policy, Platform Rules, and Privacy Policy.</span>
-          </label>
-          <p class="muted">Review the full policies: <a href="#/code-of-conduct">Code of Conduct</a> · <a href="#/content-policy">Content Policy</a> · <a href="#/platform-rules">Terms / Platform Rules</a> · <a href="#/privacy">Privacy Policy</a></p>
-        </section>
-        <div class="actions">
-          <button class="pill-btn cta-primary" type="submit" id="signup-submit-btn" ${state.authForms.signup.loading ? 'disabled' : ''}>${state.authForms.signup.loading ? 'Creating Account...' : 'Create Account'}</button>
-        </div>
+        <label>Email
+          <input name="email" type="email" autocomplete="email" required />
+        </label>
+        <label>Password
+          <input name="password" type="password" autocomplete="new-password" required />
+        </label>
+        <label>Confirm Password
+          <input name="confirmPassword" type="password" autocomplete="new-password" required />
+        </label>
+        <button class="pill-btn cta-primary" type="submit" id="signup-submit-btn" ${state.authForms.signup.loading ? 'disabled' : ''}>${state.authForms.signup.loading ? 'Creating Account...' : 'Sign Up'}</button>
         <p class="muted" style="margin:8px 0 4px;">or</p>
         <div id="google-signup-button" aria-label="Continue with Google"></div>
       </form>
-      <p class="muted">Already have an account? <a href="#/login">Log In</a></p>
+      <p class="muted">Already have an account? <a href="#/login">Sign in.</a></p>
     </section>
+  `;
+}
+
+function authLoadingPage() {
+  return `
+    <div class="public-shell">
+      <main class="public-container public-content panel">
+        <section class="card form-card">
+          <h3>Loading Authentication</h3>
+          <p class="muted">Checking your session and preparing sign-in…</p>
+        </section>
+      </main>
+    </div>
+  `;
+}
+
+function configRequiredPage() {
+  return `
+    <div class="public-shell">
+      <main class="public-container public-content panel">
+        <section class="card form-card">
+          <h3>Configuration Required</h3>
+          <p class="muted">Supabase configuration is missing.</p>
+          <p class="muted">Set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code>, then redeploy.</p>
+        </section>
+      </main>
+    </div>
   `;
 }
 
@@ -3744,6 +3718,10 @@ function applyRouteGuards(path) {
   }
 
   if (known.requiresAuth && !isAuthenticated() && path !== POLICY_ACCEPT_ROUTE) {
+    return '/login';
+  }
+
+  if (!isAuthenticated() && path === '/') {
     return '/login';
   }
 
@@ -4789,12 +4767,12 @@ async function render() {
     let path = location.hash.replace('#', '') || '/';
 
     if (state.supabaseConfigMissing) {
-      document.getElementById('app').innerHTML = '<div class="public-shell"><main class="public-container public-content panel"><h2>Configuration Required</h2><p class="muted">Supabase configuration is missing. Set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code>, then redeploy.</p></main></div>';
+      document.getElementById('app').innerHTML = configRequiredPage();
       return;
     }
 
     if (state.auth.loading) {
-      document.getElementById('app').innerHTML = '<div class="public-shell"><main class="public-container public-content panel"><p class="muted">Authenticating session...</p></main></div>';
+      document.getElementById('app').innerHTML = authLoadingPage();
       return;
     }
 
@@ -4924,24 +4902,15 @@ async function render() {
       if (state.authForms.signup.loading) return;
       const formData = new FormData(signupForm);
       const payload = {
-        legalName: String(formData.get('legalName') || '').trim(),
         email: String(formData.get('email') || '').trim(),
         password: String(formData.get('password') || ''),
         confirmPassword: String(formData.get('confirmPassword') || ''),
-        role: String(formData.get('role') || ''),
-        organizationName: String(formData.get('organizationName') || '').trim(),
-        backupEmail: String(formData.get('backupEmail') || '').trim(),
-        policyAgreement: formData.get('policyAgreement') === 'yes',
       };
 
       const validationError = (() => {
-        if (!payload.legalName) return 'Legal Name is required.';
-        if (!payload.email || !isValidEmail(payload.email)) return 'Enter a valid Primary Email address.';
-        if (!isStrongPassword(payload.password)) return PASSWORD_POLICY_MESSAGE;
+        if (!payload.email || !isValidEmail(payload.email)) return 'Enter a valid email address.';
+        if (!payload.password) return 'Password is required.';
         if (payload.password !== payload.confirmPassword) return 'Password and Confirm Password must match.';
-        if (!payload.role) return 'Please select a role.';
-        if (payload.backupEmail && !isValidEmail(payload.backupEmail)) return 'Enter a valid Backup Email Address.';
-        if (!payload.policyAgreement) return 'You must agree to the Guild policies before creating an account.';
         return '';
       })();
       if (validationError) {
@@ -4959,17 +4928,13 @@ async function render() {
         delete requestPayload.confirmPassword;
         console.log('[auth:frontend] signup request payload prepared', {
           email: requestPayload.email,
-          role: requestPayload.role,
           fields: Object.keys(requestPayload),
         });
         const result = await signupWithSupabase({
           email: requestPayload.email,
           password: requestPayload.password,
           metadata: {
-            legalName: requestPayload.legalName,
-            role: requestPayload.role,
-            organizationName: requestPayload.organizationName,
-            backupEmail: requestPayload.backupEmail,
+            role: 'member',
           },
         });
         console.log('[auth:frontend] signup success', { userId: result?.user?.id, email: result?.user?.email });
