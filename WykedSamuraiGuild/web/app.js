@@ -15,14 +15,14 @@ const routes = {
 };
 
 const navItems = [
-  ['Home', '/app'],
-  ['Arena', '/arena'],
-  ['Guild', '/guild-world'],
-  ['World RP', '/guild-world'],
-  ['Members', '/members'],
-  ['Discussions', '/profile/scenario-chat'],
-  ['Profile Hub', '/profile'],
-  ['Recruiter Console', '/recruiter-console'],
+  { label: 'Home', path: '/app', icon: '🏠' },
+  { label: 'Arena', path: '/arena', icon: '⚔️' },
+  { label: 'Guild', path: '/guild-world', icon: '🌌' },
+  { label: 'World RP', path: '/guild-world', icon: '🧭' },
+  { label: 'Members', path: '/members', icon: '🧑‍🤝‍🧑' },
+  { label: 'Discussions', path: '/profile/scenario-chat', icon: '💬' },
+  { label: 'Profile Hub', path: '/profile', icon: '👤' },
+  { label: 'Recruiter Console', path: '/recruiter-console', icon: '🛰️' },
 ];
 
 const STARTER_TRIALS = [
@@ -273,9 +273,6 @@ const state = {
     messages: [],
     pending: false,
     error: '',
-    leftPanelCollapsed: arenaLayoutPrefs.leftPanelCollapsed,
-    rightPanelCollapsed: arenaLayoutPrefs.rightPanelCollapsed,
-    rightPanelTab: arenaLayoutPrefs.rightPanelTab,
     mobileLeftOpen: false,
     mobileRightOpen: false,
   },
@@ -285,6 +282,8 @@ const state = {
     error: '',
   },
   shell: {
+    leftSidebarCollapsed: arenaLayoutPrefs.leftSidebarCollapsed,
+    rightSidebarCollapsed: arenaLayoutPrefs.rightSidebarCollapsed,
     activePaneTab: 'connections',
     selectedConversation: '',
     chatOpen: false,
@@ -313,31 +312,28 @@ const SCENARIO_PROGRESS_STORAGE_PREFIX = 'wsg-scenario-progress';
 const PASSWORD_POLICY_MESSAGE = 'Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a special character.';
 const PASSWORD_POLICY_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$/;
 const GOOGLE_CLIENT_ID_META_KEY = 'wsg-google-client-id';
-const ARENA_LAYOUT_STORAGE_KEY = 'wsg-arena-layout';
+const SHELL_LAYOUT_STORAGE_KEY = 'wsg-shell-layout';
 
 let googleInitialized = false;
 
 function loadArenaLayoutPrefs() {
   try {
-    const raw = localStorage.getItem(ARENA_LAYOUT_STORAGE_KEY);
+    const raw = localStorage.getItem(SHELL_LAYOUT_STORAGE_KEY);
     if (!raw) {
       return {
-        leftPanelCollapsed: false,
-        rightPanelCollapsed: false,
-        rightPanelTab: 'connections',
+        leftSidebarCollapsed: false,
+        rightSidebarCollapsed: false,
       };
     }
     const parsed = JSON.parse(raw);
     return {
-      leftPanelCollapsed: Boolean(parsed.leftPanelCollapsed),
-      rightPanelCollapsed: Boolean(parsed.rightPanelCollapsed),
-      rightPanelTab: ['connections', 'chat', 'participants', 'status'].includes(parsed.rightPanelTab) ? parsed.rightPanelTab : 'connections',
+      leftSidebarCollapsed: Boolean(parsed.leftSidebarCollapsed),
+      rightSidebarCollapsed: Boolean(parsed.rightSidebarCollapsed),
     };
   } catch {
     return {
-      leftPanelCollapsed: false,
-      rightPanelCollapsed: false,
-      rightPanelTab: 'connections',
+      leftSidebarCollapsed: false,
+      rightSidebarCollapsed: false,
     };
   }
 }
@@ -345,11 +341,10 @@ function loadArenaLayoutPrefs() {
 function persistArenaLayoutPrefs() {
   try {
     localStorage.setItem(
-      ARENA_LAYOUT_STORAGE_KEY,
+      SHELL_LAYOUT_STORAGE_KEY,
       JSON.stringify({
-        leftPanelCollapsed: state.arena.leftPanelCollapsed,
-        rightPanelCollapsed: state.arena.rightPanelCollapsed,
-        rightPanelTab: state.arena.rightPanelTab,
+        leftSidebarCollapsed: state.shell.leftSidebarCollapsed,
+        rightSidebarCollapsed: state.shell.rightSidebarCollapsed,
       })
     );
   } catch {
@@ -1048,6 +1043,7 @@ function selectedConnection() {
 }
 
 function SocialSidebar() {
+  const isCollapsed = state.shell.rightSidebarCollapsed;
   const connections = state.network.connections || [];
   const selectedConversation = state.shell.selectedConversation || state.directChat.activeConnectionId || '';
   const friendsOnline = connections.filter((connection) => connection.status === 'online').length || Math.min(connections.length, 4);
@@ -1092,10 +1088,15 @@ function SocialSidebar() {
 
   return `
     <section class="global-utility-pane">
-      <div class="utility-tab-switcher">
-        <button type="button" class="utility-tab-btn ${state.shell.activePaneTab === 'connections' ? 'active' : ''}" data-pane-tab="connections">Connections</button>
-        <button type="button" class="utility-tab-btn ${state.shell.activePaneTab === 'chat' ? 'active' : ''}" data-pane-tab="chat">Chat</button>
+      <div class="utility-pane-head">
+        <h3>${isCollapsed ? '↔' : 'Comms'}</h3>
+        <button type="button" class="panel-toggle-btn" id="right-sidebar-toggle" aria-label="${isCollapsed ? 'Expand right sidebar' : 'Collapse right sidebar'}">${isCollapsed ? '⟨' : '⟩'}</button>
       </div>
+      <div class="utility-tab-switcher ${isCollapsed ? 'is-collapsed' : ''}">
+        <button type="button" class="utility-tab-btn ${state.shell.activePaneTab === 'connections' ? 'active' : ''}" data-pane-tab="connections" title="Connections">🔌 ${isCollapsed ? '' : 'Connections'}</button>
+        <button type="button" class="utility-tab-btn ${state.shell.activePaneTab === 'chat' ? 'active' : ''}" data-pane-tab="chat" title="Chat">💬 ${isCollapsed ? '' : 'Chat'}</button>
+      </div>
+      ${isCollapsed ? '' : `
       ${state.shell.activePaneTab === 'connections' ? `
         <div class="social-rail-block">
           <h3>Connections</h3>
@@ -1110,6 +1111,7 @@ function SocialSidebar() {
           <h3>Conversations</h3>
           <ul class="conversation-compact-list">${conversationItems}</ul>
         </div>
+      `}
       `}
     </section>
   `;
@@ -1156,19 +1158,30 @@ function ChatDock() {
 }
 
 function Sidebar(path, key) {
+  const isCollapsed = state.shell.leftSidebarCollapsed;
   return `
-    <aside class="left-sidebar panel ${key === 'home' ? 'home-left-sidebar' : ''}">
+    <aside class="left-sidebar panel ${key === 'home' ? 'home-left-sidebar' : ''} ${isCollapsed ? 'is-collapsed' : ''}">
       <div class="left-pane-brand">
+        <div class="sidebar-toggle-row">
+          <button type="button" class="panel-toggle-btn" id="left-sidebar-toggle" aria-label="${isCollapsed ? 'Expand left sidebar' : 'Collapse left sidebar'}">${isCollapsed ? '⟩' : '⟨'}</button>
+        </div>
         <div class="guild-lockup">
           ${guildBrandMark({ compact: true, className: 'sidebar-brand-mark' })}
-          <div>
+          <div class="${isCollapsed ? 'hide-collapsed' : ''}">
             <p class="lockup-title">Wyked Samurai</p>
             <p class="muted">Command Menu</p>
           </div>
         </div>
       </div>
       <ul class="nav-list">
-        ${navItems.map(([label, target]) => `<li><a href="${linkFor(target)}" class="${path === target ? 'active' : ''}">${label}</a></li>`).join('')}
+        ${navItems.map((item) => `
+          <li>
+            <a href="${linkFor(item.path)}" class="${path === item.path ? 'active' : ''}" title="${escapeAttr(item.label)}">
+              <span class="nav-icon">${item.icon}</span>
+              <span class="${isCollapsed ? 'hide-collapsed' : ''}">${item.label}</span>
+            </a>
+          </li>
+        `).join('')}
       </ul>
     </aside>
   `;
@@ -1231,7 +1244,7 @@ function Header() {
 function AppShell(path, key, pageHtml, statusMarkup) {
   const [title, subtitle] = pageTitle(key);
   return `
-    <div class="app-shell">
+    <div class="app-shell ${state.shell.leftSidebarCollapsed ? 'is-left-sidebar-collapsed' : ''} ${state.shell.rightSidebarCollapsed ? 'is-right-sidebar-collapsed' : ''}">
       ${Header()}
       ${Sidebar(path, key)}
       ${MainContent(key, title, subtitle, statusMarkup, pageHtml)}
@@ -1398,11 +1411,7 @@ function landingPage() {
 function arenaPage() {
   const activeTrial = getActiveTrial();
   const hasActiveTrial = Boolean(activeTrial);
-  const participantCount = Math.max((state.network.connections || []).slice(0, 6).length, 1);
   const isRoleplayMode = state.mode === 'roleplay';
-  const isCompactViewport = window.matchMedia('(max-width: 1180px)').matches;
-  const leftCollapsed = isCompactViewport ? !state.arena.mobileLeftOpen : state.arena.leftPanelCollapsed;
-  const rightCollapsed = isCompactViewport ? !state.arena.mobileRightOpen : state.arena.rightPanelCollapsed;
   const trialCards = (isRoleplayMode ? ROLEPLAY_ROOMS : STARTER_TRIALS)
     .map((trialOrRoom) => {
       const trialId = isRoleplayMode ? trialOrRoom.trialId : trialOrRoom.id;
@@ -1441,89 +1450,8 @@ function arenaPage() {
     )
     .join('');
 
-  const rightTab = state.arena.rightPanelTab;
-  const rightPanelBody = (() => {
-    if (rightTab === 'participants') {
-      return `
-        <section class="participant-grid">
-          ${(state.network.connections || []).slice(0, 8).map((connection) => `
-            <article class="participant-card">
-              <div class="participant-avatar">${avatarMarkup(connection, 'md')}</div>
-              <div>
-                <strong>${escapeHtml(connection.displayName || connection.username)}</strong>
-                <p class="muted">${escapeHtml(connection.role || 'member')}</p>
-              </div>
-              <span class="participant-status">${escapeHtml(connection.status || 'live')}</span>
-            </article>
-          `).join('') || '<p class="muted">No participants connected yet.</p>'}
-        </section>
-      `;
-    }
-    if (rightTab === 'status') {
-      return hasActiveTrial
-        ? `
-          <ul class="status-list">
-            <li><span class="muted">Title</span><strong>${activeTrial.title}</strong></li>
-            <li><span class="muted">Mode</span><strong>${state.mode === 'roleplay' ? 'Roleplay Room' : 'Arena Scenario'}</strong></li>
-            <li><span class="muted">Difficulty</span><strong>${activeTrial.difficulty}</strong></li>
-            <li><span class="muted">Role Focus</span><strong>${activeTrial.suggestedRole || 'Unspecified'}</strong></li>
-            <li><span class="muted">Participants</span><strong>${participantCount}</strong></li>
-          </ul>
-        `
-        : '<p class="muted">No active session yet. Start a scenario to show status details.</p>';
-    }
-    if (rightTab === 'chat') {
-      return `
-        <ul class="compact-list">
-          ${state.arena.messages.slice(-8).map((message) => `
-            <li>
-              <div>
-                <strong>${escapeHtml(message.type === 'user' ? 'You' : (message.type === 'system' ? 'System' : 'Guide'))}</strong>
-                <p class="muted" style="margin:4px 0 0;">${escapeHtml(message.content).slice(0, 96)}${message.content.length > 96 ? '…' : ''}</p>
-              </div>
-            </li>
-          `).join('') || '<li><span class="muted">No chat messages yet.</span></li>'}
-        </ul>
-      `;
-    }
-    return `
-      <ul class="compact-list">
-        ${(state.network.connections || []).slice(0, 8).map((connection) => `
-          <li>
-            <div>
-              <strong>${escapeHtml(connection.displayName || connection.username)}</strong>
-              <p class="muted" style="margin:4px 0 0;">${escapeHtml(connection.status || 'offline')}</p>
-            </div>
-            <button class="pill-btn open-direct-chat-btn" data-connection-id="${escapeAttr(connection.id)}">Message</button>
-          </li>
-        `).join('') || '<li><span class="muted">No connections available.</span></li>'}
-      </ul>
-    `;
-  })();
-
   return `
-    <section class="workspace-layout arena-layout ${leftCollapsed ? 'is-left-collapsed' : ''} ${rightCollapsed ? 'is-right-collapsed' : ''} ${isCompactViewport ? 'is-mobile' : ''} ${state.arena.mobileLeftOpen ? 'is-mobile-left-open' : ''} ${state.arena.mobileRightOpen ? 'is-mobile-right-open' : ''}">
-      <aside class="workspace-col card arena-left-panel">
-        <div class="arena-panel-head">
-          <h3>${leftCollapsed ? 'Arena' : 'Navigation'}</h3>
-          <button type="button" class="panel-toggle-btn" id="arena-left-panel-toggle" aria-label="${leftCollapsed ? 'Expand left panel' : 'Collapse left panel'}">${leftCollapsed ? '⟩' : '⟨'}</button>
-        </div>
-        <nav class="arena-side-nav">
-          <a class="${location.hash === linkFor('/app') ? 'active' : ''}" href="${linkFor('/app')}">🏠 ${leftCollapsed ? '' : 'Home'}</a>
-          <a class="active" href="${linkFor('/arena')}">⚔️ ${leftCollapsed ? '' : 'Arena'}</a>
-          <a class="${location.hash === linkFor('/guild-world') ? 'active' : ''}" href="${linkFor('/guild-world')}">🌌 ${leftCollapsed ? '' : 'Guild'}</a>
-          <a class="${location.hash === linkFor('/profile') ? 'active' : ''}" href="${linkFor('/profile')}">👤 ${leftCollapsed ? '' : 'Profile'}</a>
-        </nav>
-        <section class="arena-side-block">
-          <h4>${leftCollapsed ? '⚡' : 'Mode'}</h4>
-          ${leftCollapsed ? '' : `<p class="muted">${isRoleplayMode ? 'Roleplay rooms active.' : 'Professional scenario mode active.'}</p>`}
-        </section>
-        <section class="arena-side-block">
-          <h4>${leftCollapsed ? '📌' : 'Active'}</h4>
-          ${leftCollapsed ? '' : `<p class="muted">${hasActiveTrial ? activeTrial.title : 'No active scenario selected.'}</p>`}
-        </section>
-      </aside>
-      <section class="workspace-col card arena-main-column">
+    <section class="arena-main-column">
         <section class="arena-selection-tier arena-scenario-strip">
           <div class="arena-selection-head">
             <h3>${isRoleplayMode ? 'Roleplay Room Strip' : 'Scenario Strip'}</h3>
@@ -1552,22 +1480,6 @@ function arenaPage() {
           </form>
           ${state.arena.error ? `<p class="muted" style="color:#ff7b7b;margin-top:8px;" role="alert">${escapeHtml(state.arena.error)}</p>` : ''}
         </section>
-      </section>
-      <aside class="workspace-col card arena-right-panel">
-        <div class="arena-panel-head">
-          <h3>${rightCollapsed ? 'Tools' : 'Control Hub'}</h3>
-          <button type="button" class="panel-toggle-btn" id="arena-right-panel-toggle" aria-label="${rightCollapsed ? 'Expand right panel' : 'Collapse right panel'}">${rightCollapsed ? '⟨' : '⟩'}</button>
-        </div>
-        <div class="arena-right-tabs">
-          <button type="button" class="utility-tab-btn ${rightTab === 'connections' ? 'active' : ''}" data-arena-tab="connections" title="Connections">🔌 ${rightCollapsed ? '' : 'Connections'}</button>
-          <button type="button" class="utility-tab-btn ${rightTab === 'chat' ? 'active' : ''}" data-arena-tab="chat" title="Chat">💬 ${rightCollapsed ? '' : 'Chat'}</button>
-          <button type="button" class="utility-tab-btn ${rightTab === 'participants' ? 'active' : ''}" data-arena-tab="participants" title="Participants">🧑‍🤝‍🧑 ${rightCollapsed ? '' : 'Participants'}</button>
-          <button type="button" class="utility-tab-btn ${rightTab === 'status' ? 'active' : ''}" data-arena-tab="status" title="Status">📊 ${rightCollapsed ? '' : 'Status'}</button>
-        </div>
-        <section class="arena-right-content">
-          ${rightCollapsed ? '' : rightPanelBody}
-        </section>
-      </aside>
     </section>
   `;
 }
@@ -2570,46 +2482,6 @@ function attachProfileEditHandler() {
 }
 
 function attachArenaHandlers() {
-  const leftPanelToggle = document.getElementById('arena-left-panel-toggle');
-  if (leftPanelToggle) {
-    leftPanelToggle.onclick = () => {
-      if (window.matchMedia('(max-width: 1180px)').matches) {
-        state.arena.mobileLeftOpen = !state.arena.mobileLeftOpen;
-        if (state.arena.mobileLeftOpen) {
-          state.arena.mobileRightOpen = false;
-        }
-      } else {
-        state.arena.leftPanelCollapsed = !state.arena.leftPanelCollapsed;
-        persistArenaLayoutPrefs();
-      }
-      render();
-    };
-  }
-
-  const rightPanelToggle = document.getElementById('arena-right-panel-toggle');
-  if (rightPanelToggle) {
-    rightPanelToggle.onclick = () => {
-      if (window.matchMedia('(max-width: 1180px)').matches) {
-        state.arena.mobileRightOpen = !state.arena.mobileRightOpen;
-        if (state.arena.mobileRightOpen) {
-          state.arena.mobileLeftOpen = false;
-        }
-      } else {
-        state.arena.rightPanelCollapsed = !state.arena.rightPanelCollapsed;
-        persistArenaLayoutPrefs();
-      }
-      render();
-    };
-  }
-
-  document.querySelectorAll('[data-arena-tab]').forEach((button) => {
-    button.onclick = () => {
-      state.arena.rightPanelTab = String(button.getAttribute('data-arena-tab') || 'connections');
-      persistArenaLayoutPrefs();
-      render();
-    };
-  });
-
   const startButtons = document.querySelectorAll('.start-trial-btn');
   startButtons.forEach((button) => {
     button.onclick = () => {
@@ -2733,6 +2605,24 @@ function attachHomeChatHandlers() {
 
 
 function attachChatPaneHandlers() {
+  const leftSidebarToggle = document.getElementById('left-sidebar-toggle');
+  if (leftSidebarToggle) {
+    leftSidebarToggle.onclick = () => {
+      state.shell.leftSidebarCollapsed = !state.shell.leftSidebarCollapsed;
+      persistArenaLayoutPrefs();
+      render();
+    };
+  }
+
+  const rightSidebarToggle = document.getElementById('right-sidebar-toggle');
+  if (rightSidebarToggle) {
+    rightSidebarToggle.onclick = () => {
+      state.shell.rightSidebarCollapsed = !state.shell.rightSidebarCollapsed;
+      persistArenaLayoutPrefs();
+      render();
+    };
+  }
+
   document.querySelectorAll('[data-pane-tab]').forEach((button) => {
     button.onclick = () => {
       const nextTab = String(button.getAttribute('data-pane-tab') || 'connections');

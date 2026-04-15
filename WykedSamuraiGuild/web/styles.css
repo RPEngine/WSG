@@ -65,8 +65,10 @@ body {
 }
 
 .app-shell {
+  --left-sidebar-width: 250px;
+  --right-sidebar-width: 320px;
   display: grid;
-  grid-template-columns: 260px 1fr 320px;
+  grid-template-columns: var(--left-sidebar-width) minmax(0, 1fr) var(--right-sidebar-width);
   grid-template-rows: 76px 1fr;
   grid-template-areas:
     "header header header"
@@ -76,6 +78,14 @@ body {
   padding: 14px;
   padding-bottom: 260px;
   position: relative;
+}
+
+.app-shell.is-left-sidebar-collapsed {
+  --left-sidebar-width: 72px;
+}
+
+.app-shell.is-right-sidebar-collapsed {
+  --right-sidebar-width: 72px;
 }
 
 .public-shell {
@@ -178,7 +188,7 @@ body {
 .icon-btn { width: 38px; height: 38px; border-radius: 12px; cursor: pointer; }
 .avatar { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-weight: 600; }
 
-.left-sidebar { grid-area: left; padding: 16px; }
+.left-sidebar { grid-area: left; padding: 16px; overflow: hidden; }
 .right-sidebar {
   grid-area: right;
   padding: 12px;
@@ -192,7 +202,42 @@ body {
 .nav-list { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 8px; }
 .nav-list a {
   display: flex; text-decoration: none; color: var(--text-main);
+  align-items: center;
+  gap: 10px;
   padding: 11px 12px; border-radius: 12px; border: 1px solid transparent;
+}
+
+.nav-icon {
+  min-width: 18px;
+  text-align: center;
+}
+
+.sidebar-toggle-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.hide-collapsed {
+  display: inline;
+}
+
+.left-sidebar.is-collapsed .guild-lockup {
+  justify-content: center;
+}
+
+.left-sidebar.is-collapsed .sidebar-toggle-row {
+  justify-content: center;
+}
+
+.left-sidebar.is-collapsed .hide-collapsed {
+  display: none;
+}
+
+.left-sidebar.is-collapsed .nav-list a {
+  justify-content: center;
+  padding-left: 8px;
+  padding-right: 8px;
 }
 .nav-list a.active, .nav-list a:hover {
   background: var(--accent-soft);
@@ -591,26 +636,7 @@ body {
 }
 
 .arena-layout {
-  --arena-left-width: 260px;
-  --arena-right-width: 320px;
-  grid-template-columns: var(--arena-left-width) minmax(0, 1fr) var(--arena-right-width);
   align-items: stretch;
-}
-
-.arena-layout.is-left-collapsed {
-  --arena-left-width: 72px;
-}
-
-.arena-layout.is-right-collapsed {
-  --arena-right-width: 72px;
-}
-
-.arena-left-panel,
-.arena-right-panel {
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
-  gap: 10px;
-  overflow: hidden;
 }
 
 .arena-panel-head {
@@ -634,58 +660,12 @@ body {
   cursor: pointer;
 }
 
-.arena-side-nav {
-  display: grid;
-  gap: 8px;
-}
-
-.arena-side-nav a {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  text-decoration: none;
-  color: var(--text-main);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 10px;
-  background: rgba(255, 255, 255, 0.01);
-}
-
-.arena-side-nav a.active {
-  border-color: var(--ring);
-  background: var(--accent-soft);
-}
-
-.arena-side-block {
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 10px;
-  background: rgba(0, 0, 0, 0.16);
-}
-
-.arena-side-block h4 {
-  margin: 0 0 6px;
-}
-
-.arena-layout.is-left-collapsed .arena-left-panel {
-  align-content: start;
-}
-
-.arena-layout.is-left-collapsed .arena-side-nav a {
-  justify-content: center;
-  font-size: 1rem;
-}
-
-.arena-layout.is-left-collapsed .arena-side-block {
-  text-align: center;
-  padding: 8px;
-}
-
 .arena-main-column {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 14px;
   min-height: 72vh;
+  height: calc(100vh - 210px);
 }
 
 .arena-selection-tier {
@@ -725,12 +705,7 @@ body {
 .workspace-layout {
   display: grid;
   gap: 12px;
-  grid-template-columns: 260px minmax(0, 1fr) 320px;
-}
-
-.workspace-col {
-  min-height: 620px;
-  overflow: auto;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .trial-list {
@@ -901,22 +876,27 @@ body {
   padding-top: 10px;
 }
 
-.arena-right-tabs {
+.utility-pane-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.utility-pane-head h3 {
+  margin: 0;
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.utility-tab-switcher.is-collapsed {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.arena-right-content {
-  min-height: 0;
-  overflow: auto;
-}
-
-.arena-layout.is-right-collapsed .arena-right-tabs {
   grid-template-columns: 1fr;
 }
 
-.arena-layout.is-right-collapsed .arena-right-tabs .utility-tab-btn {
+.app-shell.is-right-sidebar-collapsed .utility-tab-btn {
   justify-content: center;
 }
 
