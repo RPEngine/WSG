@@ -848,6 +848,43 @@ body {
   overflow: hidden;
 }
 
+.roleplay-nexus-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+  gap: 14px;
+  min-height: 0;
+  height: 100%;
+}
+
+.roleplay-nexus-main {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.roleplay-nexus-header {
+  padding: 12px 14px;
+  border-radius: 12px;
+}
+
+.roleplay-nexus-header h2 {
+  margin: 0 0 6px;
+}
+
+.roleplay-nexus-header p {
+  margin: 0;
+}
+
+.roleplay-nexus-chat {
+  min-height: 64vh;
+}
+
+.roleplay-nexus-side {
+  display: flex;
+  align-items: flex-start;
+}
+
 .arena-selection-tier {
   display: flex;
   flex-direction: column;
@@ -2259,6 +2296,14 @@ select:focus-visible {
 
   .arena-card-carousel {
     grid-auto-columns: minmax(260px, 320px);
+  }
+
+  .roleplay-nexus-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .roleplay-nexus-side {
+    order: 2;
   }
 }
 
