@@ -1,26 +1,38 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const SUPABASE_URL = (
-  import.meta?.env?.VITE_SUPABASE_URL
-  || window.VITE_SUPABASE_URL
-  || window.WSG_SUPABASE_URL
-  || ''
-).trim();
+function normalizeEnvValue(value) {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  if (trimmed === 'undefined' || trimmed === 'null') return '';
+  return trimmed;
+}
 
-const SUPABASE_ANON_KEY = (
-  import.meta?.env?.VITE_SUPABASE_ANON_KEY
-  || window.VITE_SUPABASE_ANON_KEY
-  || window.WSG_SUPABASE_ANON_KEY
-  || ''
-).trim();
+const envSupabaseUrl = normalizeEnvValue(import.meta.env?.VITE_SUPABASE_URL);
+const envSupabaseAnonKey = normalizeEnvValue(import.meta.env?.VITE_SUPABASE_ANON_KEY);
+
+// Runtime fallback for static deployments (e.g. Render static site without Vite build-time env injection).
+const runtimeSupabaseUrl = normalizeEnvValue(
+  window.WSG_SUPABASE_URL || document.querySelector('meta[name="wsg-supabase-url"]')?.content,
+);
+const runtimeSupabaseAnonKey = normalizeEnvValue(
+  window.WSG_SUPABASE_ANON_KEY || document.querySelector('meta[name="wsg-supabase-anon-key"]')?.content,
+);
+
+const SUPABASE_URL = envSupabaseUrl || runtimeSupabaseUrl;
+const SUPABASE_ANON_KEY = envSupabaseAnonKey || runtimeSupabaseAnonKey;
 
 export const supabaseConfig = {
   urlPresent: Boolean(SUPABASE_URL),
   keyPresent: Boolean(SUPABASE_ANON_KEY),
+  usingViteEnvUrl: Boolean(envSupabaseUrl),
+  usingViteEnvKey: Boolean(envSupabaseAnonKey),
 };
 
 console.info(`[supabase] Supabase URL present: ${supabaseConfig.urlPresent ? 'yes' : 'no'}`);
 console.info(`[supabase] Supabase key present: ${supabaseConfig.keyPresent ? 'yes' : 'no'}`);
+console.info(`[supabase] Supabase URL from Vite env: ${supabaseConfig.usingViteEnvUrl ? 'yes' : 'no'}`);
+console.info(`[supabase] Supabase key from Vite env: ${supabaseConfig.usingViteEnvKey ? 'yes' : 'no'}`);
 
 if (!supabaseConfig.urlPresent || !supabaseConfig.keyPresent) {
   console.warn('[supabase] Missing Supabase URL or anon key. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in frontend runtime env.');

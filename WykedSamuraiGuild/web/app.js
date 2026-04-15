@@ -3545,8 +3545,9 @@ function clearAuthSession() {
 
 async function bootstrapAuth() {
   state.auth.loading = true;
+  state.supabaseConfigMissing = !(supabaseConfig.urlPresent && supabaseConfig.keyPresent);
 
-  if (!supabase) {
+  if (state.supabaseConfigMissing || !supabase) {
     state.supabaseConfigMissing = true;
     clearAuthSession();
     return;
@@ -5139,6 +5140,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   console.log('[wsg] Resolved API base URL:', resolvedApiBaseUrl || '(same-origin)');
   console.info(`[wsg] Supabase URL present: ${supabaseConfig.urlPresent ? 'yes' : 'no'}`);
   console.info(`[wsg] Supabase key present: ${supabaseConfig.keyPresent ? 'yes' : 'no'}`);
+  console.info(`[wsg] Supabase configuration missing: ${(!supabaseConfig.urlPresent || !supabaseConfig.keyPresent) ? 'yes' : 'no'}`);
   await bootstrapAuth();
   render();
 });
