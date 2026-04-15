@@ -370,6 +370,7 @@ const state = {
     leftSidebarCollapsed: arenaLayoutPrefs.leftSidebarCollapsed,
     rightSidebarCollapsed: arenaLayoutPrefs.rightSidebarCollapsed,
     isScenarioStripCollapsed: arenaLayoutPrefs.scenarioStripCollapsed,
+    headerCollapsed: loadHeaderCollapsedPreference(),
     activePaneTab: 'connections',
     selectedConversation: '',
     chatOpen: false,
@@ -402,6 +403,7 @@ const PASSWORD_POLICY_MESSAGE = 'Password must be at least 8 characters and incl
 const PASSWORD_POLICY_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$/;
 const GOOGLE_CLIENT_ID_META_KEY = 'wsg-google-client-id';
 const SHELL_LAYOUT_STORAGE_KEY = 'wsg-shell-layout';
+const HEADER_COLLAPSED_STORAGE_KEY = 'ui.headerCollapsed';
 const HOME_ROUTE = '/app';
 const ONBOARDING_ROUTE = `/scenario/${FIRST_SCENARIO_ID}`;
 
@@ -429,6 +431,27 @@ function loadArenaLayoutPrefs() {
       rightSidebarCollapsed: false,
       scenarioStripCollapsed: false,
     };
+  }
+}
+
+function loadHeaderCollapsedPreference() {
+  const mobileDefault = window.matchMedia('(max-width: 800px)').matches;
+  try {
+    const stored = localStorage.getItem(HEADER_COLLAPSED_STORAGE_KEY);
+    if (stored === null) {
+      return mobileDefault;
+    }
+    return stored === 'true';
+  } catch {
+    return mobileDefault;
+  }
+}
+
+function persistHeaderCollapsedPreference() {
+  try {
+    localStorage.setItem(HEADER_COLLAPSED_STORAGE_KEY, String(state.shell.headerCollapsed));
+  } catch {
+    // no-op: localStorage might be unavailable
   }
 }
 
@@ -1523,11 +1546,13 @@ function SiteFooter() {
 }
 
 function Header() {
+  const isCollapsed = state.shell.headerCollapsed;
   return `
-    <header class="header panel">
+    <header class="header panel ${isCollapsed ? 'is-collapsed' : ''}">
+      <button type="button" class="header-collapse-btn" id="header-collapse-toggle" aria-label="${isCollapsed ? 'Expand header' : 'Collapse header'}" title="${isCollapsed ? 'Expand header' : 'Collapse header'}">${isCollapsed ? '▼' : '▲'}</button>
       <div class="brand">
         ${guildBrandMark({ className: 'header-brand-mark' })}
-        <div>
+        <div class="header-brand-copy">
           <div class="title">Wyked Samurai Guild</div>
           <div class="subtitle">Strategic Guild Network • Nebula Nexus</div>
         </div>
@@ -1537,8 +1562,7 @@ function Header() {
           <button id="professional-mode" class="${state.mode === 'professional' ? 'active' : ''}">Professional</button>
           <button id="roleplay-mode" class="${state.mode === 'roleplay' ? 'active' : ''}">Roleplay</button>
         </div>
-        <button class="icon-btn" title="Notifications" aria-label="notifications">◉</button>
-        ${state.currentUser ? `<span class="muted">${state.currentUser.displayName}</span>${avatarMarkup(state.currentUser, 'md')}<button class="pill-btn" id="logout-btn">Log out</button>` : '<a class="pill-btn" href="#/login">Log in</a>'}
+        ${state.currentUser ? `${avatarMarkup(state.currentUser, 'md')}<button class="pill-btn ${isCollapsed ? 'hide-when-header-collapsed' : ''}" id="logout-btn">Log out</button>` : '<a class="pill-btn" href="#/login">Log in</a>'}
       </div>
     </header>
   `;
@@ -1547,7 +1571,7 @@ function Header() {
 function AppShell(path, key, pageHtml, statusMarkup, pageSet) {
   const [title, subtitle] = pageTitle(key);
   return `
-    <div class="app-shell page-set ${pageSet} ${state.shell.leftSidebarCollapsed ? 'is-left-sidebar-collapsed' : ''} ${state.shell.rightSidebarCollapsed ? 'is-right-sidebar-collapsed' : ''}">
+    <div class="app-shell page-set ${pageSet} ${state.shell.leftSidebarCollapsed ? 'is-left-sidebar-collapsed' : ''} ${state.shell.rightSidebarCollapsed ? 'is-right-sidebar-collapsed' : ''} ${state.shell.headerCollapsed ? 'is-header-collapsed' : ''}">
       ${Header()}
       ${Sidebar(path, key)}
       ${MainContent(key, title, subtitle, statusMarkup, pageHtml)}
@@ -3353,6 +3377,15 @@ function attachChatPaneHandlers() {
 }
 
 function attachHeaderActions() {
+  const collapseToggleButton = document.getElementById('header-collapse-toggle');
+  if (collapseToggleButton) {
+    collapseToggleButton.onclick = () => {
+      state.shell.headerCollapsed = !state.shell.headerCollapsed;
+      persistHeaderCollapsedPreference();
+      render();
+    };
+  }
+
   const professionalModeButton = document.getElementById('professional-mode');
   if (professionalModeButton) {
     professionalModeButton.onclick = () => setMode('professional');
