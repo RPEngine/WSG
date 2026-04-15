@@ -207,7 +207,6 @@ const SCENARIO_BLUEPRINTS = Object.freeze({
 
 const BRAND_ASSETS = Object.freeze({
   logo: 'assets/branding/wyked-samurai-guild-logo-design.svg',
-  hero: 'assets/branding/wyked-samurai-under-the-glowing-moon.svg',
 });
 
 
@@ -799,11 +798,11 @@ const connectionChecks = {
 };
 
 function card(title, body) {
-  return `<section class="card"><h3>${title}</h3>${body}</section>`;
+  return `<section class="card panel-surface panel-surface--transparent"><h3>${title}</h3>${body}</section>`;
 }
 
 function GlowCard({ title, body, className = '' }) {
-  return `<section class="card glow-card ${className}"><h3>${escapeHtml(title)}</h3>${body}</section>`;
+  return `<section class="card glow-card panel-surface panel-surface--soft ${className}"><h3>${escapeHtml(title)}</h3>${body}</section>`;
 }
 
 function ScenarioCard({ title, summary, status, timeRemaining, tone = 'harbor' }) {
@@ -1485,7 +1484,7 @@ function arenaPage() {
 
   return `
     <section class="arena-main-column">
-        <section class="arena-selection-tier arena-scenario-strip ${isScenarioStripCollapsed ? 'is-collapsed' : ''}">
+        <section class="arena-selection-tier arena-scenario-strip panel-surface panel-surface--soft ${isScenarioStripCollapsed ? 'is-collapsed' : ''}">
           <div class="arena-selection-head">
             <div class="arena-selection-head-copy">
               <h3>${stripTitle}</h3>
@@ -1509,7 +1508,7 @@ function arenaPage() {
             ${trialCards}
           </div>
         </section>
-        <section class="scenario-experience-panel arena-chat-panel">
+        <section class="scenario-experience-panel arena-chat-panel panel-surface panel-surface--transparent">
           <div class="scenario-panel-head arena-chat-head">
             <div>
               <p class="hero-kicker">${isRoleplayMode ? 'Room Chat' : 'Arena Chat'}</p>
@@ -1642,7 +1641,7 @@ function scenarioDetailPage(path) {
 
 function guildPage() {
   return `
-    <section class="scenario-hero guild-hero">
+    <section class="scenario-hero guild-hero panel-surface panel-surface--soft">
       <p class="hero-kicker">World RP</p>
       <h3>Living World Nexus</h3>
       <p class="hero-description">Follow roleplay dispatches, jump into featured locations, and track recent story beats across the guild world.</p>
@@ -1707,9 +1706,7 @@ function profilePage() {
   const layerSkillsLabel = activeLayer === 'free' ? 'Basic Tags' : 'Tags / Skills';
 
   return `
-    <section class="feature profile-display-hero guild-identity-hero">
-      <img class="profile-hero-image" src="${BRAND_ASSETS.hero}" alt="Moonlit samurai hero art" loading="eager" decoding="async" />
-      <div class="nebula-halo"></div>
+    <section class="feature profile-display-hero guild-identity-hero panel-surface panel-surface--transparent">
       <div class="profile-summary-row">
         ${avatarMarkup(profile, 'lg')}
         <div>
@@ -1730,7 +1727,7 @@ function profilePage() {
       </div>
     </section>
 
-    <section class="card profile-tabs-card" style="margin-top:12px;">
+    <section class="card profile-tabs-card panel-surface panel-surface--soft" style="margin-top:12px;">
       <div class="tabs profile-tabs">
         <button class="active" type="button">Overview</button>
         <button type="button">Arena Contributions</button>
@@ -1740,7 +1737,7 @@ function profilePage() {
       <p class="muted" style="margin-top:10px;">Profile insights and contribution history panels are currently placeholder content backed by live account data above.</p>
     </section>
 
-    <section class="card profile-edit-section">
+    <section class="card profile-edit-section panel-surface panel-surface--transparent">
       <h3>Profile Layers</h3>
       <p class="muted">Edit each unlocked layer independently. Locked layers show upgrade messaging only for now.</p>
       <div id="profile-layer-tabs" class="actions profile-layer-actions" style="margin-bottom:10px;">${tabMarkup}</div>
@@ -1761,7 +1758,7 @@ function profilePage() {
       `}
     </section>
 
-    <section class="card profile-edit-section" style="margin-top:12px;">
+    <section class="card profile-edit-section panel-surface panel-surface--transparent" style="margin-top:12px;">
       <h3>Account Settings</h3>
       <p class="muted">Account settings stay global to your user account (not per layer).</p>
       <form id="profile-hub-form" class="form-stack">
@@ -1943,14 +1940,14 @@ function recruiterPage() {
   return layoutColumns({
     className: 'recruiter-layout',
     left: `
-      <section class="recruiter-hero recruiter-command-hero">
+      <section class="recruiter-hero recruiter-command-hero panel-surface panel-surface--soft">
         <p class="hero-kicker">Wyked Samurai Guild</p>
         <h3>Recruiter Console</h3>
         <p>Talent intelligence command center for scenario-based hiring decisions.</p>
       </section>
       <div class="candidate-card-stack">
         ${(participants.map((candidate, index) => `
-          <article class="candidate-insight-card candidate-insight-spotlight">
+          <article class="candidate-insight-card candidate-insight-spotlight panel-surface panel-surface--soft">
             <div class="profile-summary-row">
               ${avatarMarkup(candidate, 'md')}
               <div>
@@ -1967,19 +1964,19 @@ function recruiterPage() {
     center: `
       <h3>Recruiter Intelligence Core</h3>
       <div class="grid two recruiter-insights-grid" style="margin-top:10px;">
-        <section class="card candidate-insight-card insight-emphasis">
+        <section class="card candidate-insight-card insight-emphasis panel-surface panel-surface--soft">
           <h4>Candidate Insights</h4>
           <p class="muted">Primary role fit: ${escapeHtml(profile.role || 'member')}</p>
           <p class="muted">Organization: ${escapeHtml(profile.organizationName || 'Independent')}</p>
           <p class="muted">Active connections: ${state.network.connections.length}</p>
         </section>
-        <section class="card activity-records records-table">
+        <section class="card activity-records records-table panel-surface panel-surface--transparent">
           <h4>Recent Performance</h4>
           <ul class="list compact-list">
             ${['Trial execution consistency', 'Communication clarity trend', 'Stakeholder response quality'].map((item) => `<li><span>${item}</span><span class="muted">Logged · 7d</span></li>`).join('')}
           </ul>
         </section>
-        <section class="card metric-card-grid recruiter-metric-section">
+        <section class="card metric-card-grid recruiter-metric-section panel-surface panel-surface--transparent">
           <h4>Participation Analytics</h4>
           <div class="metric-grid recruiter-metric-grid">
             <article class="metric-card recruiter-metric-card"><span>Participation Depth</span><strong>84%</strong></article>
@@ -1987,12 +1984,12 @@ function recruiterPage() {
             <article class="metric-card recruiter-metric-card"><span>Response Latency</span><strong>42s</strong></article>
           </div>
         </section>
-        <section class="card candidate-insight-card">
+        <section class="card candidate-insight-card panel-surface panel-surface--transparent">
           <h4>Scenario Intelligence</h4>
           <p class="muted">Top pressure scenarios, risk behavior patterns, and coaching prompts are prioritized for shortlist decisions.</p>
         </section>
       </div>
-      <section class="card network-feature-panel">
+      <section class="card network-feature-panel panel-surface panel-surface--transparent">
         <div class="network-panel-head">
           <h4>Guild Network Map</h4>
           <span class="muted">Static strategic layer</span>
