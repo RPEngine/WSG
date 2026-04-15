@@ -42,9 +42,17 @@ app.get("/", (req, res) => {
 
 async function startServer() {
   try {
-    if (!process.env.HUGGINGFACE_API_KEY?.trim()) {
-      console.error("HUGGINGFACE_API_KEY not configured");
-    }
+    const hfToken = process.env.HUGGINGFACE_API_KEY || process.env.HUGGINGFACE_API_TOKEN;
+    const hfTokenPresent = Boolean(hfToken?.trim());
+    const hfTokenEnvName = process.env.HUGGINGFACE_API_KEY?.trim()
+      ? "HUGGINGFACE_API_KEY"
+      : process.env.HUGGINGFACE_API_TOKEN?.trim()
+        ? "HUGGINGFACE_API_TOKEN"
+        : null;
+    console.log("[startup] Hugging Face token configured:", {
+      tokenPresent: hfTokenPresent,
+      tokenEnvName: hfTokenEnvName,
+    });
     await connectDatabase();
     console.log("[db] database connection established");
     await initializeDatabase();

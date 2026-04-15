@@ -2,7 +2,7 @@ const DEFAULT_AI_MODEL = "HuggingFaceH4/zephyr-7b-beta";
 const HF_MODEL = process.env.HUGGING_FACE_MODEL || DEFAULT_AI_MODEL;
 const HF_ROUTER_ENDPOINT = "https://router.huggingface.co/v1/chat/completions";
 const HF_ROUTER_MODEL = process.env.HUGGING_FACE_ROUTER_MODEL || HF_MODEL;
-const HF_ROUTER_TOKEN_ENV = "HUGGINGFACE_API_KEY";
+const HF_ROUTER_TOKEN_ENVS = ["HUGGINGFACE_API_KEY", "HUGGINGFACE_API_TOKEN"];
 
 const scenarioOutputSchema = {
   title: "string",
@@ -62,11 +62,12 @@ const validateGeneratedScenario = (payload) => {
 };
 
 const resolveHuggingFaceToken = () => {
-  const value = process.env[HF_ROUTER_TOKEN_ENV];
-  if (typeof value === "string" && value.trim()) {
+  const hfToken = process.env.HUGGINGFACE_API_KEY || process.env.HUGGINGFACE_API_TOKEN;
+  if (typeof hfToken === "string" && hfToken.trim()) {
+    const envName = HF_ROUTER_TOKEN_ENVS.find((name) => process.env[name]?.trim()) || null;
     return {
-      token: value.trim(),
-      envName: HF_ROUTER_TOKEN_ENV,
+      token: hfToken.trim(),
+      envName,
     };
   }
   return {
@@ -95,9 +96,7 @@ const callHuggingFace = async ({
 }) => {
   const { token, envName } = resolveHuggingFaceToken();
   if (!token) {
-    throw new Error(
-      `Missing Hugging Face token. Set ${HF_ROUTER_TOKEN_ENV}.`,
-    );
+    throw new Error("Missing Hugging Face token. Set HUGGINGFACE_API_KEY or HUGGINGFACE_API_TOKEN.");
   }
   const endpoint = HF_ROUTER_ENDPOINT;
   const requestModel = model || HF_ROUTER_MODEL;
@@ -203,15 +202,15 @@ export const testHuggingFaceConnection = async () => {
 };
 
 export const checkHuggingFaceHealth = async () => {
-  const token = process.env[HF_ROUTER_TOKEN_ENV]?.trim() || "";
+  const { token, envName } = resolveHuggingFaceToken();
 
   if (!token) {
-    const failureReason = `Missing token. Configure ${HF_ROUTER_TOKEN_ENV}.`;
+    const failureReason = "Missing token. Configure HUGGINGFACE_API_KEY or HUGGINGFACE_API_TOKEN.";
     console.error("[ai:test] Hugging Face router provider test failed:", {
       reason: failureReason,
       endpoint: HF_ROUTER_ENDPOINT,
       model: HF_ROUTER_MODEL,
-      tokenEnvName: HF_ROUTER_TOKEN_ENV,
+      tokenEnvName: null,
       tokenPresent: false,
     });
     return {
@@ -222,7 +221,7 @@ export const checkHuggingFaceHealth = async () => {
       method: "POST",
       token: {
         present: false,
-        envName: HF_ROUTER_TOKEN_ENV,
+        envName: null,
       },
       failureReason,
       timestamp: new Date().toISOString(),
@@ -274,7 +273,7 @@ export const checkHuggingFaceHealth = async () => {
       method: "POST",
       token: {
         present: true,
-        envName: HF_ROUTER_TOKEN_ENV,
+        envName,
       },
       failureReason: null,
       timestamp: new Date().toISOString(),
@@ -285,7 +284,7 @@ export const checkHuggingFaceHealth = async () => {
       reason: failureReason,
       endpoint: HF_ROUTER_ENDPOINT,
       model: HF_ROUTER_MODEL,
-      tokenEnvName: HF_ROUTER_TOKEN_ENV,
+      tokenEnvName: envName,
       tokenPresent: true,
     });
     return {
@@ -296,7 +295,7 @@ export const checkHuggingFaceHealth = async () => {
       method: "POST",
       token: {
         present: true,
-        envName: HF_ROUTER_TOKEN_ENV,
+        envName,
       },
       failureReason,
       timestamp: new Date().toISOString(),
