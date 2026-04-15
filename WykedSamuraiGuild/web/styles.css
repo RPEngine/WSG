@@ -209,7 +209,10 @@ body {
   grid-area: main;
   padding: 16px;
   overflow: auto;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
+  min-width: 0;
 }
 
 .main-content-body {
@@ -220,6 +223,12 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-height: 0;
+  min-width: 0;
+}
+
+.main-content.arena-main-shell {
+  overflow: hidden;
 }
 
 .arena-main-shell .page-hero {
@@ -229,8 +238,10 @@ body {
 .arena-main-shell .arena-content-body {
   flex: 1 1 auto;
   min-height: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .nav-list { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 8px; }
@@ -700,6 +711,8 @@ body {
   gap: 14px;
   flex: 1 1 auto;
   min-height: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .arena-selection-tier {
@@ -707,6 +720,7 @@ body {
   gap: 10px;
   flex: 0 0 auto;
   min-height: 0;
+  min-width: 0;
 }
 
 .arena-selection-head h3 {
@@ -1461,6 +1475,8 @@ body {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   gap: 10px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .utility-tab-switcher {
@@ -1550,7 +1566,8 @@ body {
   border-radius: 12px;
   padding: 8px;
   background: linear-gradient(170deg, rgba(13, 22, 32, 0.9), rgba(7, 13, 19, 0.79));
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   min-height: 0;
 }
 
