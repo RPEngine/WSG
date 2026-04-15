@@ -1,5 +1,5 @@
 import { getAiProviderConfig } from "../config/ai.js";
-import { checkFriendliHealth, runFriendliDebugTest } from "../services/aiService.js";
+import { checkFriendliHealth, markAiActive, runFriendliDebugTest } from "../services/aiService.js";
 import { generateAndSaveScenario, getAllowedScenarioStatuses } from "../services/scenarioService.js";
 
 export const testAiConnection = async (req, res) => {
@@ -7,6 +7,7 @@ export const testAiConnection = async (req, res) => {
 
   try {
     const friendli = await checkFriendliHealth();
+    markAiActive();
 
     return res.status(200).json({
       ok: true,
@@ -38,6 +39,9 @@ export const testAiConnection = async (req, res) => {
 export const debugFriendliTest = async (req, res) => {
   const result = await runFriendliDebugTest();
   const status = Number.isInteger(result.status) ? result.status : 500;
+  if (status >= 200 && status < 300) {
+    markAiActive();
+  }
 
   return res.status(status).json({
     status: result.status,
