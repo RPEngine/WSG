@@ -333,10 +333,14 @@ const AI_ENDPOINTS = Object.freeze({
 const ONBOARDING_NEW_USER_KEY = 'wsg-onboarding-new-user';
 const STARTER_SCENARIO_SEEN_PREFIX = 'wsg-starter-seen';
 const SCENARIO_PROGRESS_STORAGE_PREFIX = 'wsg-scenario-progress';
+const ONBOARDING_KNOWN_RETURNING_PREFIX = 'wsg-known-returning';
+const ONBOARDING_MOTIVATION_PREFIX = 'wsg-onboarding-motivation';
 const PASSWORD_POLICY_MESSAGE = 'Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a special character.';
 const PASSWORD_POLICY_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$/;
 const GOOGLE_CLIENT_ID_META_KEY = 'wsg-google-client-id';
 const SHELL_LAYOUT_STORAGE_KEY = 'wsg-shell-layout';
+const HOME_ROUTE = '/app';
+const ONBOARDING_ROUTE = `/scenario/${FIRST_SCENARIO_ID}`;
 
 let googleInitialized = false;
 
@@ -450,6 +454,74 @@ function getScenarioProgressStorageKey(userId = state.currentUser?.id) {
   return `${SCENARIO_PROGRESS_STORAGE_PREFIX}:${safeUserId}`;
 }
 
+function getKnownReturningStorageKey(userId = state.currentUser?.id) {
+  return `${ONBOARDING_KNOWN_RETURNING_PREFIX}:${userId || 'anonymous'}`;
+}
+
+function getOnboardingMotivationStorageKey(userId = state.currentUser?.id) {
+  return `${ONBOARDING_MOTIVATION_PREFIX}:${userId || 'anonymous'}`;
+}
+
+function readPersistedScenarioProgressForUser(userId = state.currentUser?.id) {
+  try {
+    const raw = localStorage.getItem(getScenarioProgressStorageKey(userId));
+    if (!raw) {
+      return {};
+    }
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return null;
+  }
+}
+
+function hasCompletedOnboarding(userId = state.currentUser?.id) {
+  const persisted = readPersistedScenarioProgressForUser(userId);
+  if (!persisted || typeof persisted !== 'object') {
+    return null;
+  }
+  return Boolean(persisted?.[FIRST_SCENARIO_ID]?.finalSubmitted);
+}
+
+function markKnownReturningUser(userId = state.currentUser?.id) {
+  if (!userId) return;
+  localStorage.setItem(getKnownReturningStorageKey(userId), 'true');
+}
+
+function isKnownReturningUser(userId = state.currentUser?.id) {
+  if (!userId) return false;
+  return localStorage.getItem(getKnownReturningStorageKey(userId)) === 'true';
+}
+
+function saveOnboardingMotivation(answer, userId = state.currentUser?.id) {
+  const normalized = String(answer || '').trim();
+  if (!userId || !normalized) {
+    return;
+  }
+  const key = getOnboardingMotivationStorageKey(userId);
+  if (!localStorage.getItem(key)) {
+    localStorage.setItem(key, normalized);
+  }
+}
+
+function resolvePostAuthRoute(user = state.currentUser) {
+  const userId = user?.id;
+  if (!userId) {
+    return HOME_ROUTE;
+  }
+
+  const onboardingCompleted = hasCompletedOnboarding(userId);
+  if (onboardingCompleted === true) {
+    markKnownReturningUser(userId);
+    return HOME_ROUTE;
+  }
+  if (onboardingCompleted === false) {
+    return ONBOARDING_ROUTE;
+  }
+
+  return isKnownReturningUser(userId) ? HOME_ROUTE : ONBOARDING_ROUTE;
+}
+
 function sanitizeScenarioSessionForSave(scenarioId, session) {
   const scenario = findScenarioBlueprint(scenarioId);
   if (!scenario || !session) {
@@ -496,16 +568,8 @@ function sanitizeScenarioSessionForSave(scenarioId, session) {
 }
 
 function readPersistedScenarioProgress() {
-  try {
-    const raw = localStorage.getItem(getScenarioProgressStorageKey());
-    if (!raw) {
-      return {};
-    }
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
-  }
+  const persisted = readPersistedScenarioProgressForUser();
+  return persisted && typeof persisted === 'object' ? persisted : {};
 }
 
 function persistScenarioProgress(scenarioId) {
@@ -2137,8 +2201,9 @@ async function finalizeSignInResult(result, formName) {
   }
 
   state.membersLoaded = false;
+  const postAuthRoute = resolvePostAuthRoute(state.currentUser);
   setTimeout(() => {
-    location.hash = '/profile';
+    location.hash = postAuthRoute;
   }, 200);
 }
 
@@ -2353,7 +2418,11 @@ function applyRouteGuards(path) {
   }
 
   if (known.guestOnly && state.currentUser) {
-    return '/profile';
+    return resolvePostAuthRoute(state.currentUser);
+  }
+
+  if (path === '/' && state.currentUser) {
+    return resolvePostAuthRoute(state.currentUser);
   }
 
   return path;
@@ -2426,7 +2495,14 @@ function attachScenarioDetailHandlers() {
       session.finalAnswer = value;
       session.finalSubmitted = true;
       session.completionMessageVisible = true;
+      saveOnboardingMotivation(session.finalAnswer);
+      markKnownReturningUser();
       persistScenarioProgress(scenarioId);
+      if (scenarioId === FIRST_SCENARIO_ID) {
+        setStatusMessage('Onboarding complete. Welcome to Home.', 'success');
+        location.hash = HOME_ROUTE;
+        return;
+      }
       render();
     };
   }
@@ -2479,7 +2555,7 @@ async function handleAuthSubmit(formId, endpoint, feedbackId, mapPayload, valida
       feedback.textContent = 'Success.';
       setStatusMessage('Login successful.', 'success');
       state.membersLoaded = false;
-      location.hash = '/app';
+      location.hash = resolvePostAuthRoute(state.currentUser);
     } catch (error) {
       feedback.textContent = error.message;
     }
