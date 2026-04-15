@@ -40,6 +40,7 @@ Backend (`/server`):
 
 Frontend (`/web`):
 - Configure Google Sign-In by setting `<meta name="wsg-google-client-id" content="YOUR_GOOGLE_CLIENT_ID">` in `web/index.html` (or set `window.WSG_GOOGLE_CLIENT_ID` before `app.js` loads).
+- Configure Supabase Auth runtime values using `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (or matching `window` globals in `web/index.html` for static deployments).
 - Render deployments use same-origin API by default unless `wsg-backend-base-url` / runtime backend vars are explicitly configured.
 - Production-safe override order on Render:
   1. `<meta name="wsg-backend-base-url" content="">`

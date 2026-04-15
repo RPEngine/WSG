@@ -1,3 +1,5 @@
+import { supabase, toAppUser } from './supabaseClient.js';
+
 const routes = {
   '/': { key: 'landing' },
   '/app': { key: 'home', requiresAuth: true },
@@ -312,8 +314,13 @@ const arenaLayoutPrefs = loadArenaLayoutPrefs();
 
 const state = {
   mode: localStorage.getItem('wsg-mode') || 'professional',
-  authToken: sessionStorage.getItem('wsg-auth-token') || localStorage.getItem('wsg-auth-token') || '',
+  authToken: '',
   currentUser: null,
+  auth: {
+    user: null,
+    session: null,
+    loading: true,
+  },
   members: [],
   activeProfile: null,
   activeLayer: 'free',
@@ -536,8 +543,32 @@ function setProfileHubMessage(message, tone = 'info') {
   state.profileHub.tone = tone;
 }
 
+function getPolicyAcceptanceStorageKey(userId) {
+  return `wsg-policy-acceptance:${userId || 'anonymous'}`;
+}
+
+function readLocalPolicyAcceptance(userId) {
+  if (!userId) return null;
+  try {
+    const raw = localStorage.getItem(getPolicyAcceptanceStorageKey(userId));
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveLocalPolicyAcceptance(userId) {
+  if (!userId) return;
+  const acceptedAt = new Date().toISOString();
+  const acceptance = REQUIRED_POLICY_KEYS.reduce((acc, key) => {
+    acc[key] = { accepted: true, acceptedAt, policyVersion: CURRENT_POLICY_VERSION };
+    return acc;
+  }, {});
+  localStorage.setItem(getPolicyAcceptanceStorageKey(userId), JSON.stringify(acceptance));
+}
+
 function hasAcceptedCurrentPolicies(user) {
-  const policyAcceptance = user?.policyAcceptance || {};
+  const policyAcceptance = user?.policyAcceptance || readLocalPolicyAcceptance(user?.id) || {};
   return REQUIRED_POLICY_KEYS.every((key) => {
     const policy = policyAcceptance?.[key];
     return Boolean(policy?.accepted && policy?.acceptedAt && policy?.policyVersion === CURRENT_POLICY_VERSION);
@@ -545,7 +576,11 @@ function hasAcceptedCurrentPolicies(user) {
 }
 
 function isAuthenticated() {
-  return Boolean(state.currentUser && state.authToken);
+  return Boolean(state.auth.session && state.auth.user);
+}
+
+function requiresEmailVerification(user = state.auth.user) {
+  return Boolean(user && !user.email_confirmed_at);
 }
 
 function requiresPolicyAcceptance(user) {
@@ -3429,25 +3464,31 @@ async function handleGoogleCredentialResponse(response, formName) {
 }
 
 async function finalizeSignInResult(result, formName) {
-  if (result?.mfa_required) {
-    const code = window.prompt('Enter your MFA code to finish sign-in:') || '';
-    const mfaResult = await apiRequest('/auth/mfa/verify', {
-      method: 'POST',
-      body: JSON.stringify({
-        mfa_challenge_token: result?.mfa_challenge_token,
-        code,
-      }),
-    });
-    setAuthSession(mfaResult);
-    setFormMessage(formName, 'MFA verified. Login successful.', 'success');
-    setStatusMessage('MFA verified. Login successful.', 'success');
-  } else {
-    setAuthSession(result);
-    setFormMessage(formName, 'Login successful.', 'success');
-    setStatusMessage('Login successful.', 'success');
+  const session = result?.session || null;
+  const user = result?.user || session?.user || null;
+  state.auth.session = session;
+  state.auth.user = user;
+  state.auth.loading = false;
+  state.authToken = session?.access_token || '';
+  const appUser = withPersistedOnboardingProfile(toAppUser(user));
+  state.currentUser = appUser
+    ? { ...appUser, policyAcceptance: readLocalPolicyAcceptance(appUser.id) || appUser.policyAcceptance || {} }
+    : null;
+  state.membersLoaded = false;
+
+  if (requiresEmailVerification(user)) {
+    const message = 'Please verify your email before full app access.';
+    setFormMessage(formName, message, 'info');
+    setStatusMessage(message, 'info');
+    setTimeout(() => {
+      location.hash = '/login';
+    }, 200);
+    return;
   }
 
-  state.membersLoaded = false;
+  setFormMessage(formName, 'Login successful.', 'success');
+  setStatusMessage('Login successful.', 'success');
+
   const postAuthRoute = requiresPolicyReacceptance(state.currentUser)
     ? POLICY_ACCEPT_ROUTE
     : resolvePostAuthRoute(state.currentUser);
@@ -3456,54 +3497,16 @@ async function finalizeSignInResult(result, formName) {
   }, 200);
 }
 
-function initializeGoogleAuth(routeKey) {
-  if (routeKey !== 'login' && routeKey !== 'signup') {
-    return;
-  }
-
-  const google = window.google;
-  if (!google?.accounts?.id) {
-    return;
-  }
-
-  const clientId = resolveGoogleClientId();
-  if (!clientId) {
-    return;
-  }
-
-  if (!googleInitialized) {
-    google.accounts.id.initialize({
-      client_id: clientId,
-      callback: (response) => {
-        const formName = location.hash === '#/signup' ? 'signup' : 'login';
-        handleGoogleCredentialResponse(response, formName);
-      },
-      auto_select: false,
-      cancel_on_tap_outside: true,
-    });
-    googleInitialized = true;
-  }
-
-  renderGoogleButton('google-login-button');
-  renderGoogleButton('google-signup-button');
-}
-
-function setAuthSession({ sessionToken, user }) {
-  const normalized = normalizeLayeredProfile(user);
-  state.authToken = sessionToken;
-  state.currentUser = withPersistedOnboardingProfile(normalized.user);
-  state.scenarioDetail.sessions = {};
-  state.layers = normalized.layers;
-  state.availableLayers = normalized.availableLayers;
-  state.lockedLayers = normalized.lockedLayers;
-  state.activeLayer = state.availableLayers.includes(state.activeLayer) ? state.activeLayer : (state.availableLayers[0] || 'free');
-  sessionStorage.setItem('wsg-auth-token', sessionToken);
-  localStorage.removeItem('wsg-auth-token');
-  console.log('[auth:frontend] session token saved', {
-    hasSessionToken: Boolean(sessionToken),
-    userId: normalized.user?.id || null,
-    email: normalized.user?.email || null,
-  });
+function syncAuthStateFromSupabase(session) {
+  const user = session?.user || null;
+  state.auth.session = session || null;
+  state.auth.user = user;
+  state.authToken = session?.access_token || '';
+  const appUser = withPersistedOnboardingProfile(toAppUser(user));
+  state.currentUser = appUser
+    ? { ...appUser, policyAcceptance: readLocalPolicyAcceptance(appUser.id) || appUser.policyAcceptance || {} }
+    : null;
+  state.auth.loading = false;
 }
 
 function clearClientSecurityState() {
@@ -3527,35 +3530,54 @@ function clearClientSecurityState() {
 function clearAuthSession() {
   state.authToken = '';
   state.currentUser = null;
+  state.auth.user = null;
+  state.auth.session = null;
+  state.auth.loading = false;
   state.scenarioDetail.sessions = {};
   state.layers = {};
   state.availableLayers = ['free'];
   state.lockedLayers = ['professional', 'roleplay'];
   state.activeLayer = 'free';
-  localStorage.removeItem('wsg-auth-token');
-  sessionStorage.removeItem('wsg-auth-token');
   sessionStorage.removeItem(ONBOARDING_NEW_USER_KEY);
   clearClientSecurityState();
 }
 
 async function bootstrapAuth() {
-  if (!state.authToken) {
-    return;
+  state.auth.loading = true;
+  const { data, error } = await supabase.auth.getSession();
+  if (error) {
+    console.warn('[auth:frontend] Supabase session bootstrap failed', error.message);
   }
+  syncAuthStateFromSupabase(data?.session || null);
 
-  try {
-    const data = await apiRequest('/auth/me');
-    const normalized = normalizeLayeredProfile(data.user);
-    state.currentUser = withPersistedOnboardingProfile(normalized.user);
-    state.layers = normalized.layers;
-    state.availableLayers = normalized.availableLayers;
-    state.lockedLayers = normalized.lockedLayers;
-    state.activeLayer = state.availableLayers.includes(state.activeLayer) ? state.activeLayer : (state.availableLayers[0] || 'free');
-    console.log('[auth:frontend] bootstrap /auth/me success', { userId: normalized.user?.id, email: normalized.user?.email });
-  } catch {
-    console.warn('[auth:frontend] bootstrap /auth/me failed, clearing local auth session');
-    clearAuthSession();
-  }
+  supabase.auth.onAuthStateChange((_event, session) => {
+    syncAuthStateFromSupabase(session || null);
+    render();
+  });
+}
+
+async function signupWithSupabase({ email, password, metadata }) {
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: metadata,
+      emailRedirectTo: window.location.origin,
+    },
+  });
+  if (error) throw error;
+  return data;
+}
+
+async function loginWithSupabase({ email, password }) {
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw error;
+  return data;
+}
+
+async function logoutWithSupabase() {
+  const { error } = await supabase.auth.signOut();
+  if (error) throw error;
 }
 
 async function ensureMembersLoaded() {
@@ -3696,7 +3718,15 @@ function applyRouteGuards(path) {
     return path;
   }
 
+  if (state.auth.loading) {
+    return path;
+  }
+
   if (known.requiresAuth && !isAuthenticated() && path !== POLICY_ACCEPT_ROUTE) {
+    return '/login';
+  }
+
+  if (isAuthenticated() && requiresEmailVerification(state.auth.user) && !known.guestOnly) {
     return '/login';
   }
 
@@ -4597,7 +4627,7 @@ function attachHeaderActions() {
   if (logoutButton) {
     logoutButton.onclick = async () => {
       try {
-        await apiRequest('/auth/logout', { method: 'POST' });
+        await logoutWithSupabase();
       } catch {
         // ignore logout network errors and clear local auth regardless
       }
@@ -4734,6 +4764,12 @@ function renderPublicLayout(path, key, pageHtml) {
 
 async function render() {
   let path = location.hash.replace('#', '') || '/';
+
+  if (state.auth.loading) {
+    document.getElementById('app').innerHTML = '<div class="public-shell"><main class="public-container public-content panel"><p class="muted">Authenticating session...</p></main></div>';
+    return;
+  }
+
   path = applyRouteGuards(path);
 
   if (location.hash.replace('#', '') !== path) {
@@ -4837,8 +4873,7 @@ async function render() {
       state.authForms.login.loading = true;
       render();
       try {
-        const result = await apiRequest('/auth/login', { method: 'POST', body: JSON.stringify(payload) });
-        console.log('[auth:frontend] login server response', result);
+        const result = await loginWithSupabase({ email: payload.identifier, password: payload.password });
         await finalizeSignInResult(result, 'login');
         console.log('[auth:frontend] login success', { userId: result?.user?.id, email: result?.user?.email });
       } catch (error) {
@@ -4899,17 +4934,30 @@ async function render() {
           role: requestPayload.role,
           fields: Object.keys(requestPayload),
         });
-        const result = await apiRequest('/auth/register', {
-          method: 'POST',
-          body: JSON.stringify(requestPayload),
+        const result = await signupWithSupabase({
+          email: requestPayload.email,
+          password: requestPayload.password,
+          metadata: {
+            legalName: requestPayload.legalName,
+            role: requestPayload.role,
+            organizationName: requestPayload.organizationName,
+            backupEmail: requestPayload.backupEmail,
+          },
         });
-        console.log('[auth:frontend] signup server response', result);
         console.log('[auth:frontend] signup success', { userId: result?.user?.id, email: result?.user?.email });
-        setFormMessage('signup', 'Account created successfully. You can now sign in.', 'success');
-        setStatusMessage('Account created successfully. You can now sign in.', 'success');
-        setTimeout(() => {
-          location.hash = '/login';
-        }, 200);
+        const requiresVerification = !result?.session;
+        const successMessage = requiresVerification
+          ? 'Account created. Please verify your email, then log in.'
+          : 'Account created successfully.';
+        setFormMessage('signup', successMessage, 'success');
+        setStatusMessage(successMessage, 'success');
+        if (result?.session) {
+          await finalizeSignInResult(result, 'signup');
+        } else {
+          setTimeout(() => {
+            location.hash = '/login';
+          }, 200);
+        }
       } catch (error) {
         console.warn('[auth:frontend] signup server response error', error);
         const message = error instanceof Error ? error.message : 'Unable to create account. Please check the form and try again.';
@@ -4952,11 +5000,11 @@ async function render() {
       state.authForms.policyAccept.loading = true;
       render();
       try {
-        const result = await apiRequest('/auth/policy/accept', {
-          method: 'POST',
-          body: JSON.stringify({ policyAgreement: true }),
-        });
-        state.currentUser = withPersistedOnboardingProfile(result?.user || state.currentUser);
+        saveLocalPolicyAcceptance(state.currentUser?.id);
+        state.currentUser = {
+          ...(state.currentUser || {}),
+          policyAcceptance: readLocalPolicyAcceptance(state.currentUser?.id) || {},
+        };
         state.authForms.policyAccept.agreed = true;
         setFormMessage('policyAccept', 'Policy acceptance saved.', 'success');
         setStatusMessage('Policy acceptance saved. Welcome to WSG.', 'success');
