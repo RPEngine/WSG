@@ -2,7 +2,7 @@ const DEFAULT_AI_MODEL = "HuggingFaceH4/zephyr-7b-beta";
 const HF_MODEL = process.env.HUGGING_FACE_MODEL || DEFAULT_AI_MODEL;
 const HF_ROUTER_ENDPOINT = "https://router.huggingface.co/v1/chat/completions";
 const HF_ROUTER_MODEL = process.env.HUGGING_FACE_ROUTER_MODEL || HF_MODEL;
-const HF_ROUTER_TOKEN_ENV = "HUGGINGFACE_API_TOKEN";
+const HF_ROUTER_TOKEN_ENV = "HUGGINGFACE_API_KEY";
 
 const scenarioOutputSchema = {
   title: "string",
@@ -62,7 +62,7 @@ const validateGeneratedScenario = (payload) => {
 };
 
 const resolveHuggingFaceToken = () => {
-  const value = process.env.HUGGINGFACE_API_TOKEN;
+  const value = process.env[HF_ROUTER_TOKEN_ENV];
   if (typeof value === "string" && value.trim()) {
     return {
       token: value.trim(),
@@ -149,6 +149,7 @@ const callHuggingFace = async ({
     const reason = extractProviderErrorMessage(payload, response.statusText);
     const routerHint = response.status === 410 ? " Verify requests are sent to https://router.huggingface.co." : "";
     const message = `Provider rejected request: ${reason}.${routerHint}`.trim();
+    console.error("HuggingFace API Error:", bodyText || reason);
     console.error("[ai:generate] Hugging Face router request failed", {
       endpoint,
       model: requestModel,

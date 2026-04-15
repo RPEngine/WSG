@@ -32,10 +32,7 @@ The backend health route is:
 Backend (`/server`):
 - `PORT` (Render supplies this automatically).
 - `GOOGLE_CLIENT_ID` (required for Google Sign-In token verification).
-- `HUGGINGFACE_API_TOKEN` (primary Hugging Face token variable).
-- `HUGGING_FACE_API_TOKEN` (legacy-compatible Hugging Face token variable).
-- `WSG_HF_API_TOKEN` (legacy-compatible Hugging Face token variable).
-- `HF_TOKEN` (also accepted).
+- `HUGGINGFACE_API_KEY` (required Hugging Face token variable).
 - `HUGGING_FACE_MODEL` (optional override; defaults to `HuggingFaceH4/zephyr-7b-beta`).
 - `HUGGING_FACE_HEALTH_MODEL` (optional provider-test model override; defaults to the active model).
 - `WSG_FRONTEND_ORIGIN` (optional explicit frontend origin(s) for CORS allowlist; supports comma-separated values).
