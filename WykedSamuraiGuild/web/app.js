@@ -82,6 +82,41 @@ const STARTER_TRIALS = [
   },
 ];
 
+const ROLEPLAY_ROOMS = [
+  {
+    id: 'ember-crossing',
+    trialId: 'team-conflict',
+    title: 'Ember Crossing Council',
+    description: 'Open council room where guild officers resolve faction disputes and keep fragile alliances intact.',
+    roleFocus: 'Diplomat',
+    players: 7,
+  },
+  {
+    id: 'dock-47',
+    trialId: 'customer-escalation',
+    title: 'Dock 47 Distress Channel',
+    description: 'High-pressure response room reacting to incoming merchant convoy failures and sponsor complaints.',
+    roleFocus: 'Incident Commander',
+    players: 11,
+  },
+  {
+    id: 'shadow-forge',
+    trialId: 'leadership-decision',
+    title: 'Shadow Forge War Room',
+    description: 'Strategy room balancing delivery speed against defense readiness during active threat windows.',
+    roleFocus: 'Strategist',
+    players: 5,
+  },
+  {
+    id: 'aurora-gate',
+    trialId: 'operational-crisis',
+    title: 'Aurora Gate Operations',
+    description: 'Live operations room coordinating logistics, medical supply routes, and response priorities.',
+    roleFocus: 'Operations Lead',
+    players: 9,
+  },
+];
+
 const FIRST_SCENARIO_ID = 'find-your-why';
 const SCENARIO_BLUEPRINTS = Object.freeze({
   'find-your-why': {
@@ -1317,115 +1352,77 @@ function arenaPage() {
   const activeTrial = getActiveTrial();
   const hasActiveTrial = Boolean(activeTrial);
   const participantCount = Math.max((state.network.connections || []).slice(0, 6).length, 1);
+  const isRoleplayMode = state.mode === 'roleplay';
+  const trialCards = (isRoleplayMode ? ROLEPLAY_ROOMS : STARTER_TRIALS)
+    .map((trialOrRoom) => {
+      const trialId = isRoleplayMode ? trialOrRoom.trialId : trialOrRoom.id;
+      const isActive = trialId === state.arena.activeTrialId;
+      return `
+        <article class="trial-card arena-carousel-card ${isActive ? 'active' : ''}">
+          <div class="trial-card-head">
+            <h4>${trialOrRoom.title}</h4>
+            ${isActive ? `<span class="trial-state-chip">${isRoleplayMode ? 'Active Room' : 'Active Trial'}</span>` : ''}
+          </div>
+          <p class="muted">${trialOrRoom.description}</p>
+          <div class="trial-meta">
+            ${isRoleplayMode
+    ? `<span>Players: ${trialOrRoom.players}</span><span>${trialOrRoom.roleFocus}</span>`
+    : `<span>${trialOrRoom.difficulty}</span><span>${trialOrRoom.suggestedRole || 'Open role'}</span>`}
+          </div>
+          <button class="pill-btn start-trial-btn" data-trial-id="${trialId}">
+            ${isRoleplayMode
+    ? (isActive ? 'Re-enter Room' : 'Enter Room')
+    : (isActive ? 'Restart Trial' : 'Start Trial')}
+          </button>
+        </article>
+      `;
+    })
+    .join('');
+
   const chatMessages = state.arena.messages
     .map(
       (message) => `
-        <article class="message ${message.type}">
-          <div class="message-label">${message.type === 'user' ? 'You' : 'Arena System'}</div>
+        <article class="message arena-chat-message ${message.type === 'user' ? 'user' : message.type === 'system' ? 'system' : 'assistant'}">
+          <div class="message-label">${message.type === 'user' ? 'You' : message.type === 'system' ? 'Arena System' : 'Arena Guide'}</div>
           <p>${escapeHtml(message.content)}</p>
         </article>
       `
     )
     .join('');
-
-  const scenarioMessages = (state.scenarioChat.messages || [])
-    .map((message) => `
-      <article class="message ${message.senderId === state.currentUser?.id ? 'user' : 'system'}">
-        <div class="message-label">${message.senderId === state.currentUser?.id ? 'You' : 'Participant'}</div>
-        <p>${escapeHtml(message.content)}</p>
-      </article>
-    `).join('');
-
-  return layoutColumns({
-    className: 'arena-layout',
-    left: `
-      <h3>Starter Trial Library</h3>
-      <p class="muted">Select a live scenario to enter the Arena.</p>
-      <div class="trial-list">
-        ${STARTER_TRIALS.map(
-          (trial) => `
-            <article class="trial-card ${trial.id === state.arena.activeTrialId ? 'active' : ''}">
-              <div class="trial-card-head">
-                <h4>${trial.title}</h4>
-                ${trial.id === state.arena.activeTrialId ? '<span class="trial-state-chip">Active Trial</span>' : ''}
-              </div>
-              <p class="muted">${trial.description}</p>
-              <div class="trial-meta">
-                <span>${trial.category}</span>
-                <span>${trial.difficulty}</span>
-              </div>
-              <button class="pill-btn start-trial-btn" data-trial-id="${trial.id}">
-                ${trial.id === state.arena.activeTrialId ? 'Restart Trial' : 'Start Trial'}
-              </button>
-            </article>
-          `
-        ).join('')}
-      </div>
-    `,
-    center: `
-      ${
-  hasActiveTrial
-    ? `
-          <section class="scenario-hero scenario-hero-arena">
-            <p class="hero-kicker">Active Arena Scenario</p>
-            <h3>${activeTrial.title}</h3>
-            <p class="hero-description">${activeTrial.description}</p>
-            <div class="hero-meta">
-              <article class="hero-metric">
-                <span>Timer</span>
-                <strong>29:45</strong>
-              </article>
-              <article class="hero-metric">
-                <span>Participants</span>
-                <strong>${participantCount}</strong>
-              </article>
-              <article class="hero-metric">
-                <span>Category</span>
-                <strong>${activeTrial.category}</strong>
-              </article>
-              <article class="hero-metric">
-                <span>Role Focus</span>
-                <strong>${activeTrial.suggestedRole || 'Open'}</strong>
-              </article>
-            </div>
-          </section>
-        `
-    : `
-          <section class="scenario-hero scenario-hero-arena">
-            <p class="hero-kicker">Arena Ready</p>
-            <h3>Select a Trial to Start</h3>
-            <p class="hero-description">Choose from the left panel to launch a guided scenario run with live messaging and participant context.</p>
-            <div class="hero-meta">
-              <article class="hero-metric"><span>Status</span><strong>Awaiting launch</strong></article>
-              <article class="hero-metric"><span>Mode</span><strong>${state.mode === 'roleplay' ? 'Roleplay' : 'Professional'}</strong></article>
-              <article class="hero-metric"><span>Queue</span><strong>${STARTER_TRIALS.length} scenarios</strong></article>
-            </div>
-          </section>
-        `
-}
-
-      <section class="scenario-experience-panel">
-        <div class="scenario-panel-head">
-          <div>
-            <p class="hero-kicker">Execution Deck</p>
-            <h4>Scenario Experience</h4>
+  return `
+    <section class="workspace-layout arena-layout">
+      <section class="workspace-col card arena-main-column">
+        <section class="arena-selection-tier">
+          <div class="arena-selection-head">
+            <h3>${isRoleplayMode ? 'Open RP Rooms' : 'Arena Scenarios'}</h3>
+            <p class="muted">${isRoleplayMode ? 'Choose a live roleplay room and jump directly into shared storytelling.' : 'Pick a scenario card to launch or restart a guided trial.'}</p>
           </div>
-          <p class="muted">${state.mode === 'roleplay' ? 'Immersive roleplay lane' : 'Structured decision lane'}</p>
-        </div>
-        ${hasActiveTrial ? `<p class="scenario-prompt">${escapeHtml(activeTrial.openingPrompt)}</p>` : ''}
-      ${
+          <div class="arena-card-carousel">
+            ${trialCards}
+          </div>
+        </section>
+        <section class="scenario-experience-panel arena-chat-panel">
+          <div class="scenario-panel-head">
+            <div>
+              <p class="hero-kicker">${isRoleplayMode ? 'Room Chat' : 'Arena Chat'}</p>
+              <h4>${hasActiveTrial ? activeTrial.title : `No ${isRoleplayMode ? 'room' : 'scenario'} active`}</h4>
+            </div>
+            <p class="muted">${state.mode === 'roleplay' ? 'Immersive roleplay lane' : 'Structured decision lane'}</p>
+          </div>
+          ${hasActiveTrial ? `<p class="scenario-prompt">${escapeHtml(activeTrial.openingPrompt)}</p>` : ''}
+          ${
   hasActiveTrial
-    ? `<div id="arena-conversation-log" class="conversation-log">${chatMessages}</div>`
-    : '<div class="arena-empty"><h4>No Trial active</h4><p class="muted">Choose a starter Trial from the left panel to begin.</p></div>'
+    ? `<div id="arena-conversation-log" class="conversation-log arena-chat-log">${chatMessages}</div>`
+    : `<div class="arena-empty"><h4>No ${isRoleplayMode ? 'Room' : 'Trial'} active</h4><p class="muted">Select a ${isRoleplayMode ? 'room' : 'scenario card'} above to begin chatting.</p></div>`
 }
-      <form id="arena-input-form" class="arena-input">
-        <input id="arena-input" name="message" placeholder="${hasActiveTrial ? 'Enter your response to the Trial...' : 'Start a Trial to enable messaging'}" ${hasActiveTrial ? '' : 'disabled'} />
-        <button id="arena-send-btn" class="pill-btn" type="submit" ${(hasActiveTrial && !state.arena.pending) ? '' : 'disabled'}>${state.arena.pending ? 'Sending...' : 'Send'}</button>
-      </form>
-      ${state.arena.error ? `<p class="muted" style="color:#ff7b7b;margin-top:8px;" role="alert">${escapeHtml(state.arena.error)}</p>` : ''}
+          <form id="arena-input-form" class="arena-input">
+            <input id="arena-input" name="message" placeholder="${hasActiveTrial ? `Type your ${isRoleplayMode ? 'roleplay' : 'response'} message...` : `Start a ${isRoleplayMode ? 'room' : 'trial'} to enable chat`}" ${hasActiveTrial ? '' : 'disabled'} />
+            <button id="arena-send-btn" class="pill-btn" type="submit" ${(hasActiveTrial && !state.arena.pending) ? '' : 'disabled'}>${state.arena.pending ? 'Sending...' : 'Send'}</button>
+          </form>
+          ${state.arena.error ? `<p class="muted" style="color:#ff7b7b;margin-top:8px;" role="alert">${escapeHtml(state.arena.error)}</p>` : ''}
+        </section>
       </section>
-    `,
-    right: `
+      <aside class="workspace-col card">
       <h3>Participants</h3>
       <section class="participant-grid">
         ${(state.network.connections || []).slice(0, 6).map((connection) => `
@@ -1439,33 +1436,40 @@ function arenaPage() {
           </article>
         `).join('') || '<p class="muted">No participants connected yet.</p>'}
       </section>
-      <section class="messaging-rail scenario-chat-rail" style="margin-top:12px;">
-        <div class="messaging-rail-head">
-          <h4>Scenario Chat</h4>
-          <span class="muted">In-trial comms</span>
-        </div>
-        <div class="conversation-log home-chat-log">${scenarioMessages || '<p class="muted">No scenario chat messages yet.</p>'}</div>
-        <form id="scenario-chat-form" class="arena-input" style="margin-top:10px;">
-          <input id="scenario-chat-input" placeholder="Message participants..." />
-          <button class="pill-btn" type="submit">Send</button>
-        </form>
-      </section>
       <h4 style="margin-top:14px;">Scenario Status</h4>
       ${
   hasActiveTrial
     ? `
             <ul class="status-list">
               <li><span class="muted">Title</span><strong>${activeTrial.title}</strong></li>
-              <li><span class="muted">Category</span><strong>${activeTrial.category}</strong></li>
+              <li><span class="muted">Mode</span><strong>${state.mode === 'roleplay' ? 'Roleplay Room' : 'Arena Scenario'}</strong></li>
               <li><span class="muted">Difficulty</span><strong>${activeTrial.difficulty}</strong></li>
-              <li><span class="muted">Suggested Role</span><strong>${activeTrial.suggestedRole || 'Unspecified'}</strong></li>
-              <li><span class="muted">Pressure State</span><strong>Stable</strong></li>
+              <li><span class="muted">Role Focus</span><strong>${activeTrial.suggestedRole || 'Unspecified'}</strong></li>
+              <li><span class="muted">Participants</span><strong>${participantCount}</strong></li>
             </ul>
           `
-    : '<p class="muted">No active Trial yet. Status details will populate after you start one.</p>'
+    : '<p class="muted">No active session yet. Select a card to populate status details.</p>'
 }
-    `,
-  });
+      <section class="messaging-rail" style="margin-top:12px;">
+        <div class="messaging-rail-head">
+          <h4>Connections</h4>
+          <span class="muted">${state.network.connections.length} total</span>
+        </div>
+        <ul class="compact-list">
+          ${(state.network.connections || []).slice(0, 6).map((connection) => `
+            <li>
+              <div>
+                <strong>${escapeHtml(connection.displayName || connection.username)}</strong>
+                <p class="muted" style="margin:4px 0 0;">${escapeHtml(connection.status || 'offline')}</p>
+              </div>
+              <button class="pill-btn open-direct-chat-btn" data-connection-id="${escapeAttr(connection.id)}">Message</button>
+            </li>
+          `).join('') || '<li><span class="muted">No connections available.</span></li>'}
+        </ul>
+      </section>
+      </aside>
+    </section>
+  `;
 }
 
 function scenarioDetailPage(path) {

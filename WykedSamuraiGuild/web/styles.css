@@ -591,7 +591,42 @@ body {
 }
 
 .arena-layout {
-  grid-template-columns: 280px minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr) 320px;
+}
+
+.arena-main-column {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+}
+
+.arena-selection-tier {
+  display: grid;
+  gap: 10px;
+}
+
+.arena-selection-head h3 {
+  margin: 0 0 6px;
+}
+
+.arena-selection-head p {
+  margin: 0;
+}
+
+.arena-card-carousel {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(250px, 290px);
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  scrollbar-width: thin;
+}
+
+.arena-carousel-card {
+  min-height: 210px;
+  display: grid;
+  align-content: start;
 }
 
 .recruiter-layout {
@@ -677,6 +712,20 @@ body {
   gap: 10px;
 }
 
+.arena-chat-panel {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.arena-chat-log {
+  max-height: none;
+  min-height: 360px;
+  background: rgba(6, 10, 15, 0.82);
+  align-content: start;
+  padding: 14px;
+}
+
 .message {
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -695,9 +744,17 @@ body {
   justify-self: start;
 }
 
+.message.assistant {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.12);
+  justify-self: start;
+}
+
 .message.user {
-  background: var(--accent-soft);
+  background: rgba(26, 132, 255, 0.18);
+  border-color: rgba(26, 132, 255, 0.38);
   justify-self: end;
+  text-align: left;
 }
 
 .message p {
@@ -731,6 +788,13 @@ body {
   border: 1px solid var(--border);
   background: var(--panel-soft);
   color: var(--text-main);
+}
+
+.arena-chat-panel .arena-input {
+  position: sticky;
+  bottom: 0;
+  background: linear-gradient(180deg, rgba(15, 19, 24, 0), rgba(15, 19, 24, 0.9) 20%);
+  padding-top: 8px;
 }
 
 .scenario-hero,
@@ -1654,9 +1718,17 @@ select:focus-visible {
     grid-template-columns: 260px minmax(0, 1fr);
   }
 
+  .workspace-layout.arena-layout {
+    grid-template-columns: minmax(0, 1fr) 320px;
+  }
+
   .workspace-layout .workspace-col:last-child {
     grid-column: 1 / -1;
     min-height: auto;
+  }
+
+  .workspace-layout.arena-layout .workspace-col:last-child {
+    grid-column: auto;
   }
 
   .scenario-location-grid {
@@ -1680,6 +1752,10 @@ select:focus-visible {
 
   .workspace-layout {
     grid-template-columns: 1fr;
+  }
+
+  .workspace-layout.arena-layout .workspace-col:last-child {
+    grid-column: 1 / -1;
   }
 
   .workspace-col {
