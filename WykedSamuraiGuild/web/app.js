@@ -2957,7 +2957,7 @@ function configRequiredPage() {
         <section class="card form-card">
           <h3>Configuration Required</h3>
           <p class="muted">Supabase configuration is missing.</p>
-          <p class="muted">Set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code>, then redeploy.</p>
+          <p class="muted">Set <code>wsg-supabase-url</code> and <code>wsg-supabase-anon-key</code> in <code>web/index.html</code> (or window.WSG_SUPABASE_*), then redeploy.</p>
         </section>
       </main>
     </div>
@@ -3540,10 +3540,16 @@ function clearAuthSession() {
 async function bootstrapAuth() {
   state.auth.loading = true;
   state.startupError = '';
-  state.supabaseConfigMissing = !(supabaseConfig.urlPresent && supabaseConfig.keyPresent);
+  state.supabaseConfigMissing = !supabaseConfig.ready;
 
-  if (state.supabaseConfigMissing || !supabase) {
+  if (state.supabaseConfigMissing) {
     state.supabaseConfigMissing = true;
+    clearAuthSession();
+    return;
+  }
+
+  if (!supabase) {
+    state.startupError = supabaseConfig.initError || 'Supabase client failed to initialize.';
     clearAuthSession();
     return;
   }
@@ -5149,7 +5155,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   console.log('[wsg] Resolved API base URL:', resolvedApiBaseUrl || '(same-origin)');
   console.info(`[wsg] Supabase URL present: ${supabaseConfig.urlPresent ? 'yes' : 'no'}`);
   console.info(`[wsg] Supabase key present: ${supabaseConfig.keyPresent ? 'yes' : 'no'}`);
-  console.info(`[wsg] Supabase configuration missing: ${(!supabaseConfig.urlPresent || !supabaseConfig.keyPresent) ? 'yes' : 'no'}`);
+  console.info(`[wsg] Supabase configuration missing: ${supabaseConfig.ready ? 'no' : 'yes'}`);
   await bootstrapAuth();
   render();
 });
