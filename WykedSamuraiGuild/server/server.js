@@ -5,6 +5,7 @@ import { healthCheck } from "./controllers/healthController.js";
 import { aiChat, generateAiScenario } from "./controllers/aiController.js";
 import { PORT } from "./config/env.js";
 import { connectDatabase, initializeDatabase } from "./config/db.js";
+import { getAiProviderConfig, requireFriendliConfig } from "./config/ai.js";
 
 const app = express();
 
@@ -42,28 +43,17 @@ app.get("/", (req, res) => {
 
 async function startServer() {
   try {
-    const friendliToken = typeof process.env.FRIENDLI_API_TOKEN === "string"
-      ? process.env.FRIENDLI_API_TOKEN.trim()
-      : "";
-    const friendliEndpointId = typeof process.env.FRIENDLI_ENDPOINT_ID === "string"
-      ? process.env.FRIENDLI_ENDPOINT_ID.trim()
-      : "";
-    const friendliBaseUrl = (process.env.FRIENDLI_API_BASE_URL || "https://api.friendli.ai/dedicated/v1").trim();
-    const friendliDeployedModelName = (process.env.FRIENDLI_MODEL || "mistralai/Mistral-7B-Instruct-v0.3").trim();
-
-    if (!friendliToken) {
-      throw new Error("Missing required startup config: FRIENDLI_API_TOKEN.");
-    }
-    if (!friendliEndpointId) {
-      throw new Error("Missing required startup config: FRIENDLI_ENDPOINT_ID.");
-    }
+    requireFriendliConfig();
+    const aiConfig = getAiProviderConfig();
 
     console.log("[startup] AI provider diagnostics:", {
-      provider: "friendli",
-      baseUrl: friendliBaseUrl,
-      endpointId: friendliEndpointId,
-      deployedModelName: friendliDeployedModelName,
+      provider: aiConfig.provider,
+      baseUrl: aiConfig.baseUrl,
+      endpointId: aiConfig.endpointId,
+      deployedModelName: aiConfig.deployedModelName,
+      tokenPresent: aiConfig.tokenPresent,
     });
+
     await connectDatabase();
     console.log("[db] database connection established");
     await initializeDatabase();
