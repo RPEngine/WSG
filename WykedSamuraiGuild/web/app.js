@@ -280,7 +280,7 @@ const SCENARIO_BLUEPRINTS = Object.freeze({
 });
 
 const BRAND_ASSETS = Object.freeze({
-  logo: 'assets/branding/wyked-samurai-guild-logo-design.svg',
+  logo: '/assets/WSLogo.png',
 });
 
 
