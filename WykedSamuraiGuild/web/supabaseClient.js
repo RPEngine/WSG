@@ -10,29 +10,39 @@ function cleanEnvValue(value) {
   return trimmed;
 }
 
-function readSupabaseConfig() {
-  const url = cleanEnvValue(
-    window.WSG_SUPABASE_URL
-      || window.VITE_SUPABASE_URL
-      || document.querySelector('meta[name="wsg-supabase-url"]')?.getAttribute('content'),
+function readMetaContent(name) {
+  return cleanEnvValue(
+    document
+      .querySelector(`meta[name="${name}"]`)
+      ?.getAttribute('content'),
   );
-
-  const anonKey = cleanEnvValue(
-    window.WSG_SUPABASE_ANON_KEY
-      || window.VITE_SUPABASE_ANON_KEY
-      || document.querySelector('meta[name="wsg-supabase-anon-key"]')?.getAttribute('content'),
-  );
-
-  return { url, anonKey };
 }
 
-const { url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY } = readSupabaseConfig();
+function readSupabaseConfig() {
+  const urlFromMeta = readMetaContent('wsg-supabase-url');
+  const anonKeyFromMeta = readMetaContent('wsg-supabase-anon-key');
+
+  const urlFromWindow = cleanEnvValue(window.WSG_SUPABASE_URL || window.VITE_SUPABASE_URL);
+  const anonKeyFromWindow = cleanEnvValue(window.WSG_SUPABASE_ANON_KEY || window.VITE_SUPABASE_ANON_KEY);
+
+  const url = urlFromMeta || urlFromWindow;
+  const anonKey = anonKeyFromMeta || anonKeyFromWindow;
+  const source = (urlFromMeta || anonKeyFromMeta) ? 'meta-tags' : 'window-runtime';
+
+  return { url, anonKey, source };
+}
+
+const {
+  url: SUPABASE_URL,
+  anonKey: SUPABASE_ANON_KEY,
+  source: SUPABASE_CONFIG_SOURCE,
+} = readSupabaseConfig();
 
 export const supabaseConfig = {
   urlPresent: Boolean(SUPABASE_URL),
   keyPresent: Boolean(SUPABASE_ANON_KEY),
   ready: Boolean(SUPABASE_URL && SUPABASE_ANON_KEY),
-  source: 'window/meta-runtime',
+  source: SUPABASE_CONFIG_SOURCE,
   initError: '',
 };
 
