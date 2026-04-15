@@ -2965,3 +2965,48 @@ h1, h2, h3, h4, .title, .lockup-title { font-family: var(--heading-font); }
 .policy-copy-block ul {
   margin: 10px 0 0 20px;
 }
+
+.policy-layout-card {
+  max-width: 920px;
+  margin: 0 auto;
+  line-height: 1.65;
+}
+
+.policy-page-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+  padding-bottom: 12px;
+}
+
+.policy-last-updated {
+  margin: 4px 0 8px;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.policy-section-nav {
+  margin-top: 16px;
+  background: rgba(6, 9, 20, 0.7);
+  border: 1px solid rgba(155, 172, 246, 0.2);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.policy-section-nav h4 {
+  margin: 0 0 8px;
+}
+
+.policy-section-nav ul {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 6px;
+}
+
+.policy-section-nav a {
+  color: var(--text-main);
+}
+
+.policy-copy-block p,
+.policy-copy-block li {
+  color: rgba(232, 238, 255, 0.95);
+}

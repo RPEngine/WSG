@@ -1,6 +1,6 @@
 const FRIENDLI_PROVIDER = "friendli";
 const DEFAULT_BASE_URL = "https://api.friendli.ai/dedicated/v1";
-const DEFAULT_ENDPOINT_ID = "depfbgnsxtxk2bc";
+const DEFAULT_ENDPOINT_ID = "";
 
 const trim = (value) => (typeof value === "string" ? value.trim() : "");
 
