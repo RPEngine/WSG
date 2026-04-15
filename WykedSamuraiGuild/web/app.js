@@ -366,6 +366,8 @@ const state = {
     session: null,
     pending: false,
     error: '',
+    toolsCollapsed: loadRoleplayToolsCollapsedPreference(),
+    activeToolsTab: 'participants',
   },
   homeChat: {
     messages: [],
@@ -413,10 +415,26 @@ const PASSWORD_POLICY_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).
 const GOOGLE_CLIENT_ID_META_KEY = 'wsg-google-client-id';
 const SHELL_LAYOUT_STORAGE_KEY = 'wsg-shell-layout';
 const HEADER_COLLAPSED_STORAGE_KEY = 'ui.headerCollapsed';
+const ROLEPLAY_TOOLS_COLLAPSED_STORAGE_KEY = 'ui.roleplayToolsCollapsed';
 const HOME_ROUTE = '/app';
 const ONBOARDING_ROUTE = `/scenario/${FIRST_SCENARIO_ID}`;
 
 let googleInitialized = false;
+
+function shouldStartRoleplayToolsCollapsed() {
+  return window.matchMedia('(max-width: 900px)').matches;
+}
+
+function loadRoleplayToolsCollapsedPreference() {
+  try {
+    const raw = localStorage.getItem(ROLEPLAY_TOOLS_COLLAPSED_STORAGE_KEY);
+    if (raw === 'true') return true;
+    if (raw === 'false') return false;
+  } catch {
+    // no-op: localStorage might be unavailable
+  }
+  return shouldStartRoleplayToolsCollapsed();
+}
 
 function loadArenaLayoutPrefs() {
   try {
@@ -474,6 +492,14 @@ function persistArenaLayoutPrefs() {
         scenarioStripCollapsed: state.shell.isScenarioStripCollapsed,
       })
     );
+  } catch {
+    // no-op: localStorage might be unavailable
+  }
+}
+
+function persistRoleplayToolsCollapsedPreference() {
+  try {
+    localStorage.setItem(ROLEPLAY_TOOLS_COLLAPSED_STORAGE_KEY, String(state.roleplay.toolsCollapsed));
   } catch {
     // no-op: localStorage might be unavailable
   }
@@ -1109,6 +1135,56 @@ function getRoleplayRooms() {
 
 function getActiveRoleplayRoom() {
   return getRoleplayRooms().find((room) => room.id === state.arena.activeRoomId) || null;
+}
+
+function getRoleplayParticipants() {
+  const activeRoom = getActiveRoleplayRoom();
+  const currentUser = state.currentUser;
+  const currentUserCharacter = Array.isArray(currentUser?.roleplayCharacters) ? currentUser.roleplayCharacters[0] : null;
+
+  const participants = [
+    currentUser
+      ? {
+        id: `user-${currentUser.id}`,
+        type: 'user',
+        displayName: currentUser.displayName || currentUser.username || 'You',
+        avatarUrl: currentUser.avatarUrl || '',
+        subtitle: 'You • Room Member',
+        profileId: currentUser.id,
+        isOnline: true,
+      }
+      : null,
+    currentUserCharacter
+      ? {
+        id: `character-${currentUserCharacter.id}`,
+        type: 'character',
+        displayName: currentUserCharacter.name || 'Current Character',
+        subtitle: currentUserCharacter.title || currentUserCharacter.archetype || 'Character Persona',
+        characterId: currentUserCharacter.id,
+        isOnline: true,
+      }
+      : null,
+    {
+      id: `npc-warden-${activeRoom?.id || 'room'}`,
+      type: 'npc',
+      displayName: 'Warden Echo',
+      initials: 'WE',
+      subtitle: 'NPC • Scene Guide',
+      isOnline: true,
+    },
+  ].filter(Boolean);
+
+  return participants;
+}
+
+function roleplayParticipantRoute(participant) {
+  if (participant.type === 'user' && participant.profileId) {
+    return `/profile/${participant.profileId}`;
+  }
+  if (participant.type === 'character' && participant.characterId) {
+    return `/characters/${participant.characterId}`;
+  }
+  return '';
 }
 
 function slugifyScenario(value) {
@@ -2157,7 +2233,29 @@ function guildPage() {
 
 function roleplayHubPage() {
   const session = ensureRoleplaySession();
+  const isToolsCollapsed = Boolean(state.roleplay.toolsCollapsed);
+  const activeToolsTab = state.roleplay.activeToolsTab || 'participants';
   const messages = Array.isArray(session.messages) ? session.messages : [];
+  const participantsMarkup = getRoleplayParticipants().map((participant) => {
+    const participantRoute = roleplayParticipantRoute(participant);
+    const isDisabled = !participantRoute;
+    return `
+      <button
+        type="button"
+        class="roleplay-participant-row ${participant.isOnline ? 'is-online' : ''}"
+        data-roleplay-participant-route="${escapeAttr(participantRoute)}"
+        ${isDisabled ? 'disabled title="NPC detail cards are coming soon."' : ''}
+      >
+        <span class="roleplay-participant-avatar">
+          ${participant.avatarUrl ? `<img src="${escapeAttr(participant.avatarUrl)}" alt="${escapeAttr(participant.displayName)}"/>` : `<span>${escapeHtml(participant.initials || participant.displayName.slice(0, 2).toUpperCase())}</span>`}
+        </span>
+        <span class="roleplay-participant-copy">
+          <strong>${escapeHtml(participant.displayName)}</strong>
+          <small>${escapeHtml(participant.subtitle || (participant.type === 'character' ? 'Character' : participant.type))}</small>
+        </span>
+      </button>
+    `;
+  }).join('');
   const messagesMarkup = messages.map((message) => `
     <article class="message arena-chat-message ${message.type === 'user' ? 'user' : 'system'}">
       <div class="message-label">${message.type === 'user' ? 'You' : 'Roleplay Nexus'}</div>
@@ -2188,10 +2286,43 @@ function roleplayHubPage() {
         </div>
         ${state.roleplay.error ? `<p class="muted" style="color:#ff7b7b;margin-top:8px;" role="alert">${escapeHtml(state.roleplay.error)}</p>` : ''}
       </section>
-      <aside class="roleplay-nexus-side panel-surface panel-surface--soft">
-        <h3>Future Tools</h3>
-        <p class="muted">Rooms, NPCs, and scene tools will be added later.</p>
+      <aside class="roleplay-nexus-side roleplay-tools-panel panel-surface panel-surface--soft ${isToolsCollapsed ? 'is-collapsed' : ''}">
+        <div class="roleplay-tools-head">
+          <h3>${isToolsCollapsed ? 'Tools' : 'Roleplay Tools'}</h3>
+          <button type="button" class="panel-toggle-btn roleplay-tools-collapse-btn" id="roleplay-tools-toggle" aria-label="${isToolsCollapsed ? 'Expand roleplay tools' : 'Collapse roleplay tools'}">${isToolsCollapsed ? '⟨' : '⟩'}</button>
+        </div>
+        <div class="roleplay-tools-tabs ${isToolsCollapsed ? 'is-collapsed' : ''}" role="tablist" aria-label="Roleplay tools tabs">
+          <button type="button" class="roleplay-tools-tab ${activeToolsTab === 'participants' ? 'active' : ''}" data-roleplay-tools-tab="participants" role="tab" aria-selected="${activeToolsTab === 'participants'}" title="Participants">👥<span>Participants</span></button>
+          <button type="button" class="roleplay-tools-tab ${activeToolsTab === 'scene' ? 'active' : ''}" data-roleplay-tools-tab="scene" role="tab" aria-selected="${activeToolsTab === 'scene'}" title="Scene">🗺️<span>Scene</span></button>
+          <button type="button" class="roleplay-tools-tab ${activeToolsTab === 'tools' ? 'active' : ''}" data-roleplay-tools-tab="tools" role="tab" aria-selected="${activeToolsTab === 'tools'}" title="Tools">🛠️<span>Tools</span></button>
+        </div>
+        ${isToolsCollapsed ? '' : `
+          <div class="roleplay-tools-content" role="tabpanel">
+            ${activeToolsTab === 'participants' ? `
+              <div class="roleplay-participant-list">
+                ${participantsMarkup || '<p class="muted">No participants are visible in this room yet.</p>'}
+              </div>
+            ` : ''}
+            ${activeToolsTab === 'scene' ? '<p class="muted">Scene state, room info, and location tools will appear here later.</p>' : ''}
+            ${activeToolsTab === 'tools' ? '<p class="muted">NPC controls, room tools, and scene utilities will be added later.</p>' : ''}
+          </div>
+        `}
       </aside>
+    </section>
+  `;
+}
+
+function characterDetailPage(path) {
+  const characterId = path.replace('/characters/', '').split('/')[0];
+  const knownCharacters = Array.isArray(state.currentUser?.roleplayCharacters) ? state.currentUser.roleplayCharacters : [];
+  const character = knownCharacters.find((entry) => String(entry.id) === String(characterId));
+  return `
+    <section class="card panel-surface panel-surface--transparent">
+      <p class="hero-kicker">Character Profile</p>
+      <h3>${escapeHtml(character?.name || 'Character Detail')}</h3>
+      <p class="muted">${escapeHtml(character?.bio || 'This character profile page is a placeholder route for upcoming roleplay character details.')}</p>
+      <p class="muted">Character ID: ${escapeHtml(characterId)}</p>
+      <a class="pill-btn" href="${linkFor('/roleplay')}">Back to Roleplay Nexus</a>
     </section>
   `;
 }
@@ -2813,7 +2944,7 @@ async function loadProfileForRoute(path) {
     return;
   }
 
-  const match = path.match(/^\/members\/([a-fA-F0-9-]+)$/);
+  const match = path.match(/^\/(?:members|profile)\/([a-fA-F0-9-]+)$/);
   if (!match) {
     return;
   }
@@ -2850,8 +2981,12 @@ function applyRouteGuards(path) {
   }
 
   const isScenarioRoute = path === '/scenario' || path.startsWith('/scenario/');
+  const isMemberProfileRoute = /^\/members\/[^/]+$/.test(path);
+  const isUserProfileRoute = /^\/profile\/[^/]+$/.test(path);
+  const isCharacterRoute = /^\/characters\/[^/]+$/.test(path);
   const known = routes[path]
-    || (path.startsWith('/members/') ? { key: 'profile', requiresAuth: true } : null)
+    || (isMemberProfileRoute || isUserProfileRoute ? { key: 'profile', requiresAuth: true } : null)
+    || (isCharacterRoute ? { key: 'characterDetail', requiresAuth: true } : null)
     || (isScenarioRoute ? { key: 'scenarioDetail', requiresAuth: true } : null);
   if (!known) {
     return path;
@@ -3724,7 +3859,7 @@ async function render() {
   if (path === '/members') {
     await ensureMembersLoaded();
   }
-  if (path === '/profile' || path.startsWith('/members/')) {
+  if (path === '/profile' || /^\/(?:members|profile)\/[^/]+$/.test(path)) {
     await loadProfileForRoute(path);
   }
   const isPublicRoute = ['/', '/login', '/signup'].includes(path);
@@ -3752,7 +3887,10 @@ async function render() {
     }
   }
 
-  const route = routes[path] || (path.startsWith('/members/') ? { key: 'profile', requiresAuth: true } : { key: 'fallback' });
+  const route = routes[path]
+    || (/^\/(?:members|profile)\/[^/]+$/.test(path) ? { key: 'profile', requiresAuth: true } : null)
+    || (/^\/characters\/[^/]+$/.test(path) ? { key: 'characterDetail', requiresAuth: true } : null)
+    || { key: 'fallback' };
   const isScenarioRoute = path === '/scenario' || path.startsWith('/scenario/');
   const resolvedRoute = isScenarioRoute ? { key: 'scenarioDetail', requiresAuth: true } : route;
   const pageHtml = {
@@ -3763,6 +3901,7 @@ async function render() {
     roleplayHub: roleplayHubPage,
     members: membersPage,
     profile: profilePage,
+    characterDetail: () => characterDetailPage(path),
     directChat: directChatPage,
     scenarioChat: scenarioChatPage,
     areaChat: areaChatPage,
@@ -3910,46 +4049,74 @@ async function render() {
 
 function attachRoleplayHandlers() {
   const roleplayForm = document.getElementById('roleplay-input-form');
-  if (!roleplayForm) {
-    return;
+  if (roleplayForm) {
+    roleplayForm.onsubmit = async (event) => {
+      event.preventDefault();
+      const session = ensureRoleplaySession();
+      const input = document.getElementById('roleplay-input');
+      const value = String(input?.value || '').trim();
+      if (!value || state.roleplay.pending) {
+        return;
+      }
+
+      state.roleplay.error = '';
+      session.messages.push({ id: crypto.randomUUID(), type: 'user', content: value });
+      if (input) input.value = '';
+      state.roleplay.pending = true;
+      render();
+
+      try {
+        const aiReply = await requestRoleplayAssistantReply(value, session);
+        session.messages.push({ id: crypto.randomUUID(), type: 'system', content: aiReply });
+      } catch (error) {
+        console.error('[ai:frontend] roleplay response failed', { error, message: value });
+        state.roleplay.error = getArenaFriendlyErrorMessage(error);
+        session.messages.push({
+          id: crypto.randomUUID(),
+          type: 'system',
+          content: 'The world goes silent for a moment. Try again.',
+        });
+      }
+
+      state.roleplay.pending = false;
+      render();
+    };
   }
-
-  roleplayForm.onsubmit = async (event) => {
-    event.preventDefault();
-    const session = ensureRoleplaySession();
-    const input = document.getElementById('roleplay-input');
-    const value = String(input?.value || '').trim();
-    if (!value || state.roleplay.pending) {
-      return;
-    }
-
-    state.roleplay.error = '';
-    session.messages.push({ id: crypto.randomUUID(), type: 'user', content: value });
-    if (input) input.value = '';
-    state.roleplay.pending = true;
-    render();
-
-    try {
-      const aiReply = await requestRoleplayAssistantReply(value, session);
-      session.messages.push({ id: crypto.randomUUID(), type: 'system', content: aiReply });
-    } catch (error) {
-      console.error('[ai:frontend] roleplay response failed', { error, message: value });
-      state.roleplay.error = getArenaFriendlyErrorMessage(error);
-      session.messages.push({
-        id: crypto.randomUUID(),
-        type: 'system',
-        content: 'The world goes silent for a moment. Try again.',
-      });
-    }
-
-    state.roleplay.pending = false;
-    render();
-  };
 
   const chatLog = document.getElementById('roleplay-conversation-log');
   if (chatLog) {
     chatLog.scrollTop = chatLog.scrollHeight;
   }
+
+  const toolsToggle = document.getElementById('roleplay-tools-toggle');
+  if (toolsToggle) {
+    toolsToggle.onclick = () => {
+      state.roleplay.toolsCollapsed = !state.roleplay.toolsCollapsed;
+      persistRoleplayToolsCollapsedPreference();
+      render();
+    };
+  }
+
+  document.querySelectorAll('[data-roleplay-tools-tab]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const tab = button.getAttribute('data-roleplay-tools-tab');
+      if (!tab) return;
+      state.roleplay.activeToolsTab = tab;
+      if (state.roleplay.toolsCollapsed) {
+        state.roleplay.toolsCollapsed = false;
+        persistRoleplayToolsCollapsedPreference();
+      }
+      render();
+    });
+  });
+
+  document.querySelectorAll('[data-roleplay-participant-route]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const route = button.getAttribute('data-roleplay-participant-route');
+      if (!route) return;
+      location.hash = route;
+    });
+  });
 }
 
 window.addEventListener('hashchange', render);
