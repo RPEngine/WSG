@@ -220,6 +220,7 @@ const PROFILE_LAYER_META = {
   roleplay: { label: 'Roleplay', hint: 'In-world RP persona layer' },
 };
 const PROFILE_LAYER_ORDER = ['free', 'professional', 'roleplay'];
+const arenaLayoutPrefs = loadArenaLayoutPrefs();
 
 const state = {
   mode: localStorage.getItem('wsg-mode') || 'professional',
@@ -272,6 +273,11 @@ const state = {
     messages: [],
     pending: false,
     error: '',
+    leftPanelCollapsed: arenaLayoutPrefs.leftPanelCollapsed,
+    rightPanelCollapsed: arenaLayoutPrefs.rightPanelCollapsed,
+    rightPanelTab: arenaLayoutPrefs.rightPanelTab,
+    mobileLeftOpen: false,
+    mobileRightOpen: false,
   },
   homeChat: {
     messages: [],
@@ -307,8 +313,49 @@ const SCENARIO_PROGRESS_STORAGE_PREFIX = 'wsg-scenario-progress';
 const PASSWORD_POLICY_MESSAGE = 'Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a special character.';
 const PASSWORD_POLICY_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$/;
 const GOOGLE_CLIENT_ID_META_KEY = 'wsg-google-client-id';
+const ARENA_LAYOUT_STORAGE_KEY = 'wsg-arena-layout';
 
 let googleInitialized = false;
+
+function loadArenaLayoutPrefs() {
+  try {
+    const raw = localStorage.getItem(ARENA_LAYOUT_STORAGE_KEY);
+    if (!raw) {
+      return {
+        leftPanelCollapsed: false,
+        rightPanelCollapsed: false,
+        rightPanelTab: 'connections',
+      };
+    }
+    const parsed = JSON.parse(raw);
+    return {
+      leftPanelCollapsed: Boolean(parsed.leftPanelCollapsed),
+      rightPanelCollapsed: Boolean(parsed.rightPanelCollapsed),
+      rightPanelTab: ['connections', 'chat', 'participants', 'status'].includes(parsed.rightPanelTab) ? parsed.rightPanelTab : 'connections',
+    };
+  } catch {
+    return {
+      leftPanelCollapsed: false,
+      rightPanelCollapsed: false,
+      rightPanelTab: 'connections',
+    };
+  }
+}
+
+function persistArenaLayoutPrefs() {
+  try {
+    localStorage.setItem(
+      ARENA_LAYOUT_STORAGE_KEY,
+      JSON.stringify({
+        leftPanelCollapsed: state.arena.leftPanelCollapsed,
+        rightPanelCollapsed: state.arena.rightPanelCollapsed,
+        rightPanelTab: state.arena.rightPanelTab,
+      })
+    );
+  } catch {
+    // no-op: localStorage might be unavailable
+  }
+}
 
 function linkFor(path) {
   return `#${path}`;
@@ -1353,6 +1400,9 @@ function arenaPage() {
   const hasActiveTrial = Boolean(activeTrial);
   const participantCount = Math.max((state.network.connections || []).slice(0, 6).length, 1);
   const isRoleplayMode = state.mode === 'roleplay';
+  const isCompactViewport = window.matchMedia('(max-width: 1180px)').matches;
+  const leftCollapsed = isCompactViewport ? !state.arena.mobileLeftOpen : state.arena.leftPanelCollapsed;
+  const rightCollapsed = isCompactViewport ? !state.arena.mobileRightOpen : state.arena.rightPanelCollapsed;
   const trialCards = (isRoleplayMode ? ROLEPLAY_ROOMS : STARTER_TRIALS)
     .map((trialOrRoom) => {
       const trialId = isRoleplayMode ? trialOrRoom.trialId : trialOrRoom.id;
@@ -1371,9 +1421,10 @@ function arenaPage() {
           </div>
           <button class="pill-btn start-trial-btn" data-trial-id="${trialId}">
             ${isRoleplayMode
-    ? (isActive ? 'Re-enter Room' : 'Enter Room')
+    ? (isActive ? 'Resume Room' : 'Start Room')
     : (isActive ? 'Restart Trial' : 'Start Trial')}
           </button>
+          ${isActive ? `<button class="pill-btn start-trial-btn" data-trial-id="${trialId}" data-restart="true">${isRoleplayMode ? 'Restart Room' : 'Resume Trial'}</button>` : ''}
         </article>
       `;
     })
@@ -1389,31 +1440,111 @@ function arenaPage() {
       `
     )
     .join('');
+
+  const rightTab = state.arena.rightPanelTab;
+  const rightPanelBody = (() => {
+    if (rightTab === 'participants') {
+      return `
+        <section class="participant-grid">
+          ${(state.network.connections || []).slice(0, 8).map((connection) => `
+            <article class="participant-card">
+              <div class="participant-avatar">${avatarMarkup(connection, 'md')}</div>
+              <div>
+                <strong>${escapeHtml(connection.displayName || connection.username)}</strong>
+                <p class="muted">${escapeHtml(connection.role || 'member')}</p>
+              </div>
+              <span class="participant-status">${escapeHtml(connection.status || 'live')}</span>
+            </article>
+          `).join('') || '<p class="muted">No participants connected yet.</p>'}
+        </section>
+      `;
+    }
+    if (rightTab === 'status') {
+      return hasActiveTrial
+        ? `
+          <ul class="status-list">
+            <li><span class="muted">Title</span><strong>${activeTrial.title}</strong></li>
+            <li><span class="muted">Mode</span><strong>${state.mode === 'roleplay' ? 'Roleplay Room' : 'Arena Scenario'}</strong></li>
+            <li><span class="muted">Difficulty</span><strong>${activeTrial.difficulty}</strong></li>
+            <li><span class="muted">Role Focus</span><strong>${activeTrial.suggestedRole || 'Unspecified'}</strong></li>
+            <li><span class="muted">Participants</span><strong>${participantCount}</strong></li>
+          </ul>
+        `
+        : '<p class="muted">No active session yet. Start a scenario to show status details.</p>';
+    }
+    if (rightTab === 'chat') {
+      return `
+        <ul class="compact-list">
+          ${state.arena.messages.slice(-8).map((message) => `
+            <li>
+              <div>
+                <strong>${escapeHtml(message.type === 'user' ? 'You' : (message.type === 'system' ? 'System' : 'Guide'))}</strong>
+                <p class="muted" style="margin:4px 0 0;">${escapeHtml(message.content).slice(0, 96)}${message.content.length > 96 ? '…' : ''}</p>
+              </div>
+            </li>
+          `).join('') || '<li><span class="muted">No chat messages yet.</span></li>'}
+        </ul>
+      `;
+    }
+    return `
+      <ul class="compact-list">
+        ${(state.network.connections || []).slice(0, 8).map((connection) => `
+          <li>
+            <div>
+              <strong>${escapeHtml(connection.displayName || connection.username)}</strong>
+              <p class="muted" style="margin:4px 0 0;">${escapeHtml(connection.status || 'offline')}</p>
+            </div>
+            <button class="pill-btn open-direct-chat-btn" data-connection-id="${escapeAttr(connection.id)}">Message</button>
+          </li>
+        `).join('') || '<li><span class="muted">No connections available.</span></li>'}
+      </ul>
+    `;
+  })();
+
   return `
-    <section class="workspace-layout arena-layout">
+    <section class="workspace-layout arena-layout ${leftCollapsed ? 'is-left-collapsed' : ''} ${rightCollapsed ? 'is-right-collapsed' : ''} ${isCompactViewport ? 'is-mobile' : ''} ${state.arena.mobileLeftOpen ? 'is-mobile-left-open' : ''} ${state.arena.mobileRightOpen ? 'is-mobile-right-open' : ''}">
+      <aside class="workspace-col card arena-left-panel">
+        <div class="arena-panel-head">
+          <h3>${leftCollapsed ? 'Arena' : 'Navigation'}</h3>
+          <button type="button" class="panel-toggle-btn" id="arena-left-panel-toggle" aria-label="${leftCollapsed ? 'Expand left panel' : 'Collapse left panel'}">${leftCollapsed ? '⟩' : '⟨'}</button>
+        </div>
+        <nav class="arena-side-nav">
+          <a class="${location.hash === linkFor('/app') ? 'active' : ''}" href="${linkFor('/app')}">🏠 ${leftCollapsed ? '' : 'Home'}</a>
+          <a class="active" href="${linkFor('/arena')}">⚔️ ${leftCollapsed ? '' : 'Arena'}</a>
+          <a class="${location.hash === linkFor('/guild-world') ? 'active' : ''}" href="${linkFor('/guild-world')}">🌌 ${leftCollapsed ? '' : 'Guild'}</a>
+          <a class="${location.hash === linkFor('/profile') ? 'active' : ''}" href="${linkFor('/profile')}">👤 ${leftCollapsed ? '' : 'Profile'}</a>
+        </nav>
+        <section class="arena-side-block">
+          <h4>${leftCollapsed ? '⚡' : 'Mode'}</h4>
+          ${leftCollapsed ? '' : `<p class="muted">${isRoleplayMode ? 'Roleplay rooms active.' : 'Professional scenario mode active.'}</p>`}
+        </section>
+        <section class="arena-side-block">
+          <h4>${leftCollapsed ? '📌' : 'Active'}</h4>
+          ${leftCollapsed ? '' : `<p class="muted">${hasActiveTrial ? activeTrial.title : 'No active scenario selected.'}</p>`}
+        </section>
+      </aside>
       <section class="workspace-col card arena-main-column">
-        <section class="arena-selection-tier">
+        <section class="arena-selection-tier arena-scenario-strip">
           <div class="arena-selection-head">
-            <h3>${isRoleplayMode ? 'Open RP Rooms' : 'Arena Scenarios'}</h3>
-            <p class="muted">${isRoleplayMode ? 'Choose a live roleplay room and jump directly into shared storytelling.' : 'Pick a scenario card to launch or restart a guided trial.'}</p>
+            <h3>${isRoleplayMode ? 'Roleplay Room Strip' : 'Scenario Strip'}</h3>
+            <p class="muted">${isRoleplayMode ? 'Open, resume, or restart shared room sessions.' : 'Launch, resume, or restart your guided trial flow.'}</p>
           </div>
           <div class="arena-card-carousel">
             ${trialCards}
           </div>
         </section>
         <section class="scenario-experience-panel arena-chat-panel">
-          <div class="scenario-panel-head">
+          <div class="scenario-panel-head arena-chat-head">
             <div>
               <p class="hero-kicker">${isRoleplayMode ? 'Room Chat' : 'Arena Chat'}</p>
               <h4>${hasActiveTrial ? activeTrial.title : `No ${isRoleplayMode ? 'room' : 'scenario'} active`}</h4>
             </div>
-            <p class="muted">${state.mode === 'roleplay' ? 'Immersive roleplay lane' : 'Structured decision lane'}</p>
+            <p class="muted">${state.mode === 'roleplay' ? 'Immersive roleplay lane' : 'Structured decision lane'} · ${state.arena.messages.length} messages</p>
           </div>
-          ${hasActiveTrial ? `<p class="scenario-prompt">${escapeHtml(activeTrial.openingPrompt)}</p>` : ''}
           ${
   hasActiveTrial
     ? `<div id="arena-conversation-log" class="conversation-log arena-chat-log">${chatMessages}</div>`
-    : `<div class="arena-empty"><h4>No ${isRoleplayMode ? 'Room' : 'Trial'} active</h4><p class="muted">Select a ${isRoleplayMode ? 'room' : 'scenario card'} above to begin chatting.</p></div>`
+    : `<div class="arena-empty"><h4>No ${isRoleplayMode ? 'Room' : 'Trial'} active</h4><p class="muted">Select a ${isRoleplayMode ? 'room' : 'scenario card'} from the strip above to begin chatting.</p></div>`
 }
           <form id="arena-input-form" class="arena-input">
             <input id="arena-input" name="message" placeholder="${hasActiveTrial ? `Type your ${isRoleplayMode ? 'roleplay' : 'response'} message...` : `Start a ${isRoleplayMode ? 'room' : 'trial'} to enable chat`}" ${hasActiveTrial ? '' : 'disabled'} />
@@ -1422,51 +1553,20 @@ function arenaPage() {
           ${state.arena.error ? `<p class="muted" style="color:#ff7b7b;margin-top:8px;" role="alert">${escapeHtml(state.arena.error)}</p>` : ''}
         </section>
       </section>
-      <aside class="workspace-col card">
-      <h3>Participants</h3>
-      <section class="participant-grid">
-        ${(state.network.connections || []).slice(0, 6).map((connection) => `
-          <article class="participant-card">
-            <div class="participant-avatar">${avatarMarkup(connection, 'md')}</div>
-            <div>
-              <strong>${escapeHtml(connection.displayName || connection.username)}</strong>
-              <p class="muted">${escapeHtml(connection.role || 'member')}</p>
-            </div>
-            <span class="participant-status">Live</span>
-          </article>
-        `).join('') || '<p class="muted">No participants connected yet.</p>'}
-      </section>
-      <h4 style="margin-top:14px;">Scenario Status</h4>
-      ${
-  hasActiveTrial
-    ? `
-            <ul class="status-list">
-              <li><span class="muted">Title</span><strong>${activeTrial.title}</strong></li>
-              <li><span class="muted">Mode</span><strong>${state.mode === 'roleplay' ? 'Roleplay Room' : 'Arena Scenario'}</strong></li>
-              <li><span class="muted">Difficulty</span><strong>${activeTrial.difficulty}</strong></li>
-              <li><span class="muted">Role Focus</span><strong>${activeTrial.suggestedRole || 'Unspecified'}</strong></li>
-              <li><span class="muted">Participants</span><strong>${participantCount}</strong></li>
-            </ul>
-          `
-    : '<p class="muted">No active session yet. Select a card to populate status details.</p>'
-}
-      <section class="messaging-rail" style="margin-top:12px;">
-        <div class="messaging-rail-head">
-          <h4>Connections</h4>
-          <span class="muted">${state.network.connections.length} total</span>
+      <aside class="workspace-col card arena-right-panel">
+        <div class="arena-panel-head">
+          <h3>${rightCollapsed ? 'Tools' : 'Control Hub'}</h3>
+          <button type="button" class="panel-toggle-btn" id="arena-right-panel-toggle" aria-label="${rightCollapsed ? 'Expand right panel' : 'Collapse right panel'}">${rightCollapsed ? '⟨' : '⟩'}</button>
         </div>
-        <ul class="compact-list">
-          ${(state.network.connections || []).slice(0, 6).map((connection) => `
-            <li>
-              <div>
-                <strong>${escapeHtml(connection.displayName || connection.username)}</strong>
-                <p class="muted" style="margin:4px 0 0;">${escapeHtml(connection.status || 'offline')}</p>
-              </div>
-              <button class="pill-btn open-direct-chat-btn" data-connection-id="${escapeAttr(connection.id)}">Message</button>
-            </li>
-          `).join('') || '<li><span class="muted">No connections available.</span></li>'}
-        </ul>
-      </section>
+        <div class="arena-right-tabs">
+          <button type="button" class="utility-tab-btn ${rightTab === 'connections' ? 'active' : ''}" data-arena-tab="connections" title="Connections">🔌 ${rightCollapsed ? '' : 'Connections'}</button>
+          <button type="button" class="utility-tab-btn ${rightTab === 'chat' ? 'active' : ''}" data-arena-tab="chat" title="Chat">💬 ${rightCollapsed ? '' : 'Chat'}</button>
+          <button type="button" class="utility-tab-btn ${rightTab === 'participants' ? 'active' : ''}" data-arena-tab="participants" title="Participants">🧑‍🤝‍🧑 ${rightCollapsed ? '' : 'Participants'}</button>
+          <button type="button" class="utility-tab-btn ${rightTab === 'status' ? 'active' : ''}" data-arena-tab="status" title="Status">📊 ${rightCollapsed ? '' : 'Status'}</button>
+        </div>
+        <section class="arena-right-content">
+          ${rightCollapsed ? '' : rightPanelBody}
+        </section>
       </aside>
     </section>
   `;
@@ -2470,11 +2570,47 @@ function attachProfileEditHandler() {
 }
 
 function attachArenaHandlers() {
-  const startButtons = document.querySelectorAll('.start-trial-btn');
-  if (!startButtons.length) {
-    return;
+  const leftPanelToggle = document.getElementById('arena-left-panel-toggle');
+  if (leftPanelToggle) {
+    leftPanelToggle.onclick = () => {
+      if (window.matchMedia('(max-width: 1180px)').matches) {
+        state.arena.mobileLeftOpen = !state.arena.mobileLeftOpen;
+        if (state.arena.mobileLeftOpen) {
+          state.arena.mobileRightOpen = false;
+        }
+      } else {
+        state.arena.leftPanelCollapsed = !state.arena.leftPanelCollapsed;
+        persistArenaLayoutPrefs();
+      }
+      render();
+    };
   }
 
+  const rightPanelToggle = document.getElementById('arena-right-panel-toggle');
+  if (rightPanelToggle) {
+    rightPanelToggle.onclick = () => {
+      if (window.matchMedia('(max-width: 1180px)').matches) {
+        state.arena.mobileRightOpen = !state.arena.mobileRightOpen;
+        if (state.arena.mobileRightOpen) {
+          state.arena.mobileLeftOpen = false;
+        }
+      } else {
+        state.arena.rightPanelCollapsed = !state.arena.rightPanelCollapsed;
+        persistArenaLayoutPrefs();
+      }
+      render();
+    };
+  }
+
+  document.querySelectorAll('[data-arena-tab]').forEach((button) => {
+    button.onclick = () => {
+      state.arena.rightPanelTab = String(button.getAttribute('data-arena-tab') || 'connections');
+      persistArenaLayoutPrefs();
+      render();
+    };
+  });
+
+  const startButtons = document.querySelectorAll('.start-trial-btn');
   startButtons.forEach((button) => {
     button.onclick = () => {
       const trialId = button.getAttribute('data-trial-id');

@@ -591,13 +591,101 @@ body {
 }
 
 .arena-layout {
-  grid-template-columns: minmax(0, 1fr) 320px;
+  --arena-left-width: 260px;
+  --arena-right-width: 320px;
+  grid-template-columns: var(--arena-left-width) minmax(0, 1fr) var(--arena-right-width);
+  align-items: stretch;
+}
+
+.arena-layout.is-left-collapsed {
+  --arena-left-width: 72px;
+}
+
+.arena-layout.is-right-collapsed {
+  --arena-right-width: 72px;
+}
+
+.arena-left-panel,
+.arena-right-panel {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 10px;
+  overflow: hidden;
+}
+
+.arena-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.arena-panel-head h3 {
+  margin: 0;
+}
+
+.panel-toggle-btn {
+  border: 1px solid var(--border);
+  background: var(--panel-soft);
+  color: var(--text-main);
+  border-radius: 10px;
+  width: 34px;
+  height: 34px;
+  cursor: pointer;
+}
+
+.arena-side-nav {
+  display: grid;
+  gap: 8px;
+}
+
+.arena-side-nav a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  color: var(--text-main);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.01);
+}
+
+.arena-side-nav a.active {
+  border-color: var(--ring);
+  background: var(--accent-soft);
+}
+
+.arena-side-block {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.16);
+}
+
+.arena-side-block h4 {
+  margin: 0 0 6px;
+}
+
+.arena-layout.is-left-collapsed .arena-left-panel {
+  align-content: start;
+}
+
+.arena-layout.is-left-collapsed .arena-side-nav a {
+  justify-content: center;
+  font-size: 1rem;
+}
+
+.arena-layout.is-left-collapsed .arena-side-block {
+  text-align: center;
+  padding: 8px;
 }
 
 .arena-main-column {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  gap: 12px;
+  gap: 14px;
+  min-height: 72vh;
 }
 
 .arena-selection-tier {
@@ -616,17 +704,18 @@ body {
 .arena-card-carousel {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(250px, 290px);
-  gap: 10px;
+  grid-auto-columns: minmax(360px, 460px);
+  gap: 12px;
   overflow-x: auto;
   padding-bottom: 8px;
   scrollbar-width: thin;
 }
 
 .arena-carousel-card {
-  min-height: 210px;
+  min-height: 186px;
   display: grid;
   align-content: start;
+  gap: 8px;
 }
 
 .recruiter-layout {
@@ -714,16 +803,27 @@ body {
 
 .arena-chat-panel {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
-  gap: 10px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  min-height: 0;
+  padding: 14px;
+  border-radius: 14px;
+  background: linear-gradient(170deg, rgba(10, 14, 20, 0.94), rgba(13, 18, 25, 0.88));
+}
+
+.arena-chat-head {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 10px;
 }
 
 .arena-chat-log {
   max-height: none;
-  min-height: 360px;
-  background: rgba(6, 10, 15, 0.82);
+  min-height: 52vh;
+  background: rgba(6, 10, 15, 0.62);
   align-content: start;
-  padding: 14px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  overflow-y: auto;
 }
 
 .message {
@@ -760,6 +860,8 @@ body {
 .message p {
   margin: 0;
   line-height: 1.4;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .arena-empty {
@@ -769,6 +871,8 @@ body {
   border: 1px dashed var(--border);
   border-radius: 10px;
   padding: 30px 18px;
+  min-height: 52vh;
+  background: rgba(8, 13, 18, 0.55);
 }
 
 .arena-empty h4 {
@@ -793,8 +897,27 @@ body {
 .arena-chat-panel .arena-input {
   position: sticky;
   bottom: 0;
-  background: linear-gradient(180deg, rgba(15, 19, 24, 0), rgba(15, 19, 24, 0.9) 20%);
-  padding-top: 8px;
+  background: linear-gradient(180deg, rgba(15, 19, 24, 0), rgba(15, 19, 24, 0.95) 35%);
+  padding-top: 10px;
+}
+
+.arena-right-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.arena-right-content {
+  min-height: 0;
+  overflow: auto;
+}
+
+.arena-layout.is-right-collapsed .arena-right-tabs {
+  grid-template-columns: 1fr;
+}
+
+.arena-layout.is-right-collapsed .arena-right-tabs .utility-tab-btn {
+  justify-content: center;
 }
 
 .scenario-hero,
@@ -1718,17 +1841,22 @@ select:focus-visible {
     grid-template-columns: 260px minmax(0, 1fr);
   }
 
-  .workspace-layout.arena-layout {
-    grid-template-columns: minmax(0, 1fr) 320px;
-  }
-
   .workspace-layout .workspace-col:last-child {
     grid-column: 1 / -1;
     min-height: auto;
   }
 
+  .workspace-layout.arena-layout {
+    grid-template-columns: 260px minmax(0, 1fr) 320px;
+  }
+
   .workspace-layout.arena-layout .workspace-col:last-child {
     grid-column: auto;
+    min-height: 460px;
+  }
+
+  .arena-card-carousel {
+    grid-auto-columns: minmax(320px, 380px);
   }
 
   .scenario-location-grid {
@@ -1751,6 +1879,10 @@ select:focus-visible {
   }
 
   .workspace-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-layout.arena-layout {
     grid-template-columns: 1fr;
   }
 
@@ -1789,6 +1921,59 @@ select:focus-visible {
 
   .scenario-final-form {
     grid-template-columns: 1fr;
+  }
+
+  .arena-layout.is-mobile .arena-left-panel,
+  .arena-layout.is-mobile .arena-right-panel {
+    min-height: 0;
+  }
+
+  .arena-main-column {
+    min-height: 68vh;
+  }
+
+  .arena-card-carousel {
+    grid-auto-columns: minmax(260px, 320px);
+  }
+}
+
+@media (max-width: 1180px) {
+  .arena-layout.is-mobile {
+    grid-template-columns: 72px minmax(0, 1fr) 72px;
+    position: relative;
+  }
+
+  .arena-layout.is-mobile .arena-left-panel,
+  .arena-layout.is-mobile .arena-right-panel {
+    z-index: 5;
+  }
+
+  .arena-layout.is-mobile .arena-left-panel {
+    grid-column: 1;
+  }
+
+  .arena-layout.is-mobile .arena-right-panel {
+    grid-column: 3;
+  }
+
+  .arena-layout.is-mobile.is-mobile-left-open .arena-left-panel {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: min(84vw, 300px);
+  }
+
+  .arena-layout.is-mobile.is-mobile-right-open .arena-right-panel {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: min(86vw, 340px);
+  }
+
+  .arena-layout.is-mobile .arena-main-column {
+    grid-column: 2;
   }
 }
 
