@@ -2,6 +2,7 @@ const FRIENDLI_PROVIDER = "friendli";
 const DEFAULT_DEPLOYED_MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.3";
 const FRIENDLI_DEPLOYED_MODEL_NAME = (process.env.FRIENDLI_MODEL || DEFAULT_DEPLOYED_MODEL_NAME).trim();
 const FRIENDLI_ENDPOINT_ID = (process.env.FRIENDLI_ENDPOINT_ID || "").trim();
+const FRIENDLI_TEAM_ID = (process.env.FRIENDLI_TEAM_ID || "").trim();
 const DEFAULT_FRIENDLI_BASE_URL = "https://api.friendli.ai/dedicated/v1";
 const FRIENDLI_BASE_URL = DEFAULT_FRIENDLI_BASE_URL;
 const FRIENDLI_CHAT_COMPLETIONS_PATH = "/chat/completions";
@@ -116,6 +117,19 @@ const validateFriendliEndpointId = (endpointId) => {
   }
 };
 
+const buildFriendliHeaders = (token) => {
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+  };
+
+  if (FRIENDLI_TEAM_ID) {
+    headers["X-Friendli-Team"] = FRIENDLI_TEAM_ID;
+  }
+
+  return headers;
+};
+
 const extractProviderErrorMessage = (payload, fallbackText = "") => {
   if (!payload || typeof payload !== "object") {
     return fallbackText || "Unknown Friendli error.";
@@ -155,10 +169,7 @@ const callFriendli = async ({
   try {
     response = await fetch(endpoint, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
+      headers: buildFriendliHeaders(token),
       body: JSON.stringify(requestBody),
     });
   } catch (error) {
@@ -251,6 +262,7 @@ export const testFriendliConnection = async () => {
       headers: {
         Authorization: "Bearer [REDACTED]",
         "Content-Type": "application/json",
+        ...(FRIENDLI_TEAM_ID ? { "X-Friendli-Team": FRIENDLI_TEAM_ID } : {}),
       },
       body: requestBody,
     },
@@ -337,10 +349,7 @@ export const checkFriendliHealth = async () => {
 
     const response = await fetch(FRIENDLI_CHAT_COMPLETIONS_ENDPOINT, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
+      headers: buildFriendliHeaders(token),
       body: JSON.stringify(requestBody),
     });
 
