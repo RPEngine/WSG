@@ -42,22 +42,18 @@ app.get("/", (req, res) => {
 
 async function startServer() {
   try {
-    const rawApiKey = process.env.HUGGINGFACE_API_KEY;
-    const rawApiToken = process.env.HUGGINGFACE_API_TOKEN;
-    const trimmedApiKey = typeof rawApiKey === "string" ? rawApiKey.trim() : "";
-    const trimmedApiToken = typeof rawApiToken === "string" ? rawApiToken.trim() : "";
-    const hfToken = trimmedApiKey || trimmedApiToken;
-    const hfTokenEnvName = trimmedApiKey
-      ? "HUGGINGFACE_API_KEY"
-      : trimmedApiToken
-        ? "HUGGINGFACE_API_TOKEN"
-        : null;
-    console.log("[startup] Hugging Face token configured:", {
-      apiKeyExists: typeof rawApiKey === "string",
-      apiTokenExists: typeof rawApiToken === "string",
-      tokenPresent: Boolean(hfToken),
-      tokenEnvName: hfTokenEnvName,
-      tokenLength: hfToken.length,
+    const friendliToken = typeof process.env.FRIENDLI_API_TOKEN === "string"
+      ? process.env.FRIENDLI_API_TOKEN.trim()
+      : "";
+    const friendliBaseUrl = (process.env.FRIENDLI_API_BASE_URL || "https://api.friendli.ai/dedicated").trim();
+    const friendliModel = (process.env.FRIENDLI_MODEL || "mistralai/Mistral-7B-Instruct-v0.3").trim();
+
+    console.log("[startup] AI provider diagnostics:", {
+      provider: "friendli",
+      baseUrl: friendliBaseUrl,
+      model: friendliModel,
+      tokenPresent: Boolean(friendliToken),
+      tokenEnvName: friendliToken ? "FRIENDLI_API_TOKEN" : null,
     });
     await connectDatabase();
     console.log("[db] database connection established");

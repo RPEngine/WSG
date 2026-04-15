@@ -1,7 +1,10 @@
-const DEFAULT_AI_MODEL = "HuggingFaceH4/zephyr-7b-beta";
-const HF_MODEL = process.env.HUGGING_FACE_MODEL || DEFAULT_AI_MODEL;
-const HF_ROUTER_ENDPOINT = "https://router.huggingface.co/v1/chat/completions";
-const HF_ROUTER_MODEL = process.env.HUGGING_FACE_ROUTER_MODEL || HF_MODEL;
+const FRIENDLI_PROVIDER = "friendli";
+const DEFAULT_AI_MODEL = "mistralai/Mistral-7B-Instruct-v0.3";
+const FRIENDLI_MODEL = process.env.FRIENDLI_MODEL || DEFAULT_AI_MODEL;
+const DEFAULT_FRIENDLI_BASE_URL = "https://api.friendli.ai/dedicated";
+const FRIENDLI_BASE_URL = (process.env.FRIENDLI_API_BASE_URL || DEFAULT_FRIENDLI_BASE_URL).trim();
+const FRIENDLI_CHAT_COMPLETIONS_PATH = "/v1/chat/completions";
+const FRIENDLI_CHAT_COMPLETIONS_ENDPOINT = `${FRIENDLI_BASE_URL.replace(/\/+$/, "")}${FRIENDLI_CHAT_COMPLETIONS_PATH}`;
 
 const scenarioOutputSchema = {
   title: "string",
@@ -60,69 +63,65 @@ const validateGeneratedScenario = (payload) => {
   };
 };
 
-const resolveHuggingFaceToken = () => {
-  const rawApiKey = process.env.HUGGINGFACE_API_KEY;
-  const rawApiToken = process.env.HUGGINGFACE_API_TOKEN;
-  const trimmedApiKey = typeof rawApiKey === "string" ? rawApiKey.trim() : "";
-  const trimmedApiToken = typeof rawApiToken === "string" ? rawApiToken.trim() : "";
-  const hfToken = trimmedApiKey || trimmedApiToken;
-  const envName = trimmedApiKey ? "HUGGINGFACE_API_KEY" : trimmedApiToken ? "HUGGINGFACE_API_TOKEN" : null;
+const resolveFriendliToken = () => {
+  const rawFriendliToken = process.env.FRIENDLI_API_TOKEN;
+  const token = typeof rawFriendliToken === "string" ? rawFriendliToken.trim() : "";
+  const envName = token ? "FRIENDLI_API_TOKEN" : null;
 
   return {
-    token: hfToken,
+    token,
     envName,
+    tokenPresent: Boolean(token),
   };
 };
 
-const validateHuggingFaceToken = (token) => {
+const validateFriendliToken = (token) => {
   if (typeof token !== "string") {
-    throw new Error("Invalid Hugging Face token: token must be a string.");
+    throw new Error("Invalid Friendli token: token must be a string.");
   }
   if (!token) {
-    throw new Error("Missing Hugging Face token. Set HUGGINGFACE_API_KEY or HUGGINGFACE_API_TOKEN.");
+    throw new Error("Missing Friendli API token. Set FRIENDLI_API_TOKEN.");
   }
   if (!token.trim()) {
-    throw new Error("Invalid Hugging Face token: token is empty after trim.");
-  }
-  if (!token.startsWith("hf_")) {
-    throw new Error("Invalid Hugging Face token: expected a token starting with \"hf_\".");
+    throw new Error("Invalid Friendli token: token is empty after trim.");
   }
 };
 
 const extractProviderErrorMessage = (payload, fallbackText = "") => {
   if (!payload || typeof payload !== "object") {
-    return fallbackText || "Unknown Hugging Face error.";
+    return fallbackText || "Unknown Friendli error.";
   }
 
   const nestedError = payload.error;
   if (nestedError && typeof nestedError === "object") {
-    return nestedError.message || nestedError.error || fallbackText || "Unknown Hugging Face error.";
+    return nestedError.message || nestedError.error || fallbackText || "Unknown Friendli error.";
   }
 
-  return payload.error || payload.message || payload.raw || fallbackText || "Unknown Hugging Face error.";
+  return payload.error || payload.message || payload.raw || fallbackText || "Unknown Friendli error.";
 };
 
-const callHuggingFace = async ({
+const callFriendli = async ({
   model,
-  inputs,
+  messages,
   parameters = {},
 }) => {
-  const { token, envName } = resolveHuggingFaceToken();
-  validateHuggingFaceToken(token);
-  const endpoint = HF_ROUTER_ENDPOINT;
-  const requestModel = model || HF_ROUTER_MODEL;
-  const userContent = typeof inputs === "string" ? inputs : JSON.stringify(inputs);
+  const { token, envName, tokenPresent } = resolveFriendliToken();
+  validateFriendliToken(token);
+  const endpoint = FRIENDLI_CHAT_COMPLETIONS_ENDPOINT;
+  const requestModel = model || FRIENDLI_MODEL;
   const requestBody = {
     model: requestModel,
-    messages: [
-      {
-        role: "user",
-        content: userContent,
-      },
-    ],
+    messages,
     max_tokens: parameters?.max_new_tokens ?? 300,
     temperature: parameters?.temperature ?? 0.7,
   };
+
+  console.log("[ai:request] Provider diagnostics", {
+    provider: FRIENDLI_PROVIDER,
+    baseUrl: FRIENDLI_BASE_URL,
+    model: requestModel,
+    tokenPresent,
+  });
 
   let response;
   try {
@@ -135,7 +134,7 @@ const callHuggingFace = async ({
       body: JSON.stringify(requestBody),
     });
   } catch (error) {
-    console.error("[ai:generate] Hugging Face router network failure", {
+    console.error("[ai:generate] Friendli network failure", {
       endpoint,
       model: requestModel,
       tokenEnvName: envName,
@@ -157,21 +156,20 @@ const callHuggingFace = async ({
 
   if (!response.ok) {
     const reason = extractProviderErrorMessage(payload, response.statusText);
-    const routerHint = response.status === 410 ? " Verify requests are sent to https://router.huggingface.co." : "";
-    const message = `Provider rejected request: ${reason}.${routerHint}`.trim();
-    console.error("[ai:generate] Hugging Face router HTTP error details", {
+    const message = `Provider rejected request: ${reason}.`.trim();
+    console.error("[ai:generate] Friendli HTTP error details", {
       status: response.status,
       statusText: response.statusText,
       bodyText,
     });
-    console.error("[ai:generate] Hugging Face router request failed", {
+    console.error("[ai:generate] Friendli request failed", {
       endpoint,
       model: requestModel,
       tokenEnvName: envName,
       status: response.status,
       reason: message,
     });
-    throw new Error(`Hugging Face request failed (${response.status}): ${message}`);
+    throw new Error(`Friendli request failed (${response.status}): ${message}`);
   }
 
   return {
@@ -184,11 +182,20 @@ const callHuggingFace = async ({
   };
 };
 
-export const testHuggingFaceConnection = async () => {
-  const healthModel = process.env.HUGGING_FACE_HEALTH_MODEL || HF_MODEL;
-  const { payload, model, endpoint, method, tokenEnvName, requestBody } = await callHuggingFace({
+export const testFriendliConnection = async () => {
+  const healthModel = process.env.FRIENDLI_HEALTH_MODEL || FRIENDLI_MODEL;
+  const { payload, model, endpoint, method, tokenEnvName, requestBody } = await callFriendli({
     model: healthModel,
-    inputs: "Hugging Face health check:",
+    messages: [
+      {
+        role: "system",
+        content: "You are a concise assistant.",
+      },
+      {
+        role: "user",
+        content: "Friendli health check:",
+      },
+    ],
     parameters: {
       max_new_tokens: 12,
       return_full_text: false,
@@ -198,8 +205,9 @@ export const testHuggingFaceConnection = async () => {
 
   return {
     status: "ok",
-    provider: "huggingface",
+    provider: FRIENDLI_PROVIDER,
     model,
+    baseUrl: FRIENDLI_BASE_URL,
     endpoint,
     method,
     tokenEnvName,
@@ -216,27 +224,29 @@ export const testHuggingFaceConnection = async () => {
   };
 };
 
-export const checkHuggingFaceHealth = async () => {
-  const { token, envName } = resolveHuggingFaceToken();
+export const checkFriendliHealth = async () => {
+  const { token, envName, tokenPresent } = resolveFriendliToken();
 
   try {
-    validateHuggingFaceToken(token);
+    validateFriendliToken(token);
   } catch (error) {
     const failureReason = error instanceof Error
       ? error.message
-      : "Missing token. Configure HUGGINGFACE_API_KEY or HUGGINGFACE_API_TOKEN.";
-    console.error("[ai:test] Hugging Face router provider test failed:", {
+      : "Missing token. Configure FRIENDLI_API_TOKEN.";
+    console.error("[ai:test] Friendli provider test failed:", {
       reason: failureReason,
-      endpoint: HF_ROUTER_ENDPOINT,
-      model: HF_ROUTER_MODEL,
+      endpoint: FRIENDLI_CHAT_COMPLETIONS_ENDPOINT,
+      baseUrl: FRIENDLI_BASE_URL,
+      model: FRIENDLI_MODEL,
       tokenEnvName: null,
       tokenPresent: false,
     });
     return {
-      provider: "huggingface",
+      provider: FRIENDLI_PROVIDER,
       status: "degraded",
-      model: HF_ROUTER_MODEL,
-      endpoint: HF_ROUTER_ENDPOINT,
+      model: FRIENDLI_MODEL,
+      baseUrl: FRIENDLI_BASE_URL,
+      endpoint: FRIENDLI_CHAT_COMPLETIONS_ENDPOINT,
       method: "POST",
       token: {
         present: false,
@@ -248,8 +258,12 @@ export const checkHuggingFaceHealth = async () => {
   }
 
   const requestBody = {
-    model: HF_ROUTER_MODEL,
+    model: FRIENDLI_MODEL,
     messages: [
+      {
+        role: "system",
+        content: "You are a concise assistant.",
+      },
       {
         role: "user",
         content: "Reply with exactly: ok",
@@ -260,7 +274,14 @@ export const checkHuggingFaceHealth = async () => {
   };
 
   try {
-    const response = await fetch(HF_ROUTER_ENDPOINT, {
+    console.log("[ai:test] Provider diagnostics", {
+      provider: FRIENDLI_PROVIDER,
+      baseUrl: FRIENDLI_BASE_URL,
+      model: FRIENDLI_MODEL,
+      tokenPresent,
+    });
+
+    const response = await fetch(FRIENDLI_CHAT_COMPLETIONS_ENDPOINT, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -280,20 +301,21 @@ export const checkHuggingFaceHealth = async () => {
     }
 
     if (!response.ok) {
-      console.error("[ai:test] Hugging Face router HTTP error details", {
+      console.error("[ai:test] Friendli HTTP error details", {
         status: response.status,
         statusText: response.statusText,
         bodyText: responseText,
       });
-      const reason = payload?.error?.message || payload?.error || payload?.message || response.statusText || "Unknown Hugging Face router error.";
-      throw new Error(`Hugging Face router request failed (${response.status}): ${reason}`);
+      const reason = payload?.error?.message || payload?.error || payload?.message || response.statusText || "Unknown Friendli error.";
+      throw new Error(`Friendli request failed (${response.status}): ${reason}`);
     }
 
     return {
-      provider: "huggingface",
+      provider: FRIENDLI_PROVIDER,
       status: "ok",
-      model: HF_ROUTER_MODEL,
-      endpoint: HF_ROUTER_ENDPOINT,
+      model: FRIENDLI_MODEL,
+      baseUrl: FRIENDLI_BASE_URL,
+      endpoint: FRIENDLI_CHAT_COMPLETIONS_ENDPOINT,
       method: "POST",
       token: {
         present: true,
@@ -303,19 +325,21 @@ export const checkHuggingFaceHealth = async () => {
       timestamp: new Date().toISOString(),
     };
   } catch (error) {
-    const failureReason = error instanceof Error ? error.message : "Unknown Hugging Face router error.";
-    console.error("[ai:test] Hugging Face router provider test failed:", {
+    const failureReason = error instanceof Error ? error.message : "Unknown Friendli error.";
+    console.error("[ai:test] Friendli provider test failed:", {
       reason: failureReason,
-      endpoint: HF_ROUTER_ENDPOINT,
-      model: HF_ROUTER_MODEL,
+      endpoint: FRIENDLI_CHAT_COMPLETIONS_ENDPOINT,
+      baseUrl: FRIENDLI_BASE_URL,
+      model: FRIENDLI_MODEL,
       tokenEnvName: envName,
       tokenPresent: true,
     });
     return {
-      provider: "huggingface",
+      provider: FRIENDLI_PROVIDER,
       status: "degraded",
-      model: HF_ROUTER_MODEL,
-      endpoint: HF_ROUTER_ENDPOINT,
+      model: FRIENDLI_MODEL,
+      baseUrl: FRIENDLI_BASE_URL,
+      endpoint: FRIENDLI_CHAT_COMPLETIONS_ENDPOINT,
       method: "POST",
       token: {
         present: true,
@@ -331,9 +355,18 @@ export const generateScenarioFromAI = async ({ prompt, genre, tone, constraints 
   const inputPrompt = promptForScenario({ prompt, genre, tone, constraints });
 
   try {
-    const { payload: result } = await callHuggingFace({
-      model: HF_MODEL,
-      inputs: inputPrompt,
+    const { payload: result } = await callFriendli({
+      model: FRIENDLI_MODEL,
+      messages: [
+        {
+          role: "system",
+          content: "You are a scenario generator for tabletop or roleplay experiences. Return strict JSON only.",
+        },
+        {
+          role: "user",
+          content: inputPrompt,
+        },
+      ],
       parameters: {
         max_new_tokens: 300,
         return_full_text: false,
@@ -349,7 +382,9 @@ export const generateScenarioFromAI = async ({ prompt, genre, tone, constraints 
     return validateGeneratedScenario(parsed);
   } catch (error) {
     console.error("[ai:generate] Failed to generate scenario", {
-      model: HF_MODEL,
+      provider: FRIENDLI_PROVIDER,
+      baseUrl: FRIENDLI_BASE_URL,
+      model: FRIENDLI_MODEL,
       hasPrompt: Boolean(prompt),
       genre: genre || null,
       tone: tone || null,

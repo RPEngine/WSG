@@ -1,23 +1,25 @@
-import { checkHuggingFaceHealth } from "../services/aiService.js";
+import { checkFriendliHealth } from "../services/aiService.js";
 import { generateAndSaveScenario, getAllowedScenarioStatuses } from "../services/scenarioService.js";
 
 export const testAiConnection = async (req, res) => {
   try {
-    const huggingFace = await checkHuggingFaceHealth();
+    const friendli = await checkFriendliHealth();
 
     return res.status(200).json({
       ok: true,
       backend: "ok",
-      provider: huggingFace?.provider || "huggingface",
-      model: huggingFace?.model || "HuggingFaceH4/zephyr-7b-beta",
-      timestamp: huggingFace?.timestamp || new Date().toISOString(),
+      provider: friendli?.provider || "friendli",
+      model: friendli?.model || "mistralai/Mistral-7B-Instruct-v0.3",
+      baseUrl: friendli?.baseUrl || "https://api.friendli.ai/dedicated",
+      timestamp: friendli?.timestamp || new Date().toISOString(),
     });
   } catch (error) {
     return res.status(503).json({
       ok: false,
       backend: "error",
-      provider: "huggingface",
-      model: "HuggingFaceH4/zephyr-7b-beta",
+      provider: "friendli",
+      model: "mistralai/Mistral-7B-Instruct-v0.3",
+      baseUrl: "https://api.friendli.ai/dedicated",
       timestamp: new Date().toISOString(),
       error: error instanceof Error ? error.message : "Provider test failed.",
     });
