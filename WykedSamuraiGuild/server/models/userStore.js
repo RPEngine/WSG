@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import pool from "../config/db.js";
+import { createVerificationPlaceholder } from "../config/policy.js";
 
 const PROFILE_LAYER_KEYS = ["free", "professional", "roleplay"];
 
@@ -101,6 +102,8 @@ function publicUser(row, layers = [], connections = [], scenarioHistory = []) {
     secondaryArchetype: row.secondary_archetype || "",
     reflectionProfile: row.reflection_profile && typeof row.reflection_profile === "object" ? row.reflection_profile : {},
     derivedArchetypeProfile: row.derived_archetype_profile && typeof row.derived_archetype_profile === "object" ? row.derived_archetype_profile : {},
+    policyAcceptance: row.policy_acceptance && typeof row.policy_acceptance === "object" ? row.policy_acceptance : {},
+    verification: row.verification && typeof row.verification === "object" ? row.verification : createVerificationPlaceholder(),
     availableLayers,
     lockedLayers,
     layers: layerMap,
@@ -145,6 +148,8 @@ export async function createUser({
   authProvider = "local",
   providerSubject = "",
   mfaEnabled = false,
+  policyAcceptance = {},
+  verification = createVerificationPlaceholder(),
 }) {
   const userId = crypto.randomUUID();
   const freeLayerId = crypto.randomUUID();
@@ -153,10 +158,10 @@ export async function createUser({
   try {
     await client.query("BEGIN");
     const userInsert = await client.query(
-      `INSERT INTO users (id, legal_name, email, password_hash, role, organization_name, backup_email, auth_provider, provider_subject, mfa_enabled)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `INSERT INTO users (id, legal_name, email, password_hash, role, organization_name, backup_email, auth_provider, provider_subject, mfa_enabled, policy_acceptance, verification)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::JSONB, $12::JSONB)
        RETURNING *`,
-      [userId, legalName.trim(), email.trim().toLowerCase(), passwordHash, role, organizationName.trim(), backupEmail.trim(), authProvider, providerSubject, mfaEnabled === true],
+      [userId, legalName.trim(), email.trim().toLowerCase(), passwordHash, role, organizationName.trim(), backupEmail.trim(), authProvider, providerSubject, mfaEnabled === true, JSON.stringify(policyAcceptance || {}), JSON.stringify(verification || createVerificationPlaceholder())],
     );
 
     await client.query(
@@ -184,6 +189,18 @@ export async function createUser({
   } finally {
     client.release();
   }
+}
+
+export async function updateUserPolicyAcceptance(userId, policyAcceptance) {
+  await pool.query(
+    `UPDATE users
+     SET policy_acceptance = $2::JSONB,
+         updated_at = NOW()
+     WHERE id = $1`,
+    [userId, JSON.stringify(policyAcceptance || {})],
+  );
+
+  return findUserById(userId);
 }
 
 export async function findUserByIdentifier(identifier) {

@@ -94,6 +94,16 @@ export async function initializeDatabase() {
   `);
 
   await pool.query(`
+    ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS policy_acceptance JSONB NOT NULL DEFAULT '{}'::JSONB;
+  `);
+
+  await pool.query(`
+    ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS verification JSONB NOT NULL DEFAULT '{"identityStatus":"none","provider":null,"verifiedAt":null}'::JSONB;
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS profiles (
       id UUID PRIMARY KEY,
       user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

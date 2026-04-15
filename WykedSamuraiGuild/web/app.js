@@ -15,6 +15,11 @@ const routes = {
   '/scenario': { key: 'scenarioDetail', requiresAuth: true },
   '/login': { key: 'login', guestOnly: true },
   '/signup': { key: 'signup', guestOnly: true },
+  '/policy/accept': { key: 'policyAccept', requiresAuth: true, bypassPolicyGuard: true },
+  '/code-of-conduct': { key: 'codeOfConduct' },
+  '/content-policy': { key: 'contentPolicy' },
+  '/platform-rules': { key: 'platformRules' },
+  '/privacy': { key: 'privacy' },
   '/recruiter-console': { key: 'recruiter', requiresAuth: true },
 };
 
@@ -422,6 +427,8 @@ const HEADER_COLLAPSED_STORAGE_KEY = 'ui.headerCollapsed';
 const ROLEPLAY_TOOLS_COLLAPSED_STORAGE_KEY = 'ui.roleplayToolsCollapsed';
 const HOME_ROUTE = '/app';
 const ONBOARDING_ROUTE = `/scenario/${FIRST_SCENARIO_ID}`;
+const POLICY_ACCEPT_ROUTE = '/policy/accept';
+const CURRENT_POLICY_VERSION = 'v1.0';
 
 let googleInitialized = false;
 
@@ -526,6 +533,20 @@ function setFormMessage(formName, message, tone = 'info') {
 function setProfileHubMessage(message, tone = 'info') {
   state.profileHub.message = message;
   state.profileHub.tone = tone;
+}
+
+function hasAcceptedCurrentPolicies(user) {
+  const policyAcceptance = user?.policyAcceptance || {};
+  const requiredPolicies = ['codeOfConduct', 'contentPolicy', 'platformRules'];
+  return requiredPolicies.every((key) => {
+    const policy = policyAcceptance?.[key];
+    return Boolean(policy?.accepted && policy?.acceptedAt && policy?.policyVersion === CURRENT_POLICY_VERSION);
+  });
+}
+
+function requiresPolicyReacceptance(user) {
+  if (!user) return false;
+  return !hasAcceptedCurrentPolicies(user);
 }
 
 function normalizeLayeredProfile(profilePayload) {
@@ -911,6 +932,10 @@ async function apiRequest(path, options = {}) {
   }
 
   if (!response.ok) {
+    if (data?.policy_reacceptance_required === true && state.currentUser && location.hash.replace('#', '') !== POLICY_ACCEPT_ROUTE) {
+      setStatusMessage('Please accept the current Guild policies to continue.', 'info');
+      location.hash = POLICY_ACCEPT_ROUTE;
+    }
     if (isAiRequest) {
       console.error('[ai:frontend] API request failed', {
         path,
@@ -1127,6 +1152,11 @@ function pageTitle(key) {
     areaChat: ['Area Chat', 'Shared location-based roleplay chat stream.'],
     login: ['Log In', 'Access your guild account.'],
     signup: ['Create Account', 'Join Wyked Samurai Guild.'],
+    policyAccept: ['Policy Agreement Required', 'Accept the Guild policy standards to continue.'],
+    codeOfConduct: ['Code of Conduct', 'Professional and Safe for Work behavior standards for all members.'],
+    contentPolicy: ['Content Policy', 'Safe for Work content requirements across all platform surfaces.'],
+    platformRules: ['Platform Rules', 'Core platform integrity and job-board participation standards.'],
+    privacy: ['Privacy Policy', 'How WSG currently handles account and moderation data.'],
     recruiter: ['Recruiter Console', 'Talent intelligence for strategic hiring conversations.'],
     fallback: ['Page Placeholder', 'This section is not built yet, but routing remains intact.'],
   }[key] || ['Wyked Samurai Guild', ''];
@@ -1964,7 +1994,13 @@ function MainContent(key, statusMarkup, pageHtml) {
 function SiteFooter() {
   return `
     <footer class="site-footer" role="contentinfo">
-      © 2022 Wyked Samurai Guild (WSG). All rights reserved.
+      <div>© 2022 Wyked Samurai Guild (WSG). All rights reserved.</div>
+      <div class="footer-policy-links">
+        <a href="#/code-of-conduct">Code of Conduct</a>
+        <a href="#/content-policy">Content Policy</a>
+        <a href="#/platform-rules">Platform Rules</a>
+        <a href="#/privacy">Privacy</a>
+      </div>
     </footer>
   `;
 }
@@ -2830,6 +2866,7 @@ function signupPage() {
       <h3>Create account</h3>
       <p class="muted">Use your legal identity details so employers and recruiters can verify your profile.</p>
       <p class="muted">Storage note: account records currently use in-memory backend storage for this environment.</p>
+      <p class="muted">Wyked Samurai Guild is a Safe for Work professional network, scenario platform, and job board. Access to the platform requires agreement with the Guild’s conduct and content standards.</p>
       <form id="signup-form" class="form-stack">
         <p id="signup-feedback" class="status-banner ${state.authForms.signup.message ? `status-${state.authForms.signup.tone}` : 'status-info'}${signupHasError ? ' auth-error-banner' : ''}" role="alert" aria-live="assertive">${escapeHtml(signupFeedbackMessage)}</p>
         <section class="form-section">
@@ -2880,6 +2917,15 @@ function signupPage() {
           </label>
           <p class="muted">Backup email receives recovery and verification codes if you lose access to your primary email.</p>
         </section>
+        <section class="form-section policy-consent-section">
+          <h4>Required Policy Agreement</h4>
+          <p class="muted">Wyked Samurai Guild is a Safe for Work professional platform. By creating an account, you agree to follow the Guild’s Code of Conduct, Content Policy, and Platform Rules.</p>
+          <label class="checkbox-option">
+            <input type="checkbox" name="policyAgreement" value="yes" />
+            <span>I have read and agree to the Wyked Samurai Guild Code of Conduct, Content Policy, and Platform Rules.</span>
+          </label>
+          <p class="muted">Review the full policies: <a href="#/code-of-conduct">Code of Conduct</a> · <a href="#/content-policy">Content Policy</a> · <a href="#/platform-rules">Terms / Platform Rules</a> · <a href="#/privacy">Privacy Policy</a></p>
+        </section>
         <div class="actions">
           <button class="pill-btn cta-primary" type="submit" id="signup-submit-btn" ${state.authForms.signup.loading ? 'disabled' : ''}>${state.authForms.signup.loading ? 'Creating Account...' : 'Create Account'}</button>
         </div>
@@ -2887,6 +2933,138 @@ function signupPage() {
         <div id="google-signup-button" aria-label="Continue with Google"></div>
       </form>
       <p class="muted">Already have an account? <a href="#/login">Log In</a></p>
+    </section>
+  `;
+}
+
+function policyPageTemplate({ title, intro, sections = [] }) {
+  return `
+    <section class="card form-card policy-page-card">
+      <h3>${escapeHtml(title)}</h3>
+      <p class="muted">${escapeHtml(intro)}</p>
+      ${sections.map((section) => `
+        <section class="policy-copy-block">
+          <h4>${escapeHtml(section.heading)}</h4>
+          ${section.body ? `<p>${escapeHtml(section.body)}</p>` : ''}
+          ${Array.isArray(section.points) && section.points.length ? `<ul>${section.points.map((point) => `<li>${escapeHtml(point)}</li>`).join('')}</ul>` : ''}
+        </section>
+      `).join('')}
+    </section>
+  `;
+}
+
+function codeOfConductPage() {
+  return policyPageTemplate({
+    title: 'Wyked Samurai Guild Code of Conduct',
+    intro: 'WSG is a professional, Safe for Work environment built for members, recruiters, employers, and moderators.',
+    sections: [
+      {
+        heading: 'Member Conduct Standards',
+        points: [
+          'Respect all members, recruiters, employers, and moderators.',
+          'No harassment, hate, bullying, intimidation, or impersonation.',
+          'No spam, trolling, disruption, or fraudulent behavior.',
+          'Roleplay, scenarios, and discussions must remain workplace-appropriate.',
+          'Users must follow moderator instructions and platform safety systems.',
+        ],
+      },
+    ],
+  });
+}
+
+function contentPolicyPage() {
+  return policyPageTemplate({
+    title: 'Wyked Samurai Guild Content Policy',
+    intro: 'All user-generated and recruiter-generated content on WSG must remain Safe for Work.',
+    sections: [
+      {
+        heading: 'Prohibited Content',
+        points: [
+          'Sexual or erotic content.',
+          'Nudity or explicit sexual references.',
+          'Sexualized minors.',
+          'Graphic violence or gore.',
+          'Hate speech.',
+          'Targeted harassment.',
+          'Illegal activity promotion.',
+          'Scam or fraud content.',
+        ],
+      },
+      {
+        heading: 'Where This Applies',
+        points: [
+          'Chat messages',
+          'Profiles',
+          'Roleplay and scenario content',
+          'Usernames and avatars',
+          'Job listings and recruiter messages',
+        ],
+      },
+    ],
+  });
+}
+
+function platformRulesPage() {
+  return policyPageTemplate({
+    title: 'Wyked Samurai Guild Platform Rules',
+    intro: 'WSG is a job board and professional development platform first. All optional scenario systems operate inside that professional context.',
+    sections: [
+      {
+        heading: 'Platform Integrity Rules',
+        points: [
+          'Users may not misrepresent employers, credentials, or identities.',
+          'Recruiters may not post fraudulent or misleading listings.',
+          'Scenario participation must follow scenario rules.',
+          'Only tagged participants count toward scenario completion.',
+          'Accounts may be suspended or banned for violations.',
+          'The Guild reserves the right to moderate content and remove unsafe or fraudulent activity.',
+        ],
+      },
+    ],
+  });
+}
+
+function privacyPage() {
+  return policyPageTemplate({
+    title: 'Wyked Samurai Guild Privacy Policy (Placeholder)',
+    intro: 'This temporary policy explains current data handling while a fuller privacy policy is drafted.',
+    sections: [
+      {
+        heading: 'Data We May Store',
+        points: [
+          'Account identity and authentication data',
+          'Policy acceptance timestamp and policy version',
+          'Scenario participation history',
+          'Moderation and safety-related events',
+          'Basic operational logs needed to keep the platform secure and reliable',
+        ],
+      },
+      {
+        heading: 'Policy Status',
+        body: 'This is a professional placeholder privacy policy. A complete version with retention periods, legal basis, and contact details can be published in a future update.',
+      },
+    ],
+  });
+}
+
+function policyAcceptPage() {
+  const hasError = state.authForms.signup.tone === 'error' && Boolean(state.authForms.signup.message);
+  const feedback = hasError ? `ERROR: ${state.authForms.signup.message}` : (state.authForms.signup.message || 'Policy acceptance is required to continue.');
+  return `
+    <section class="card form-card">
+      <h3>Policy acceptance required</h3>
+      <p class="muted">Wyked Samurai Guild is a Safe for Work professional network, scenario platform, and job board. Access to the platform requires agreement with the Guild’s conduct and content standards.</p>
+      <form id="policy-accept-form" class="form-stack">
+        <p id="policy-accept-feedback" class="status-banner ${state.authForms.signup.message ? `status-${state.authForms.signup.tone}` : 'status-info'}${hasError ? ' auth-error-banner' : ''}" role="alert" aria-live="assertive">${escapeHtml(feedback)}</p>
+        <label class="checkbox-option">
+          <input type="checkbox" name="policyAgreement" value="yes" />
+          <span>I have read and agree to the Wyked Samurai Guild Code of Conduct, Content Policy, and Platform Rules.</span>
+        </label>
+        <p class="muted">Review the full policies: <a href="#/code-of-conduct">Code of Conduct</a> · <a href="#/content-policy">Content Policy</a> · <a href="#/platform-rules">Terms / Platform Rules</a> · <a href="#/privacy">Privacy Policy</a></p>
+        <div class="actions">
+          <button class="pill-btn cta-primary" type="submit" id="policy-accept-submit-btn">Accept and Continue</button>
+        </div>
+      </form>
     </section>
   `;
 }
@@ -3002,9 +3180,16 @@ async function handleGoogleCredentialResponse(response, formName) {
   setStatusMessage('Signing in with Google...', 'info');
   render();
   try {
+    const isSignupRoute = location.hash === '#/signup';
+    const signupAgreementChecked = isSignupRoute
+      ? Boolean(document.querySelector('#signup-form input[name="policyAgreement"]')?.checked)
+      : false;
     const result = await apiRequest('/auth/google', {
       method: 'POST',
-      body: JSON.stringify({ idToken: credential }),
+      body: JSON.stringify({
+        idToken: credential,
+        policyAgreement: isSignupRoute ? signupAgreementChecked : undefined,
+      }),
     });
     await finalizeSignInResult(result, formName);
   } catch (error) {
@@ -3037,7 +3222,9 @@ async function finalizeSignInResult(result, formName) {
   }
 
   state.membersLoaded = false;
-  const postAuthRoute = resolvePostAuthRoute(state.currentUser);
+  const postAuthRoute = requiresPolicyReacceptance(state.currentUser)
+    ? POLICY_ACCEPT_ROUTE
+    : resolvePostAuthRoute(state.currentUser);
   setTimeout(() => {
     location.hash = postAuthRoute;
   }, 200);
@@ -3263,6 +3450,10 @@ function applyRouteGuards(path) {
 
   if (known.requiresAuth && !state.currentUser) {
     return '/login';
+  }
+
+  if (state.currentUser && requiresPolicyReacceptance(state.currentUser) && !known.bypassPolicyGuard) {
+    return POLICY_ACCEPT_ROUTE;
   }
 
   if (known.guestOnly && state.currentUser) {
@@ -4303,7 +4494,7 @@ async function render() {
   if (path === '/profile' || /^\/(?:members|profile)\/[^/]+$/.test(path)) {
     await loadProfileForRoute(path);
   }
-  const isPublicRoute = ['/', '/login', '/signup'].includes(path);
+  const isPublicRoute = ['/', '/login', '/signup', '/code-of-conduct', '/content-policy', '/platform-rules', '/privacy'].includes(path);
   if (state.currentUser && !isPublicRoute) {
     await loadConnections();
   }
@@ -4350,11 +4541,16 @@ async function render() {
     profileEdit: profileEditPage,
     login: loginPage,
     signup: signupPage,
+    policyAccept: policyAcceptPage,
+    codeOfConduct: codeOfConductPage,
+    contentPolicy: contentPolicyPage,
+    platformRules: platformRulesPage,
+    privacy: privacyPage,
     recruiter: recruiterPage,
     fallback: fallbackPage,
   }[resolvedRoute.key]();
 
-  if (resolvedRoute.key === 'landing' || resolvedRoute.key === 'login' || resolvedRoute.key === 'signup') {
+  if (['landing', 'login', 'signup', 'codeOfConduct', 'contentPolicy', 'platformRules', 'privacy'].includes(resolvedRoute.key)) {
     renderPublicLayout(path, resolvedRoute.key, pageHtml);
   } else {
     renderLayout(path, resolvedRoute.key, pageHtml);
@@ -4418,6 +4614,7 @@ async function render() {
         role: String(formData.get('role') || ''),
         organizationName: String(formData.get('organizationName') || '').trim(),
         backupEmail: String(formData.get('backupEmail') || '').trim(),
+        policyAgreement: formData.get('policyAgreement') === 'yes',
       };
 
       const validationError = (() => {
@@ -4427,6 +4624,7 @@ async function render() {
         if (payload.password !== payload.confirmPassword) return 'Password and Confirm Password must match.';
         if (!payload.role) return 'Please select a role.';
         if (payload.backupEmail && !isValidEmail(payload.backupEmail)) return 'Enter a valid Backup Email Address.';
+        if (!payload.policyAgreement) return 'You must agree to the Guild policies before creating an account.';
         return '';
       })();
       if (validationError) {
@@ -4466,6 +4664,37 @@ async function render() {
         setStatusMessage(message, 'error');
       } finally {
         state.authForms.signup.loading = false;
+        render();
+      }
+    };
+  }
+
+  const policyAcceptForm = document.getElementById('policy-accept-form');
+  if (policyAcceptForm) {
+    policyAcceptForm.onsubmit = async (event) => {
+      event.preventDefault();
+      const formData = new FormData(policyAcceptForm);
+      const policyAgreement = formData.get('policyAgreement') === 'yes';
+      if (!policyAgreement) {
+        setFormMessage('signup', 'You must agree to the Guild policies before continuing.', 'error');
+        render();
+        return;
+      }
+      setFormMessage('signup', 'Saving policy acceptance...', 'info');
+      render();
+      try {
+        const result = await apiRequest('/auth/policy/accept', {
+          method: 'POST',
+          body: JSON.stringify({ policyAgreement: true }),
+        });
+        state.currentUser = withPersistedOnboardingProfile(result?.user || state.currentUser);
+        setFormMessage('signup', 'Policy acceptance saved.', 'success');
+        setStatusMessage('Policy acceptance saved. Welcome to WSG.', 'success');
+        location.hash = resolvePostAuthRoute(state.currentUser);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unable to save policy acceptance right now.';
+        setFormMessage('signup', message, 'error');
+        setStatusMessage(message, 'error');
         render();
       }
     };

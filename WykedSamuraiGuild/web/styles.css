@@ -2903,3 +2903,38 @@ h1, h2, h3, h4, .title, .lockup-title { font-family: var(--heading-font); }
     display: none;
   }
 }
+
+.footer-policy-links {
+  margin-top: 6px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.checkbox-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.checkbox-option input[type="checkbox"] {
+  margin-top: 3px;
+}
+
+.policy-consent-section {
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  padding-top: 14px;
+}
+
+.policy-page-card {
+  max-width: 860px;
+}
+
+.policy-copy-block {
+  margin-top: 14px;
+}
+
+.policy-copy-block ul {
+  margin: 10px 0 0 20px;
+}

@@ -1,4 +1,5 @@
 import {
+  acceptCurrentPolicies,
   authenticateWithGoogle,
   getUserFromSessionToken,
   loginUser,
@@ -26,7 +27,11 @@ export async function register(req, res) {
     fields: Object.keys(req.body || {}),
   });
   try {
-    const result = await registerUser(req.body || {});
+    const result = await registerUser({
+      ...(req.body || {}),
+      userAgent: req.get("user-agent") || "",
+      ipAddress: req.ip || "",
+    });
     console.log("[auth] signup success", {
       userId: result?.user?.id,
       email: result?.user?.email,
@@ -77,6 +82,8 @@ export async function googleAuth(req, res) {
     const result = await authenticateWithGoogle({
       ...(req.body || {}),
       sessionToken: tokenFromRequest(req),
+      userAgent: req.get("user-agent") || "",
+      ipAddress: req.ip || "",
     });
     console.log("[auth] google auth success", {
       userId: result?.user?.id,
@@ -132,4 +139,18 @@ export async function me(req, res) {
   }
 
   return res.json({ user });
+}
+
+export async function acceptPolicies(req, res) {
+  try {
+    const result = await acceptCurrentPolicies({
+      ...(req.body || {}),
+      sessionToken: tokenFromRequest(req),
+      userAgent: req.get("user-agent") || "",
+      ipAddress: req.ip || "",
+    });
+    return res.json(result);
+  } catch (error) {
+    return res.status(400).json({ error: error.message || "Unable to accept policies." });
+  }
 }

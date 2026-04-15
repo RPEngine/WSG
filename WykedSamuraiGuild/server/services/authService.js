@@ -13,7 +13,13 @@ import {
   markSessionReauthenticated,
   toPublicUser,
   touchLastActiveAt,
+  updateUserPolicyAcceptance,
 } from "../models/userStore.js";
+import {
+  createPolicyAcceptanceRecord,
+  createVerificationPlaceholder,
+  requiresPolicyReacceptance,
+} from "../config/policy.js";
 
 const PASSWORD_POLICY_MESSAGE = "Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a special character.";
 const PASSWORD_POLICY_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$/;
@@ -83,6 +89,9 @@ export async function registerUser(payload = {}) {
   const role = payload.role?.trim() || "";
   const organizationName = payload.organizationName?.trim() || "";
   const backupEmail = payload.backupEmail?.trim() || "";
+  const policyAgreement = payload.policyAgreement === true;
+  const userAgent = String(payload.userAgent || "").trim();
+  const ipAddress = String(payload.ipAddress || "").trim();
   const displayName = legalName;
 
   if (!legalName || legalName.length < 2) throw new Error("Legal name is required.");
@@ -90,6 +99,7 @@ export async function registerUser(payload = {}) {
   if (!validatePassword(password)) throw new Error(PASSWORD_POLICY_MESSAGE);
   if (!VALID_ROLES.has(role)) throw new Error("A valid role is required.");
   if (backupEmail && !validateEmail(backupEmail)) throw new Error("Backup email must be valid.");
+  if (!policyAgreement) throw new Error("You must accept the Guild policy requirements to create an account.");
 
   const existingUser = await findUserByIdentifier(email);
   if (existingUser) throw new Error("That email is already in use.");
@@ -103,6 +113,8 @@ export async function registerUser(payload = {}) {
     organizationName,
     backupEmail,
     passwordHash,
+    policyAcceptance: createPolicyAcceptanceRecord({ userAgent, ipAddress }),
+    verification: createVerificationPlaceholder(),
   });
 
   const sessionToken = await createSession(user.id);
@@ -182,17 +194,28 @@ export async function authenticateWithGoogle(payload = {}) {
     throw new Error("Google account identity mismatch.");
   }
 
-  const user = existingUser || await createUser({
-    displayName: fullName || email.split("@")[0] || "Guild Member",
-    legalName: fullName || email.split("@")[0] || "Guild Member",
-    email,
-    role: "employee_member",
-    organizationName: "",
-    backupEmail: "",
-    passwordHash: null,
-    authProvider: "google",
-    providerSubject: subject,
-  });
+  let user = existingUser;
+  if (!user) {
+    const policyAgreement = payload.policyAgreement === true;
+    if (!policyAgreement) {
+      throw new Error("You must accept the Guild policy requirements to create an account.");
+    }
+    const userAgent = String(payload.userAgent || "").trim();
+    const ipAddress = String(payload.ipAddress || "").trim();
+    user = await createUser({
+      displayName: fullName || email.split("@")[0] || "Guild Member",
+      legalName: fullName || email.split("@")[0] || "Guild Member",
+      email,
+      role: "employee_member",
+      organizationName: "",
+      backupEmail: "",
+      passwordHash: null,
+      authProvider: "google",
+      providerSubject: subject,
+      policyAcceptance: createPolicyAcceptanceRecord({ userAgent, ipAddress }),
+      verification: createVerificationPlaceholder(),
+    });
+  }
 
   await touchLastActiveAt(user.id);
   if (user.mfa_enabled === true) {
@@ -206,6 +229,21 @@ export async function authenticateWithGoogle(payload = {}) {
     mfaConfirmed: user.mfa_enabled === true,
   });
   return { user: await toPublicUser(user), sessionToken };
+}
+
+export async function acceptCurrentPolicies(payload = {}) {
+  const sessionToken = String(payload.sessionToken || "").trim();
+  if (!sessionToken) throw new Error("Session token is required.");
+  if (payload.policyAgreement !== true) throw new Error("Policy agreement is required.");
+
+  const user = await getUserFromSessionToken(sessionToken);
+  if (!user?.id) throw new Error("Unauthorized.");
+
+  const userAgent = String(payload.userAgent || "").trim();
+  const ipAddress = String(payload.ipAddress || "").trim();
+  const policyAcceptance = createPolicyAcceptanceRecord({ userAgent, ipAddress });
+  const updatedUser = await updateUserPolicyAcceptance(user.id, policyAcceptance);
+  return { user: await toPublicUser(updatedUser) };
 }
 
 function verifyMfaCode(code) {
@@ -288,5 +326,9 @@ export async function getUserFromSessionToken(sessionToken) {
   if (!user) return null;
 
   await touchLastActiveAt(user.id);
-  return toPublicUser(user);
+  const publicUser = await toPublicUser(user);
+  return {
+    ...publicUser,
+    requiresPolicyAcceptance: requiresPolicyReacceptance(publicUser),
+  };
 }
