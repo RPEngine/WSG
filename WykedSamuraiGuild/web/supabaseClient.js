@@ -1,57 +1,63 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-function normalizeEnvValue(value) {
+function cleanEnvValue(value) {
   if (typeof value !== 'string') return '';
   const trimmed = value.trim();
   if (!trimmed) return '';
-  if (trimmed === 'undefined' || trimmed === 'null') return '';
-  return trimmed;
+  const lower = trimmed.toLowerCase();
+  return (lower === 'undefined' || lower === 'null') ? '' : trimmed;
 }
 
-const viteEnv = (typeof import.meta !== 'undefined' && import.meta?.env) ? import.meta.env : {};
+function readSupabaseConfig() {
+  const url = cleanEnvValue(
+    window.WSG_SUPABASE_URL
+      || window.VITE_SUPABASE_URL
+      || document.querySelector('meta[name="wsg-supabase-url"]')?.getAttribute('content'),
+  );
 
-const viteSupabaseUrl = normalizeEnvValue(viteEnv.VITE_SUPABASE_URL);
-const viteSupabaseAnonKey = normalizeEnvValue(viteEnv.VITE_SUPABASE_ANON_KEY);
+  const anonKey = cleanEnvValue(
+    window.WSG_SUPABASE_ANON_KEY
+      || window.VITE_SUPABASE_ANON_KEY
+      || document.querySelector('meta[name="wsg-supabase-anon-key"]')?.getAttribute('content'),
+  );
 
-// Runtime fallbacks for static deployments that inject values via window/meta.
-const runtimeSupabaseUrl = normalizeEnvValue(
-  window.WSG_SUPABASE_URL
-  || window.VITE_SUPABASE_URL
-  || document.querySelector('meta[name="wsg-supabase-url"]')?.content,
-);
-const runtimeSupabaseAnonKey = normalizeEnvValue(
-  window.WSG_SUPABASE_ANON_KEY
-  || window.VITE_SUPABASE_ANON_KEY
-  || document.querySelector('meta[name="wsg-supabase-anon-key"]')?.content,
-);
+  return { url, anonKey };
+}
 
-const SUPABASE_URL = viteSupabaseUrl || runtimeSupabaseUrl;
-const SUPABASE_ANON_KEY = viteSupabaseAnonKey || runtimeSupabaseAnonKey;
+const { url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY } = readSupabaseConfig();
 
 export const supabaseConfig = {
   urlPresent: Boolean(SUPABASE_URL),
   keyPresent: Boolean(SUPABASE_ANON_KEY),
-  usingViteEnvUrl: Boolean(viteSupabaseUrl),
-  usingViteEnvKey: Boolean(viteSupabaseAnonKey),
+  ready: Boolean(SUPABASE_URL && SUPABASE_ANON_KEY),
+  source: 'window/meta-runtime',
+  initError: '',
 };
 
 console.info(`[supabase] Supabase URL present: ${supabaseConfig.urlPresent ? 'yes' : 'no'}`);
 console.info(`[supabase] Supabase key present: ${supabaseConfig.keyPresent ? 'yes' : 'no'}`);
-console.info(`[supabase] Supabase URL length: ${SUPABASE_URL.length}`);
 
-if (!supabaseConfig.urlPresent || !supabaseConfig.keyPresent) {
-  console.warn('[supabase] Missing Supabase URL or anon key. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in frontend environment and redeploy.');
+if (!supabaseConfig.ready) {
+  console.warn('[supabase] Missing Supabase URL or anon key. Set wsg-supabase-url and wsg-supabase-anon-key (or window.WSG_SUPABASE_*) in web/index.html.');
 }
 
-export const supabase = (supabaseConfig.urlPresent && supabaseConfig.keyPresent)
-  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-    },
-  })
-  : null;
+let supabaseClient = null;
+if (supabaseConfig.ready) {
+  try {
+    supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+      },
+    });
+  } catch (error) {
+    supabaseConfig.initError = error instanceof Error ? error.message : String(error);
+    console.error('[supabase] Failed to initialize client.', error);
+  }
+}
+
+export const supabase = supabaseClient;
 
 export function toAppUser(user) {
   if (!user) return null;
