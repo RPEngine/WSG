@@ -1,28 +1,40 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const SUPABASE_URL = (
-  window.VITE_SUPABASE_URL
+  import.meta?.env?.VITE_SUPABASE_URL
+  || window.VITE_SUPABASE_URL
   || window.WSG_SUPABASE_URL
-  || 'https://lcclgtefrkfikrnfkoua.supabase.co'
+  || ''
 ).trim();
 
 const SUPABASE_ANON_KEY = (
-  window.VITE_SUPABASE_ANON_KEY
+  import.meta?.env?.VITE_SUPABASE_ANON_KEY
+  || window.VITE_SUPABASE_ANON_KEY
   || window.WSG_SUPABASE_ANON_KEY
   || ''
 ).trim();
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+export const supabaseConfig = {
+  urlPresent: Boolean(SUPABASE_URL),
+  keyPresent: Boolean(SUPABASE_ANON_KEY),
+};
+
+console.info(`[supabase] Supabase URL present: ${supabaseConfig.urlPresent ? 'yes' : 'no'}`);
+console.info(`[supabase] Supabase key present: ${supabaseConfig.keyPresent ? 'yes' : 'no'}`);
+
+if (!supabaseConfig.urlPresent || !supabaseConfig.keyPresent) {
   console.warn('[supabase] Missing Supabase URL or anon key. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in frontend runtime env.');
 }
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-  },
-});
+export const supabase = (supabaseConfig.urlPresent && supabaseConfig.keyPresent)
+  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
+  })
+  : null;
 
 export function toAppUser(user) {
   if (!user) return null;
