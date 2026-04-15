@@ -9,6 +9,8 @@
   <meta name="wsg-api-base-url" content="" />
   <!-- Google Identity Services client ID for frontend -->
   <meta name="wsg-google-client-id" content="" />
+  <meta name="wsg-supabase-url" content="https://lcclgtefrkfikrnfkoua.supabase.co" />
+  <meta name="wsg-supabase-anon-key" content="" />
   <title>Wyked Samurai Guild</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -20,6 +22,10 @@
 <body>
   <div id="app"></div>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="app.js"></script>
+  <script>
+    window.WSG_SUPABASE_URL = window.VITE_SUPABASE_URL || document.querySelector('meta[name="wsg-supabase-url"]')?.content || "https://lcclgtefrkfikrnfkoua.supabase.co";
+    window.WSG_SUPABASE_ANON_KEY = window.VITE_SUPABASE_ANON_KEY || document.querySelector('meta[name="wsg-supabase-anon-key"]')?.content || "";
+  </script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>
