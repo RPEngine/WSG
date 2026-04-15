@@ -399,6 +399,9 @@ const AI_ENDPOINTS = Object.freeze({
   chat: '/ai/chat',
   scenario: '/ai/scenario',
 });
+const SCENARIO_ENDPOINTS = Object.freeze({
+  complete: (scenarioId) => `/scenarios/${encodeURIComponent(scenarioId)}/complete`,
+});
 const ONBOARDING_NEW_USER_KEY = 'wsg-onboarding-new-user';
 const STARTER_SCENARIO_SEEN_PREFIX = 'wsg-starter-seen';
 const SCENARIO_PROGRESS_STORAGE_PREFIX = 'wsg-scenario-progress';
@@ -1254,6 +1257,62 @@ function buildOnboardingProfileFromSession(scenario, session) {
   };
 }
 
+function buildScenarioCompletionPayloadFromSession(scenario, session) {
+  const onboardingProfile = buildOnboardingProfileFromSession(scenario, session);
+  const answers = {
+    hall_memory: String(session.answers?.hall_memory || '').trim(),
+    hall_ambition: String(session.answers?.hall_ambition || '').trim(),
+    hall_burden: String(session.answers?.hall_burden || '').trim(),
+    hall_connection: String(session.answers?.hall_connection || '').trim(),
+  };
+  answers.origins = answers.hall_memory;
+  answers.aspiration = answers.hall_ambition;
+  answers.weight = answers.hall_burden;
+  answers.bonds = answers.hall_connection;
+  const summary = scenario.id === FIRST_SCENARIO_ID
+    ? `The user completed the guild initiation rite, Forge Your Purpose. They chose ${answers.hall_memory || 'an unrecorded answer'} in the Hall of Origins, ${answers.hall_ambition || 'an unrecorded answer'} in the Hall of Aspiration, ${answers.hall_burden || 'an unrecorded answer'} in the Hall of Weight, and ${answers.hall_connection || 'an unrecorded answer'} in the Hall of Bonds. Their final motivation was: "${onboardingProfile.motivation || ''}". Their primary archetype resolved as ${onboardingProfile.primaryArchetype || 'unresolved'} and their secondary archetype resolved as ${onboardingProfile.secondaryArchetype || 'unresolved'}.`
+    : `The user completed scenario "${scenario.title}" (${scenario.id}).`;
+
+  return {
+    scenarioId: scenario.id,
+    title: scenario.title,
+    mode: state.mode === 'roleplay' ? 'roleplay' : 'professional',
+    profileSnapshot: {
+      motivation: onboardingProfile.motivation,
+      primaryArchetype: onboardingProfile.primaryArchetype,
+      secondaryArchetype: onboardingProfile.secondaryArchetype,
+      reflectionProfile: onboardingProfile.reflectionProfile,
+    },
+    scenarioResults: {
+      visitedLocations: Array.isArray(session.visitedLocations) ? session.visitedLocations : [],
+      answers,
+      customFinalAnswer: onboardingProfile.motivation || null,
+      completionState: session.finalSubmitted ? 'completed' : 'incomplete',
+      derivedArchetypeProfile: onboardingProfile.archetypeProfile,
+    },
+    summary,
+    memoryTags: [
+      'scenario',
+      'initiation',
+      'motivation',
+      String(onboardingProfile.primaryArchetype || '').trim(),
+      String(onboardingProfile.secondaryArchetype || '').trim(),
+    ].filter(Boolean),
+  };
+}
+
+async function submitScenarioCompletion(scenario, session) {
+  if (!scenario?.id || !state.authToken) {
+    return null;
+  }
+  const completionPayload = buildScenarioCompletionPayloadFromSession(scenario, session);
+  const result = await apiRequest(SCENARIO_ENDPOINTS.complete(scenario.id), {
+    method: 'POST',
+    body: JSON.stringify(completionPayload),
+  });
+  return result?.completion || null;
+}
+
 function formatArchetypeLabel(value) {
   return String(value || '')
     .split('_')
@@ -1342,11 +1401,22 @@ function parseAiChatResponse(data) {
 }
 
 async function requestHomeAssistantReply(userMessage) {
+  const recentScenarioMemory = Array.isArray(state.currentUser?.scenarioHistory)
+    ? state.currentUser.scenarioHistory.slice(0, 3).map((entry) => ({ scenarioId: entry.scenarioId, summary: entry.summary, memoryTags: entry.memoryTags || [] }))
+    : [];
   const payload = {
     prompt: userMessage,
     genre: 'General Coaching',
     tone: state.mode === 'roleplay' ? 'Roleplay' : 'Professional',
     constraints: 'Reply with concise, practical guidance.',
+    context: {
+      profile: {
+        motivation: String(state.currentUser?.motivation || '').trim(),
+        primaryArchetype: String(state.currentUser?.primaryArchetype || '').trim(),
+        secondaryArchetype: String(state.currentUser?.secondaryArchetype || '').trim(),
+      },
+      recentScenarioMemory,
+    },
   };
 
   const data = await apiRequest(AI_ENDPOINTS.chat, {
@@ -1395,6 +1465,16 @@ async function requestRoleplayAssistantReply(userMessage, session) {
     genre: 'Interactive Roleplay',
     tone: 'Immersive World Narration',
     constraints: 'Stay in-world, concise, responsive, and offer clear hooks for the next action.',
+    context: {
+      profile: {
+        motivation: String(state.currentUser?.motivation || '').trim(),
+        primaryArchetype: String(state.currentUser?.primaryArchetype || '').trim(),
+        secondaryArchetype: String(state.currentUser?.secondaryArchetype || '').trim(),
+      },
+      recentScenarioMemory: Array.isArray(state.currentUser?.scenarioHistory)
+        ? state.currentUser.scenarioHistory.slice(0, 3).map((entry) => ({ scenarioId: entry.scenarioId, summary: entry.summary, memoryTags: entry.memoryTags || [] }))
+        : [],
+    },
   };
 
   const data = await apiRequest(AI_ENDPOINTS.chat, {
@@ -2845,7 +2925,7 @@ function attachScenarioDetailHandlers() {
 
   const finalAnswerForm = document.getElementById('scenario-final-form');
   if (finalAnswerForm) {
-    finalAnswerForm.onsubmit = (event) => {
+    finalAnswerForm.onsubmit = async (event) => {
       event.preventDefault();
       const input = document.getElementById('scenario-final-input');
       const value = String(input?.value || session.finalAnswer || '').trim();
@@ -2863,6 +2943,21 @@ function attachScenarioDetailHandlers() {
         ...(state.currentUser || {}),
         ...onboardingProfile,
       };
+      try {
+        const completion = await submitScenarioCompletion(scenario, session);
+        if (completion && state.currentUser) {
+          const existing = Array.isArray(state.currentUser.scenarioHistory) ? state.currentUser.scenarioHistory : [];
+          state.currentUser = {
+            ...state.currentUser,
+            scenarioHistory: [completion, ...existing.filter((entry) => entry.scenarioId !== completion.scenarioId)].slice(0, 10),
+          };
+        }
+      } catch (error) {
+        console.warn('[scenario] completion handoff failed', {
+          scenarioId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
       markKnownReturningUser();
       persistScenarioProgress(scenarioId);
       if (scenarioId === FIRST_SCENARIO_ID) {

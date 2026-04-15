@@ -69,6 +69,31 @@ export async function initializeDatabase() {
   `);
 
   await pool.query(`
+    ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS motivation TEXT NOT NULL DEFAULT '';
+  `);
+
+  await pool.query(`
+    ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS primary_archetype TEXT NOT NULL DEFAULT '';
+  `);
+
+  await pool.query(`
+    ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS secondary_archetype TEXT NOT NULL DEFAULT '';
+  `);
+
+  await pool.query(`
+    ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS reflection_profile JSONB NOT NULL DEFAULT '{}'::JSONB;
+  `);
+
+  await pool.query(`
+    ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS derived_archetype_profile JSONB NOT NULL DEFAULT '{}'::JSONB;
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS profiles (
       id UUID PRIMARY KEY,
       user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -168,6 +193,28 @@ export async function initializeDatabase() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       expires_at TIMESTAMPTZ NOT NULL
     );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_scenario_memories (
+      id UUID PRIMARY KEY,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      scenario_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      mode TEXT NOT NULL,
+      completed_at TIMESTAMPTZ NOT NULL,
+      summary TEXT NOT NULL,
+      memory_tags TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+      profile_snapshot JSONB NOT NULL DEFAULT '{}'::JSONB,
+      scenario_results JSONB NOT NULL DEFAULT '{}'::JSONB,
+      payload JSONB NOT NULL DEFAULT '{}'::JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS user_scenario_memories_user_completed_idx
+      ON user_scenario_memories (user_id, completed_at DESC);
   `);
 }
 
