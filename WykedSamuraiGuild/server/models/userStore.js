@@ -32,6 +32,17 @@ function mapLayerRow(row) {
   };
 }
 
+function mapScenarioHistoryRow(row) {
+  return {
+    scenarioId: row.scenario_id,
+    title: row.title,
+    mode: row.mode,
+    completedAt: row.completed_at,
+    summary: row.summary,
+    memoryTags: Array.isArray(row.memory_tags) ? row.memory_tags : [],
+  };
+}
+
 async function getProfileLayersByUserId(userId) {
   const { rows } = await pool.query(
     `SELECT *
@@ -43,7 +54,7 @@ async function getProfileLayersByUserId(userId) {
   return rows.map(mapLayerRow);
 }
 
-function publicUser(row, layers = [], connections = []) {
+function publicUser(row, layers = [], connections = [], scenarioHistory = []) {
   if (!row) return null;
 
   const email = row.email || "";
@@ -85,9 +96,15 @@ function publicUser(row, layers = [], connections = []) {
     skillsInterests: Array.isArray(freeLayer.skills) ? freeLayer.skills : [],
     accessTier: row.access_tier || "free",
     subscriptionStatus: row.subscription_status || "inactive",
+    motivation: row.motivation || "",
+    primaryArchetype: row.primary_archetype || "",
+    secondaryArchetype: row.secondary_archetype || "",
+    reflectionProfile: row.reflection_profile && typeof row.reflection_profile === "object" ? row.reflection_profile : {},
+    derivedArchetypeProfile: row.derived_archetype_profile && typeof row.derived_archetype_profile === "object" ? row.derived_archetype_profile : {},
     availableLayers,
     lockedLayers,
     layers: layerMap,
+    scenarioHistory,
     connections,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -102,6 +119,19 @@ async function getConnectionIds(userId) {
     [userId],
   );
   return rows.map((row) => row.connection_user_id);
+}
+
+async function getScenarioHistoryByUserId(userId, limit = 6) {
+  const safeLimit = Number.isFinite(Number(limit)) ? Math.max(1, Math.min(20, Number(limit))) : 6;
+  const { rows } = await pool.query(
+    `SELECT *
+     FROM user_scenario_memories
+     WHERE user_id = $1
+     ORDER BY completed_at DESC, created_at DESC
+     LIMIT $2`,
+    [userId, safeLimit],
+  );
+  return rows.map(mapScenarioHistoryRow);
 }
 
 export async function createUser({
@@ -187,11 +217,12 @@ export async function listUsers() {
 
   const users = [];
   for (const row of rows) {
-    const [connections, layers] = await Promise.all([
+    const [connections, layers, scenarioHistory] = await Promise.all([
       getConnectionIds(row.id),
       getProfileLayersByUserId(row.id),
+      getScenarioHistoryByUserId(row.id),
     ]);
-    users.push(publicUser(row, layers, connections));
+    users.push(publicUser(row, layers, connections, scenarioHistory));
   }
   return users;
 }
@@ -207,11 +238,12 @@ export async function updateUserProfile(userId, { displayName, bio }) {
 
   const user = await findUserById(userId);
   if (!user) return null;
-  const [connections, layers] = await Promise.all([
+  const [connections, layers, scenarioHistory] = await Promise.all([
     getConnectionIds(userId),
     getProfileLayersByUserId(userId),
+    getScenarioHistoryByUserId(userId),
   ]);
-  return publicUser(user, layers, connections);
+  return publicUser(user, layers, connections, scenarioHistory);
 }
 
 export async function updateUserHubProfile(userId, { legalName, email, role, organizationName }) {
@@ -228,11 +260,12 @@ export async function updateUserHubProfile(userId, { legalName, email, role, org
 
   const user = await findUserById(userId);
   if (!user) return null;
-  const [connections, layers] = await Promise.all([
+  const [connections, layers, scenarioHistory] = await Promise.all([
     getConnectionIds(userId),
     getProfileLayersByUserId(userId),
+    getScenarioHistoryByUserId(userId),
   ]);
-  return publicUser(user, layers, connections);
+  return publicUser(user, layers, connections, scenarioHistory);
 }
 
 export async function getProfileLayer(userId, layerKey) {
@@ -282,11 +315,12 @@ export async function addConnection(userId, connectionUserId) {
   );
 
   const user = await findUserById(userId);
-  const [connections, layers] = await Promise.all([
+  const [connections, layers, scenarioHistory] = await Promise.all([
     getConnectionIds(userId),
     getProfileLayersByUserId(userId),
+    getScenarioHistoryByUserId(userId),
   ]);
-  return publicUser(user, layers, connections);
+  return publicUser(user, layers, connections, scenarioHistory);
 }
 
 export async function removeConnection(userId, connectionUserId) {
@@ -295,11 +329,12 @@ export async function removeConnection(userId, connectionUserId) {
     [userId, connectionUserId],
   );
   const user = await findUserById(userId);
-  const [connections, layers] = await Promise.all([
+  const [connections, layers, scenarioHistory] = await Promise.all([
     getConnectionIds(userId),
     getProfileLayersByUserId(userId),
+    getScenarioHistoryByUserId(userId),
   ]);
-  return publicUser(user, layers, connections);
+  return publicUser(user, layers, connections, scenarioHistory);
 }
 
 export async function touchLastActiveAt(userId) {
@@ -415,9 +450,82 @@ export async function markSessionReauthenticated(sessionToken, { mfaConfirmed = 
 
 export async function toPublicUser(user) {
   if (!user) return null;
-  const [connections, layers] = await Promise.all([
+  const [connections, layers, scenarioHistory] = await Promise.all([
     getConnectionIds(user.id),
     getProfileLayersByUserId(user.id),
+    getScenarioHistoryByUserId(user.id),
   ]);
-  return publicUser(user, layers, connections);
+  return publicUser(user, layers, connections, scenarioHistory);
+}
+
+export async function saveScenarioMemory(userId, payload) {
+  const recordId = crypto.randomUUID();
+  await pool.query(
+    `INSERT INTO user_scenario_memories (
+      id,
+      user_id,
+      scenario_id,
+      title,
+      mode,
+      completed_at,
+      summary,
+      memory_tags,
+      profile_snapshot,
+      scenario_results,
+      payload
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::JSONB,$10::JSONB,$11::JSONB)`,
+    [
+      recordId,
+      userId,
+      payload.scenarioId,
+      payload.title,
+      payload.mode,
+      payload.completedAt,
+      payload.summary,
+      Array.isArray(payload.memoryTags) ? payload.memoryTags : [],
+      JSON.stringify(payload.profileSnapshot || {}),
+      JSON.stringify(payload.scenarioResults || {}),
+      JSON.stringify(payload || {}),
+    ],
+  );
+}
+
+export async function updateUserArchetypeContext(userId, profileSnapshot = {}, scenarioResults = {}) {
+  const reflectionProfile = profileSnapshot?.reflectionProfile
+    && typeof profileSnapshot.reflectionProfile === "object"
+    ? profileSnapshot.reflectionProfile
+    : {};
+  const derivedArchetypeProfile = scenarioResults?.derivedArchetypeProfile
+    && typeof scenarioResults.derivedArchetypeProfile === "object"
+    ? scenarioResults.derivedArchetypeProfile
+    : {};
+
+  await pool.query(
+    `UPDATE users
+     SET motivation = COALESCE(NULLIF($2, ''), motivation),
+         primary_archetype = COALESCE(NULLIF($3, ''), primary_archetype),
+         secondary_archetype = COALESCE(NULLIF($4, ''), secondary_archetype),
+         reflection_profile = CASE
+           WHEN jsonb_typeof($5::JSONB) = 'object' THEN $5::JSONB
+           ELSE reflection_profile
+         END,
+         derived_archetype_profile = CASE
+           WHEN jsonb_typeof($6::JSONB) = 'object' THEN $6::JSONB
+           ELSE derived_archetype_profile
+         END,
+         updated_at = NOW()
+     WHERE id = $1`,
+    [
+      userId,
+      String(profileSnapshot?.motivation || "").trim(),
+      String(profileSnapshot?.primaryArchetype || "").trim(),
+      String(profileSnapshot?.secondaryArchetype || "").trim(),
+      JSON.stringify(reflectionProfile),
+      JSON.stringify(derivedArchetypeProfile),
+    ],
+  );
+}
+
+export async function getRecentScenarioMemory(userId, limit = 3) {
+  return getScenarioHistoryByUserId(userId, limit);
 }

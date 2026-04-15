@@ -12,6 +12,7 @@ const HEARTBEAT_IDLE_TIMEOUT_MS = 20 * 60 * 1000;
 let lastAiActivityAt = 0;
 let heartbeatIntervalId = null;
 let heartbeatRunning = false;
+const scenarioContextByUserId = new Map();
 
 const heartbeatRequestPayload = (endpointId) => ({
   model: endpointId,
@@ -97,6 +98,20 @@ export const markAiActive = () => {
   if (!heartbeatRunning) {
     startAiHeartbeat();
   }
+};
+
+export const pushScenarioContextToAI = (payload) => {
+  if (!payload?.userId) return;
+  scenarioContextByUserId.set(payload.userId, {
+    payload,
+    pushedAt: new Date().toISOString(),
+  });
+  markAiActive();
+};
+
+export const getPendingScenarioContextForUser = (userId) => {
+  if (!userId) return null;
+  return scenarioContextByUserId.get(userId) || null;
 };
 
 const scenarioOutputSchema = {
