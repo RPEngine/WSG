@@ -73,9 +73,11 @@ body {
 .app-shell {
   --left-sidebar-width: 250px;
   --right-sidebar-width: 320px;
+  --header-height: 72px;
+  --header-padding-y: 12px;
   display: grid;
   grid-template-columns: var(--left-sidebar-width) minmax(0, 1fr) var(--right-sidebar-width);
-  grid-template-rows: 68px 1fr;
+  grid-template-rows: var(--header-height) 1fr;
   grid-template-areas:
     "header header header"
     "left main right";
@@ -93,6 +95,11 @@ body {
 
 .app-shell.is-right-sidebar-collapsed {
   --right-sidebar-width: 72px;
+}
+
+.app-shell.is-header-collapsed {
+  --header-height: 38px;
+  --header-padding-y: 4px;
 }
 
 .public-shell {
@@ -151,8 +158,12 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 68px;
-  padding: 0 14px;
+  min-height: var(--header-height);
+  height: var(--header-height);
+  padding: var(--header-padding-y) 14px;
+  position: relative;
+  overflow: hidden;
+  transition: height 0.25s ease, min-height 0.25s ease, padding 0.25s ease;
 }
 
 .brand { display: flex; gap: 12px; align-items: center; }
@@ -166,6 +177,50 @@ body {
 .subtitle { color: var(--text-muted); font-size: 12px; margin-top: 2px; }
 
 .header-actions { display: flex; align-items: center; gap: 12px; }
+
+.header-collapse-btn {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel-soft);
+  color: var(--text-main);
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1;
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.hide-when-header-collapsed {
+  transition: opacity 0.2s ease;
+}
+
+.header.is-collapsed .subtitle,
+.header.is-collapsed .header-brand-copy .title,
+.header.is-collapsed .hide-when-header-collapsed {
+  opacity: 0;
+  pointer-events: none;
+  width: 0;
+  margin: 0;
+  overflow: hidden;
+}
+
+.header.is-collapsed .guild-brand-mark img {
+  width: 30px;
+  height: 30px;
+}
+
+.header.is-collapsed .brand {
+  gap: 8px;
+}
+
+.header.is-collapsed .toggle button {
+  padding: 4px 10px;
+}
 
 .guild-lockup {
   display: flex;
@@ -553,7 +608,7 @@ body {
     padding-bottom: var(--space-2);
   }
   .grid.two { grid-template-columns: 1fr; }
-  .header { flex-wrap: wrap; height: auto; padding: 12px; }
+  .header { flex-wrap: nowrap; padding-right: 36px; }
   .global-chat-dock {
     right: 10px;
     left: 10px;
