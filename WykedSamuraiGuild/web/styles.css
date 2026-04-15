@@ -759,7 +759,7 @@ body {
 .arena-selection-head {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
 }
 
@@ -773,6 +773,17 @@ body {
 
 .arena-selection-head p {
   margin: 0;
+}
+
+.arena-strip-active-summary {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  padding: 4px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.18);
+  white-space: nowrap;
 }
 
 .arena-card-carousel {
@@ -792,7 +803,15 @@ body {
 }
 
 .arena-scenario-strip.is-collapsed {
-  padding-bottom: 2px;
+  padding: 10px 12px;
+}
+
+.arena-scenario-strip {
+  flex: 0 0 auto;
+}
+
+.arena-scenario-strip:not(.is-collapsed) {
+  max-height: 290px;
 }
 
 .arena-strip-toggle-btn {
@@ -896,6 +915,14 @@ body {
   background: linear-gradient(170deg, rgba(10, 14, 20, 0.94), rgba(13, 18, 25, 0.88));
 }
 
+.arena-chat-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .arena-chat-head {
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   padding-bottom: 10px;
@@ -962,6 +989,13 @@ body {
   background: rgba(8, 13, 18, 0.55);
 }
 
+.arena-chat-input-row {
+  flex: 0 0 auto;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 10px;
+  margin-top: 2px;
+}
+
 .arena-empty h4 {
   margin: 0 0 8px;
 }
@@ -983,10 +1017,8 @@ body {
 
 .arena-chat-panel .arena-input {
   flex: 0 0 auto;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  padding-top: 10px;
-  margin-top: auto;
-  background: linear-gradient(180deg, rgba(15, 19, 24, 0.2), rgba(15, 19, 24, 0.95) 35%);
+  margin-top: 0;
+  background: transparent;
 }
 
 .utility-pane-head {
