@@ -328,6 +328,7 @@ const state = {
   authForms: {
     login: { message: '', tone: 'info', loading: false },
     signup: { message: '', tone: 'info', loading: false },
+    policyAccept: { message: '', tone: 'info', loading: false, attemptedSubmit: false, agreed: false },
   },
   network: {
     connections: [],
@@ -429,6 +430,7 @@ const HOME_ROUTE = '/app';
 const ONBOARDING_ROUTE = `/scenario/${FIRST_SCENARIO_ID}`;
 const POLICY_ACCEPT_ROUTE = '/policy/accept';
 const CURRENT_POLICY_VERSION = 'v1.0';
+const REQUIRED_POLICY_KEYS = Object.freeze(['codeOfConduct', 'contentPolicy', 'platformRules', 'privacyPolicy']);
 
 let googleInitialized = false;
 
@@ -537,8 +539,7 @@ function setProfileHubMessage(message, tone = 'info') {
 
 function hasAcceptedCurrentPolicies(user) {
   const policyAcceptance = user?.policyAcceptance || {};
-  const requiredPolicies = ['codeOfConduct', 'contentPolicy', 'platformRules'];
-  return requiredPolicies.every((key) => {
+  return REQUIRED_POLICY_KEYS.every((key) => {
     const policy = policyAcceptance?.[key];
     return Boolean(policy?.accepted && policy?.acceptedAt && policy?.policyVersion === CURRENT_POLICY_VERSION);
   });
@@ -1152,7 +1153,7 @@ function pageTitle(key) {
     areaChat: ['Area Chat', 'Shared location-based roleplay chat stream.'],
     login: ['Log In', 'Access your guild account.'],
     signup: ['Create Account', 'Join Wyked Samurai Guild.'],
-    policyAccept: ['Policy Agreement Required', 'Accept the Guild policy standards to continue.'],
+    policyAccept: ['Guild Policy Acceptance', 'Accept the Guild standards to continue into WSG.'],
     codeOfConduct: ['Code of Conduct', 'Professional and Safe for Work behavior standards for all members.'],
     contentPolicy: ['Content Policy', 'Safe for Work content requirements across all platform surfaces.'],
     platformRules: ['Platform Rules', 'Core platform integrity and job-board participation standards.'],
@@ -2919,10 +2920,10 @@ function signupPage() {
         </section>
         <section class="form-section policy-consent-section">
           <h4>Required Policy Agreement</h4>
-          <p class="muted">Wyked Samurai Guild is a Safe for Work professional platform. By creating an account, you agree to follow the Guild’s Code of Conduct, Content Policy, and Platform Rules.</p>
+          <p class="muted">Wyked Samurai Guild is a Safe for Work professional platform. By creating an account, you agree to follow the Guild’s Code of Conduct, Content Policy, Platform Rules, and Privacy Policy.</p>
           <label class="checkbox-option">
             <input type="checkbox" name="policyAgreement" value="yes" />
-            <span>I have read and agree to the Wyked Samurai Guild Code of Conduct, Content Policy, and Platform Rules.</span>
+            <span>I have read and agree to the Wyked Samurai Guild Code of Conduct, Content Policy, Platform Rules, and Privacy Policy.</span>
           </label>
           <p class="muted">Review the full policies: <a href="#/code-of-conduct">Code of Conduct</a> · <a href="#/content-policy">Content Policy</a> · <a href="#/platform-rules">Terms / Platform Rules</a> · <a href="#/privacy">Privacy Policy</a></p>
         </section>
@@ -3048,26 +3049,61 @@ function privacyPage() {
 }
 
 function policyAcceptPage() {
-  const hasError = state.authForms.signup.tone === 'error' && Boolean(state.authForms.signup.message);
-  const feedback = hasError ? `ERROR: ${state.authForms.signup.message}` : (state.authForms.signup.message || 'Policy acceptance is required to continue.');
+  const policyForm = state.authForms.policyAccept || {
+    agreed: false,
+    attemptedSubmit: false,
+    loading: false,
+    message: '',
+    tone: 'info',
+  };
+  const inlineError = policyForm.attemptedSubmit && !policyForm.agreed
+    ? 'You must agree before continuing.'
+    : '';
+  const isSubmitting = Boolean(policyForm.loading);
+  const hasAuthSession = Boolean(state.currentUser);
+  const submitDisabled = !policyForm.agreed || isSubmitting || !hasAuthSession;
+  const statusMarkup = policyForm.message
+    ? `<p id="policy-accept-feedback" class="status-banner status-${policyForm.tone}" role="status" aria-live="polite">${escapeHtml(policyForm.message)}</p>`
+    : '';
+
+  if (!hasAuthSession) {
+    return `
+      <section class="card form-card policy-accept-card policy-accept-card--standalone">
+        <h3>Guild Policy Acceptance</h3>
+        <p>We’re preparing your account session. Please wait a moment and refresh this page if needed.</p>
+        <p class="muted">If you were signed out, return to <a href="#/login">Log In</a> and come back to continue.</p>
+      </section>
+    `;
+  }
+
   return `
-    <section class="card form-card">
-      <h3>Policy acceptance required</h3>
-      <p class="muted">Wyked Samurai Guild is a Safe for Work professional network, scenario platform, and job board. Access to the platform requires agreement with the Guild’s conduct and content standards.</p>
-      <form id="policy-accept-form" class="form-stack">
-        <p id="policy-accept-feedback" class="status-banner ${state.authForms.signup.message ? `status-${state.authForms.signup.tone}` : 'status-info'}${hasError ? ' auth-error-banner' : ''}" role="alert" aria-live="assertive">${escapeHtml(feedback)}</p>
+    <section class="card form-card policy-accept-card policy-accept-card--standalone">
+      <h3>Guild Policy Acceptance</h3>
+      <p class="muted">Wyked Samurai Guild is a Safe for Work professional network, scenario platform, and job board. Access requires agreement with the Guild’s conduct, content, and platform standards.</p>
+      <form id="policy-accept-form" class="form-stack" novalidate>
+        ${statusMarkup}
+        <section class="form-section policy-link-section">
+          <h4>Review Required Policies</h4>
+          <ul class="policy-link-list">
+            <li><a href="#/code-of-conduct">Code of Conduct</a></li>
+            <li><a href="#/content-policy">Content Policy</a></li>
+            <li><a href="#/platform-rules">Platform Rules</a></li>
+            <li><a href="#/privacy">Privacy Policy</a></li>
+          </ul>
+        </section>
         <label class="checkbox-option">
-          <input type="checkbox" name="policyAgreement" value="yes" />
-          <span>I have read and agree to the Wyked Samurai Guild Code of Conduct, Content Policy, and Platform Rules.</span>
+          <input type="checkbox" name="policyAgreement" value="yes" ${policyForm.agreed ? 'checked' : ''} />
+          <span>I have read and agree to the Wyked Samurai Guild Code of Conduct, Content Policy, Platform Rules, and Privacy Policy.</span>
         </label>
-        <p class="muted">Review the full policies: <a href="#/code-of-conduct">Code of Conduct</a> · <a href="#/content-policy">Content Policy</a> · <a href="#/platform-rules">Terms / Platform Rules</a> · <a href="#/privacy">Privacy Policy</a></p>
+        ${inlineError ? `<p class="status-banner status-error auth-error-banner" id="policy-accept-inline-error" role="alert">${escapeHtml(inlineError)}</p>` : ''}
         <div class="actions">
-          <button class="pill-btn cta-primary" type="submit" id="policy-accept-submit-btn">Accept and Continue</button>
+          <button class="pill-btn cta-primary" type="submit" id="policy-accept-submit-btn" ${submitDisabled ? 'disabled' : ''}>${isSubmitting ? 'Saving...' : 'Accept and Continue'}</button>
         </div>
       </form>
     </section>
   `;
 }
+
 
 function recruiterPage() {
   const profile = state.currentUser || {};
@@ -3448,7 +3484,7 @@ function applyRouteGuards(path) {
     return path;
   }
 
-  if (known.requiresAuth && !state.currentUser) {
+  if (known.requiresAuth && !state.currentUser && path !== POLICY_ACCEPT_ROUTE) {
     return '/login';
   }
 
@@ -4494,8 +4530,9 @@ async function render() {
   if (path === '/profile' || /^\/(?:members|profile)\/[^/]+$/.test(path)) {
     await loadProfileForRoute(path);
   }
+  const isPolicyAcceptRoute = path === POLICY_ACCEPT_ROUTE;
   const isPublicRoute = ['/', '/login', '/signup', '/code-of-conduct', '/content-policy', '/platform-rules', '/privacy'].includes(path);
-  if (state.currentUser && !isPublicRoute) {
+  if (state.currentUser && !isPublicRoute && !isPolicyAcceptRoute) {
     await loadConnections();
   }
   if (path === '/recruiter-console' || path === '/members') {
@@ -4550,7 +4587,7 @@ async function render() {
     fallback: fallbackPage,
   }[resolvedRoute.key]();
 
-  if (['landing', 'login', 'signup', 'codeOfConduct', 'contentPolicy', 'platformRules', 'privacy'].includes(resolvedRoute.key)) {
+  if (['landing', 'login', 'signup', 'codeOfConduct', 'contentPolicy', 'platformRules', 'privacy', 'policyAccept'].includes(resolvedRoute.key)) {
     renderPublicLayout(path, resolvedRoute.key, pageHtml);
   } else {
     renderLayout(path, resolvedRoute.key, pageHtml);
@@ -4671,16 +4708,31 @@ async function render() {
 
   const policyAcceptForm = document.getElementById('policy-accept-form');
   if (policyAcceptForm) {
+    const checkbox = policyAcceptForm.querySelector('input[name="policyAgreement"]');
+    if (checkbox) {
+      checkbox.onchange = () => {
+        state.authForms.policyAccept.agreed = checkbox.checked;
+        if (checkbox.checked) {
+          state.authForms.policyAccept.attemptedSubmit = false;
+        }
+        render();
+      };
+    }
+
     policyAcceptForm.onsubmit = async (event) => {
       event.preventDefault();
+      if (state.authForms.policyAccept.loading) return;
       const formData = new FormData(policyAcceptForm);
       const policyAgreement = formData.get('policyAgreement') === 'yes';
+      state.authForms.policyAccept.agreed = policyAgreement;
+      state.authForms.policyAccept.attemptedSubmit = true;
       if (!policyAgreement) {
-        setFormMessage('signup', 'You must agree to the Guild policies before continuing.', 'error');
+        setFormMessage('policyAccept', 'Please review and accept all required policies.', 'error');
         render();
         return;
       }
-      setFormMessage('signup', 'Saving policy acceptance...', 'info');
+      setFormMessage('policyAccept', 'Saving policy acceptance...', 'info');
+      state.authForms.policyAccept.loading = true;
       render();
       try {
         const result = await apiRequest('/auth/policy/accept', {
@@ -4688,13 +4740,18 @@ async function render() {
           body: JSON.stringify({ policyAgreement: true }),
         });
         state.currentUser = withPersistedOnboardingProfile(result?.user || state.currentUser);
-        setFormMessage('signup', 'Policy acceptance saved.', 'success');
+        state.authForms.policyAccept.agreed = true;
+        setFormMessage('policyAccept', 'Policy acceptance saved.', 'success');
         setStatusMessage('Policy acceptance saved. Welcome to WSG.', 'success');
         location.hash = resolvePostAuthRoute(state.currentUser);
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unable to save policy acceptance right now.';
-        setFormMessage('signup', message, 'error');
+        const message = error instanceof Error && error.message
+          ? error.message
+          : 'We could not save your policy acceptance. Please try again.';
+        setFormMessage('policyAccept', message, 'error');
         setStatusMessage(message, 'error');
+      } finally {
+        state.authForms.policyAccept.loading = false;
         render();
       }
     };
