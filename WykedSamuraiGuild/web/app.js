@@ -1444,6 +1444,7 @@ function arenaPage() {
   const activeSummary = hasActiveTrial
     ? `${activeTrial.title} · Active`
     : `No ${isRoleplayMode ? 'room' : 'scenario'} active`;
+  const activeSummaryName = hasActiveTrial ? activeTrial.title : 'None active';
   const trialCards = (isRoleplayMode ? ROLEPLAY_ROOMS : STARTER_TRIALS)
     .map((trialOrRoom) => {
       const trialId = isRoleplayMode ? trialOrRoom.trialId : trialOrRoom.id;
@@ -1490,6 +1491,7 @@ function arenaPage() {
               <h3>${stripTitle}</h3>
               <p class="muted">${isScenarioStripCollapsed ? activeSummary : stripDescription}</p>
             </div>
+            <p class="arena-strip-active-summary">Active: ${escapeHtml(activeSummaryName)}</p>
             <button
               type="button"
               class="pill-btn arena-strip-toggle-btn"
@@ -1516,15 +1518,19 @@ function arenaPage() {
             </div>
             <p class="muted">${state.mode === 'roleplay' ? 'Immersive roleplay lane' : 'Structured decision lane'} · ${state.arena.messages.length} messages</p>
           </div>
-          ${
+          <div class="arena-chat-body">
+            ${
   hasActiveTrial
     ? `<div id="arena-conversation-log" class="conversation-log arena-chat-log">${chatMessages}</div>`
     : `<div class="arena-empty"><h4>No ${isRoleplayMode ? 'Room' : 'Trial'} active</h4><p class="muted">Select a ${isRoleplayMode ? 'room' : 'scenario card'} from the strip above to begin chatting.</p></div>`
 }
-          <form id="arena-input-form" class="arena-input">
-            <input id="arena-input" name="message" placeholder="${hasActiveTrial ? `Type your ${isRoleplayMode ? 'roleplay' : 'response'} message...` : `Start a ${isRoleplayMode ? 'room' : 'trial'} to enable chat`}" ${hasActiveTrial ? '' : 'disabled'} />
-            <button id="arena-send-btn" class="pill-btn" type="submit" ${(hasActiveTrial && !state.arena.pending) ? '' : 'disabled'}>${state.arena.pending ? 'Sending...' : 'Send'}</button>
-          </form>
+          </div>
+          <div class="arena-chat-input-row">
+            <form id="arena-input-form" class="arena-input">
+              <input id="arena-input" name="message" placeholder="${hasActiveTrial ? `Type your ${isRoleplayMode ? 'roleplay' : 'response'} message...` : `Start a ${isRoleplayMode ? 'room' : 'trial'} to enable chat`}" ${hasActiveTrial ? '' : 'disabled'} />
+              <button id="arena-send-btn" class="pill-btn" type="submit" ${(hasActiveTrial && !state.arena.pending) ? '' : 'disabled'}>${state.arena.pending ? 'Sending...' : 'Send'}</button>
+            </form>
+          </div>
           ${state.arena.error ? `<p class="muted" style="color:#ff7b7b;margin-top:8px;" role="alert">${escapeHtml(state.arena.error)}</p>` : ''}
         </section>
     </section>
