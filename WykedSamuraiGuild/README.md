@@ -32,9 +32,10 @@ The backend health route is:
 Backend (`/server`):
 - `PORT` (Render supplies this automatically).
 - `GOOGLE_CLIENT_ID` (required for Google Sign-In token verification).
-- `HUGGINGFACE_API_KEY` or `HUGGINGFACE_API_TOKEN` (required Hugging Face token variable; backend supports either).
-- `HUGGING_FACE_MODEL` (optional override; defaults to `HuggingFaceH4/zephyr-7b-beta`).
-- `HUGGING_FACE_HEALTH_MODEL` (optional provider-test model override; defaults to the active model).
+- `FRIENDLI_API_BASE_URL` (optional override; defaults to `https://api.friendli.ai/dedicated/v1`).
+- `FRIENDLI_API_TOKEN` (required Friendli API token).
+- `FRIENDLI_ENDPOINT_ID` (required Friendli endpoint ID; defaults to `depfbgnsxtxk2bc` if omitted).
+- `FRIENDLI_DEPLOYED_MODEL_NAME` (optional display/debug label; not used as request body model).
 - `WSG_FRONTEND_ORIGIN` (optional explicit frontend origin(s) for CORS allowlist; supports comma-separated values).
 
 Frontend (`/web`):

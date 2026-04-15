@@ -1,33 +1,53 @@
-import { checkFriendliHealth } from "../services/aiService.js";
+import { getAiProviderConfig } from "../config/ai.js";
+import { checkFriendliHealth, runFriendliDebugTest } from "../services/aiService.js";
 import { generateAndSaveScenario, getAllowedScenarioStatuses } from "../services/scenarioService.js";
 
 export const testAiConnection = async (req, res) => {
+  const config = getAiProviderConfig();
+
   try {
     const friendli = await checkFriendliHealth();
 
     return res.status(200).json({
       ok: true,
       backend: "ok",
-      provider: friendli?.provider || "friendli",
-      model: friendli?.model || process.env.FRIENDLI_ENDPOINT_ID || "dep94342bhagvi8",
-      endpointId: friendli?.endpointId || process.env.FRIENDLI_ENDPOINT_ID || "dep94342bhagvi8",
-      deployedModelName: friendli?.deployedModelName || process.env.FRIENDLI_MODEL || "mistralai/Mistral-7B-Instruct-v0.3",
-      baseUrl: friendli?.baseUrl || "https://api.friendli.ai/dedicated/v1",
+      provider: friendli?.provider || config.provider,
+      model: friendli?.model || config.endpointId,
+      endpointId: friendli?.endpointId || config.endpointId,
+      deployedModelName: friendli?.deployedModelName || config.deployedModelName,
+      baseUrl: friendli?.baseUrl || config.baseUrl,
+      tokenPresent: config.tokenPresent,
       timestamp: friendli?.timestamp || new Date().toISOString(),
     });
   } catch (error) {
     return res.status(503).json({
       ok: false,
       backend: "error",
-      provider: "friendli",
-      model: process.env.FRIENDLI_ENDPOINT_ID || "dep94342bhagvi8",
-      endpointId: process.env.FRIENDLI_ENDPOINT_ID || "dep94342bhagvi8",
-      deployedModelName: process.env.FRIENDLI_MODEL || "mistralai/Mistral-7B-Instruct-v0.3",
-      baseUrl: "https://api.friendli.ai/dedicated/v1",
+      provider: config.provider,
+      model: config.endpointId,
+      endpointId: config.endpointId,
+      deployedModelName: config.deployedModelName,
+      baseUrl: config.baseUrl,
+      tokenPresent: config.tokenPresent,
       timestamp: new Date().toISOString(),
       error: error instanceof Error ? error.message : "Provider test failed.",
     });
   }
+};
+
+export const debugFriendliTest = async (req, res) => {
+  const result = await runFriendliDebugTest();
+  const status = Number.isInteger(result.status) ? result.status : 500;
+
+  return res.status(status).json({
+    status: result.status,
+    statusText: result.statusText,
+    rawBody: result.rawBody,
+    baseUrl: result.baseUrl,
+    endpointId: result.endpointId,
+    tokenPresent: result.tokenPresent,
+    timestamp: new Date().toISOString(),
+  });
 };
 
 export const generateAiScenario = async (req, res) => {

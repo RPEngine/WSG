@@ -626,12 +626,44 @@ async function checkBackendHealth() {
   return data;
 }
 
-async function checkHuggingFaceConnection() {
+async function checkAiConnection() {
   return apiRequest(AI_ENDPOINTS.test, {
     method: 'GET',
   });
 }
 
+
+function isDebugAiMode() {
+  if (window.WSG_DEBUG_AI === true) {
+    return true;
+  }
+
+  try {
+    return localStorage.getItem('wsg-debug-ai') === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function getArenaFriendlyErrorMessage(error) {
+  const rawMessage = error instanceof Error ? error.message : 'AI provider request failed.';
+
+  if (isDebugAiMode()) {
+    return rawMessage;
+  }
+
+  if (rawMessage.includes('Friendli authentication failed.')) {
+    return 'AI authentication failed. Please contact support.';
+  }
+  if (rawMessage.includes('Friendli endpoint or route not found.')) {
+    return 'AI route is currently unavailable. Please try again shortly.';
+  }
+  if (rawMessage.includes('The AI endpoint is waking up or unavailable.')) {
+    return 'AI is waking up. Please retry in a few seconds.';
+  }
+
+  return 'AI response unavailable right now. Please try again.';
+}
 async function requestArenaAssistantReply({ userMessage, activeTrial }) {
   const payload = {
     prompt: [
@@ -2494,7 +2526,7 @@ function attachArenaHandlers() {
           message: value,
           error,
         });
-        state.arena.error = error instanceof Error ? error.message : 'AI chat request failed.';
+        state.arena.error = getArenaFriendlyErrorMessage(error);
         state.arena.messages.push({
           id: crypto.randomUUID(),
           type: 'system',
