@@ -45,15 +45,24 @@ async function startServer() {
     const friendliToken = typeof process.env.FRIENDLI_API_TOKEN === "string"
       ? process.env.FRIENDLI_API_TOKEN.trim()
       : "";
-    const friendliBaseUrl = (process.env.FRIENDLI_API_BASE_URL || "https://api.friendli.ai/dedicated").trim();
-    const friendliModel = (process.env.FRIENDLI_MODEL || "mistralai/Mistral-7B-Instruct-v0.3").trim();
+    const friendliEndpointId = typeof process.env.FRIENDLI_ENDPOINT_ID === "string"
+      ? process.env.FRIENDLI_ENDPOINT_ID.trim()
+      : "";
+    const friendliBaseUrl = (process.env.FRIENDLI_API_BASE_URL || "https://api.friendli.ai/dedicated/v1").trim();
+    const friendliDeployedModelName = (process.env.FRIENDLI_MODEL || "mistralai/Mistral-7B-Instruct-v0.3").trim();
+
+    if (!friendliToken) {
+      throw new Error("Missing required startup config: FRIENDLI_API_TOKEN.");
+    }
+    if (!friendliEndpointId) {
+      throw new Error("Missing required startup config: FRIENDLI_ENDPOINT_ID.");
+    }
 
     console.log("[startup] AI provider diagnostics:", {
       provider: "friendli",
       baseUrl: friendliBaseUrl,
-      model: friendliModel,
-      tokenPresent: Boolean(friendliToken),
-      tokenEnvName: friendliToken ? "FRIENDLI_API_TOKEN" : null,
+      endpointId: friendliEndpointId,
+      deployedModelName: friendliDeployedModelName,
     });
     await connectDatabase();
     console.log("[db] database connection established");
