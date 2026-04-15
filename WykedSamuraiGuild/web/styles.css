@@ -292,6 +292,11 @@ body {
   border-color: var(--ring);
 }
 
+.nav-list a.active {
+  position: relative;
+  box-shadow: inset 3px 0 0 var(--accent), 0 0 18px var(--accent-glow);
+}
+
 .left-pane-brand .muted {
   margin: 0;
   letter-spacing: 0.1em;
@@ -760,6 +765,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
 }
 
@@ -798,6 +804,15 @@ body {
   scrollbar-width: thin;
 }
 
+.arena-card-carousel.roleplay-room-list {
+  grid-auto-flow: row;
+  grid-auto-columns: unset;
+  grid-template-columns: minmax(0, 1fr);
+  max-height: 290px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
 .arena-card-carousel.is-collapsed {
   display: none;
 }
@@ -824,6 +839,64 @@ body {
   display: grid;
   align-content: start;
   gap: 8px;
+}
+
+.roleplay-room-row {
+  cursor: pointer;
+}
+
+.roleplay-room-row .trial-meta {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.arena-page-indicator {
+  padding: 10px 14px;
+  border-radius: 12px;
+}
+
+.arena-page-indicator .hero-kicker {
+  margin: 0;
+}
+
+.arena-page-indicator h3 {
+  margin: 4px 0 0;
+  font-size: 1.05rem;
+}
+
+.create-room-form {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.create-room-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.86rem;
+  color: var(--text-muted);
+}
+
+.create-room-form input,
+.create-room-form select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel-soft);
+  color: var(--text-main);
+}
+
+.create-room-form button,
+.create-room-form label:nth-child(4) {
+  grid-column: span 2;
+}
+
+.roleplay-room-empty-state {
+  min-height: 180px;
 }
 
 .recruiter-layout {
@@ -2311,4 +2384,15 @@ h1, h2, h3, h4, .title, .lockup-title { font-family: var(--heading-font); }
   background:
     radial-gradient(circle at 82% 16%, var(--mode-highlight-secondary), transparent 34%),
     linear-gradient(160deg, var(--panel-strong), rgba(7, 11, 16, 0.85));
+}
+
+@media (max-width: 900px) {
+  .create-room-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .create-room-form button,
+  .create-room-form label:nth-child(4) {
+    grid-column: span 1;
+  }
 }
