@@ -217,6 +217,16 @@ const ROLEPLAY_ROOMS = [
 ];
 
 const FIRST_SCENARIO_ID = 'find-your-why';
+const HUB_PLACEHOLDER_PEOPLE = Object.freeze([
+  { id: 'placeholder-person-1', displayName: 'Aiko Rivera', role: 'Community Mentor', headline: 'Guides new members through onboarding and profile setup.', badges: ['Guide'], score: 92, reputation: 'Trusted', location: 'Remote', availability: 'Online' },
+  { id: 'placeholder-person-2', displayName: 'Malik Chen', role: 'Recruiting Partner', headline: 'Coordinates role matching and recruiter introductions.', badges: ['Recruiter'], score: 88, reputation: 'Active', location: 'Seattle', availability: 'Away' },
+  { id: 'placeholder-person-3', displayName: 'Priya Solis', role: 'Product Operator', headline: 'Shares process templates and collaboration best practices.', badges: ['Contributor'], score: 84, reputation: 'Growing', location: 'Austin', availability: 'Online' },
+]);
+const HUB_PLACEHOLDER_COMPANIES = Object.freeze([
+  { id: 'placeholder-company-1', name: 'Nebula Works', industry: 'Software', summary: 'Building collaboration tooling for distributed teams.', openings: '4 open roles' },
+  { id: 'placeholder-company-2', name: 'Aegis Logistics', industry: 'Operations', summary: 'Scaling resilient operations and response workflows.', openings: '2 open roles' },
+  { id: 'placeholder-company-3', name: 'Summit Foundry', industry: 'Professional Services', summary: 'Supports hiring programs and career development.', openings: '5 open roles' },
+]);
 const ONBOARDING_ARCHETYPES = Object.freeze([
   'guardian',
   'builder',
@@ -410,6 +420,7 @@ const state = {
   network: {
     connections: [],
     searchTerm: '',
+    searchType: 'people',
     results: [],
     loading: false,
   },
@@ -3014,25 +3025,36 @@ function hubSectionTabs(activePath) {
 }
 
 function hubSocialPage() {
+  const searchType = state.network.searchType === 'companies' ? 'companies' : 'people';
   const searchQuery = String(state.network.searchTerm || '').trim();
-  const sourceProfiles = searchQuery ? (state.network.results || []) : (state.members || []);
+  const sourceProfiles = searchType === 'companies'
+    ? (searchQuery ? (state.network.results || []) : HUB_PLACEHOLDER_COMPANIES)
+    : (searchQuery ? (state.network.results || []) : ((state.members && state.members.length) ? state.members : HUB_PLACEHOLDER_PEOPLE));
   const profileSnapshots = Array.isArray(sourceProfiles) ? sourceProfiles.slice(0, 6) : [];
   const boardCategories = [
-    { name: 'General Discussion', detail: 'Community conversations, introductions, and shared updates.' },
     { name: 'FAQs', detail: 'Quick answers about people search, networking, and account visibility.' },
     { name: 'Announcements', detail: 'Official platform notices and community change logs.' },
-    { name: 'Recruiter / Company Discussions', detail: 'Cross-team discussion space for roles, hiring, and business collaboration.' },
-    { name: 'Support Questions', detail: 'Fast troubleshooting threads and guidance from the platform team.' },
+    { name: 'Updates', detail: 'Platform and community updates with release summaries and highlights.' },
     { name: 'Feedback', detail: 'Suggestions and improvement requests from the community.' },
+    { name: 'Support', detail: 'Fast troubleshooting threads and guidance from the platform team.' },
   ];
   const quickGlanceStats = [
-    { label: 'Contacts in Network', value: String(state.network.connections.length || 0) },
-    { label: 'People Search Results', value: String(profileSnapshots.length || 0) },
+    { label: 'Contacts in Network', value: String((state.network.connections || []).length || 0) },
+    { label: searchType === 'companies' ? 'Company Results' : 'People Results', value: String(profileSnapshots.length || 0) },
     { label: 'Discussion Categories', value: String(boardCategories.length) },
   ];
 
   const profileCards = profileSnapshots.length
-    ? profileSnapshots.map((profile) => `
+    ? profileSnapshots.map((profile) => searchType === 'companies' ? `
+      <article class="card panel-surface panel-surface--soft hub-snapshot-card">
+        <p class="hero-kicker">Company Search</p>
+        <h4>${escapeHtml(profile.name || 'Unknown Company')}</h4>
+        <p class="muted">${escapeHtml(profile.industry || 'Industry pending')}</p>
+        <p class="muted">${escapeHtml(profile.summary || 'Company summary placeholder.')}</p>
+        <p class="muted">${escapeHtml(profile.openings || 'Openings info pending')}</p>
+        <button class="pill-btn" type="button" disabled>Company profile (coming soon)</button>
+      </article>
+    ` : `
       <article class="card panel-surface panel-surface--soft hub-snapshot-card">
         <p class="hero-kicker">People Search</p>
         <h4>${escapeHtml(profile.displayName || profile.username || 'Unknown User')}</h4>
@@ -3043,7 +3065,7 @@ function hubSocialPage() {
         <a class="pill-btn" href="${linkFor(`/members/${profile.id || ''}`)}">Open profile</a>
       </article>
     `).join('')
-    : '<article class="card panel-surface panel-surface--soft"><h4>No people found yet</h4><p class="muted">Try a broader search term. This page handles empty states safely.</p></article>';
+    : `<article class="card panel-surface panel-surface--soft"><h4>No ${searchType === 'companies' ? 'companies' : 'people'} found yet</h4><p class="muted">Try a broader search term. This page handles empty states safely.</p></article>`;
 
   const boardCards = boardCategories.map((category) => `
     <article class="card panel-surface panel-surface--soft hub-board-card">
@@ -3058,10 +3080,14 @@ function hubSocialPage() {
     <section class="card panel-surface panel-surface--transparent">
       <p class="hero-kicker">Hub • Social</p>
       <h3>People and community interaction center</h3>
-      <p class="muted">Social is the main Hub landing page: manage contacts, search people, and jump into discussions quickly.</p>
+      <p class="muted">Social is the main Hub landing page: discussion/forum access, people/company search, and easy community interaction.</p>
       <form id="connection-search-form" class="arena-input" style="margin-top:10px;">
-        <input id="connection-search-input" type="search" placeholder="Search people by name, role, or headline..." value="${escapeAttr(searchQuery)}" />
-        <button class="pill-btn cta-primary" type="submit">Search People</button>
+        <select id="connection-search-type" aria-label="Search type">
+          <option value="people" ${searchType === 'people' ? 'selected' : ''}>People</option>
+          <option value="companies" ${searchType === 'companies' ? 'selected' : ''}>Companies</option>
+        </select>
+        <input id="connection-search-input" type="search" placeholder="${searchType === 'companies' ? 'Search companies by name or industry...' : 'Search people by name, role, or headline...'}" value="${escapeAttr(searchQuery)}" />
+        <button class="pill-btn cta-primary" type="submit">Search ${searchType === 'companies' ? 'Companies' : 'People'}</button>
       </form>
     </section>
 
@@ -3073,8 +3099,8 @@ function hubSocialPage() {
         </div>
       </div>
       <div>
-        <h4>Contact + Network Management</h4>
-        <p class="muted">Manage your visible network and open profiles directly from search results.</p>
+        <h4>${searchType === 'companies' ? 'Company Discovery' : 'Contact + Network Management'}</h4>
+        <p class="muted">${searchType === 'companies' ? 'Explore companies with safe placeholder content while integrations are being finalized.' : 'Manage your visible network and open profiles directly from search results.'}</p>
         <div class="grid two">${profileCards}</div>
       </div>
       <div>
@@ -4177,7 +4203,12 @@ async function ensureMembersLoaded() {
   state.loading = true;
   try {
     const data = await apiRequest('/members', { method: 'GET' });
-    state.members = data.items;
+    state.members = Array.isArray(data?.items) ? data.items : [];
+    state.membersLoaded = true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn('[members:frontend] ensureMembersLoaded failed; using placeholder-safe empty list.', { message });
+    state.members = [];
     state.membersLoaded = true;
   } finally {
     state.loading = false;
@@ -4214,9 +4245,26 @@ async function searchConnectionCandidates(query = '') {
   if (!state.currentUser) {
     return;
   }
-  const encoded = encodeURIComponent(query);
-  const data = await apiRequest(`/connections/search?q=${encoded}`);
-  state.network.results = data.items || [];
+  const normalizedQuery = String(query || '').trim().toLowerCase();
+  if (state.network.searchType === 'companies') {
+    state.network.results = HUB_PLACEHOLDER_COMPANIES.filter((company) => {
+      if (!normalizedQuery) return true;
+      return `${company.name} ${company.industry} ${company.summary}`.toLowerCase().includes(normalizedQuery);
+    });
+    return;
+  }
+  try {
+    const encoded = encodeURIComponent(query);
+    const data = await apiRequest(`/connections/search?q=${encoded}`);
+    state.network.results = Array.isArray(data?.items) ? data.items : [];
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn('[connections:frontend] searchConnectionCandidates failed; using local placeholder people data.', { message });
+    state.network.results = HUB_PLACEHOLDER_PEOPLE.filter((person) => {
+      if (!normalizedQuery) return true;
+      return `${person.displayName} ${person.role} ${person.headline}`.toLowerCase().includes(normalizedQuery);
+    });
+  }
 }
 
 async function loadDirectChat(connectionId) {
@@ -4813,8 +4861,15 @@ function attachProfileEditHandler() {
     searchForm.onsubmit = async (event) => {
       event.preventDefault();
       const searchInput = document.getElementById('connection-search-input');
+      const searchTypeInput = document.getElementById('connection-search-type');
+      state.network.searchType = String(searchTypeInput?.value || 'people') === 'companies' ? 'companies' : 'people';
       state.network.searchTerm = String(searchInput?.value || '').trim();
-      await searchConnectionCandidates(state.network.searchTerm);
+      try {
+        await searchConnectionCandidates(state.network.searchTerm);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Search unavailable right now.';
+        console.warn('[hub:frontend] hub search submit failed', { message });
+      }
       render();
     };
   }
