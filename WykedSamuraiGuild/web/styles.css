@@ -712,22 +712,71 @@ body {
     padding-bottom: var(--space-2);
   }
   .grid.two { grid-template-columns: 1fr; }
-  .header { flex-wrap: nowrap; padding-right: 36px; }
+  .header {
+    flex-wrap: nowrap;
+    padding-right: 36px;
+    gap: 10px;
+  }
+  .header-left {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .brand {
+    max-width: 100%;
+  }
+  .header-actions {
+    flex: 0 0 auto;
+    gap: 6px;
+  }
+  .header-glass-btn {
+    padding: 5px 8px;
+    min-height: 28px;
+    font-size: 0.75rem;
+  }
   .header-brand-mark img {
-    max-width: min(68vw, 280px);
-    height: 36px;
+    max-width: min(42vw, 176px);
+    height: 32px;
     max-height: 100%;
   }
 
   .header-brand-mark {
-    min-height: 36px;
-    max-height: 36px;
+    min-height: 32px;
+    max-height: 32px;
+  }
+  .header-brand-copy .subtitle {
+    display: none;
   }
   .global-chat-dock {
     right: 10px;
     left: 10px;
     width: auto;
     bottom: 10px;
+  }
+}
+
+@media (max-width: 640px) {
+  .header {
+    padding-right: 32px;
+    padding-left: 10px;
+  }
+  .header-actions {
+    gap: 4px;
+  }
+  .header-glass-btn {
+    padding: 4px 7px;
+    font-size: 0.72rem;
+  }
+  .header-brand-mark img {
+    height: 30px;
+    max-width: min(34vw, 144px);
+    width: auto;
+  }
+  .header-brand-mark {
+    min-height: 30px;
+    max-height: 30px;
+  }
+  .header-brand-copy {
+    display: none;
   }
 }
 
