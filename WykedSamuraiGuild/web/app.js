@@ -376,12 +376,12 @@ const BRAND_ASSETS = Object.freeze({
 
 
 function pageSetClass(path, key) {
-  if (path === '/nexus/professional' || path === '/arena' || key === 'nexusProfessional' || key === 'arena') return 'page-set--arena';
-  if (path === '/scenario' || path.startsWith('/scenario/') || ['scenarioDetail', 'scenarioChat', 'areaChat'].includes(key)) return 'page-set--scenario';
-  if (path === '/nexus' || key === 'nexus') return 'page-set--guild';
+  if (path === '/arena' || key === 'arena') return 'page-set--arena';
+  if (path === '/nexus/professional' || ['nexusProfessional', 'scenarioDetail', 'scenarioChat', 'areaChat'].includes(key) || path === '/scenario' || path.startsWith('/scenario/')) return 'page-set--scenario';
+  if (path === '/guild') return 'page-set--guild';
   if (path === '/nexus/roleplay' || path === '/world' || path === '/roleplay' || key === 'nexusRoleplay' || key === 'roleplayHub') return 'page-set--world-rp';
-  if (path === '/recruiter-console' || key === 'recruiter') return 'page-set--recruiter';
-  if (path === '/hub' || path === '/profile' || path === '/members' || key === 'profile' || key === 'members' || key === 'hub' || ['directChat'].includes(key)) {
+  if (path === '/hub' || path === '/members' || path === '/recruiter-console' || key === 'recruiter' || key === 'hub' || key === 'members') return 'page-set--recruiter';
+  if (path === '/profile' || key === 'profile' || ['directChat'].includes(key)) {
     return 'page-set--profile';
   }
   return 'page-set--home';
