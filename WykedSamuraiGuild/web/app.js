@@ -437,7 +437,6 @@ const SHELL_LAYOUT_STORAGE_KEY = 'wsg-shell-layout';
 const HEADER_COLLAPSED_STORAGE_KEY = 'ui.headerCollapsed';
 const ROLEPLAY_TOOLS_COLLAPSED_STORAGE_KEY = 'ui.roleplayToolsCollapsed';
 const HOME_ROUTE = '/app';
-const ONBOARDING_ROUTE = `/scenario/${FIRST_SCENARIO_ID}`;
 const POLICY_ACCEPT_ROUTE = '/policy/accept';
 const CURRENT_POLICY_VERSION = 'v1.0';
 const REQUIRED_POLICY_KEYS = Object.freeze(['codeOfConduct', 'contentPolicy', 'platformRules', 'privacyPolicy']);
@@ -743,15 +742,11 @@ function resolvePostAuthRoute(user = state.currentUser) {
   }
 
   const onboardingCompleted = hasCompletedOnboarding(userId);
-  if (onboardingCompleted === true) {
+  if (onboardingCompleted === true || isKnownReturningUser(userId)) {
     markKnownReturningUser(userId);
-    return HOME_ROUTE;
-  }
-  if (onboardingCompleted === false) {
-    return ONBOARDING_ROUTE;
   }
 
-  return isKnownReturningUser(userId) ? HOME_ROUTE : ONBOARDING_ROUTE;
+  return HOME_ROUTE;
 }
 
 function sanitizeScenarioSessionForSave(scenarioId, session) {
