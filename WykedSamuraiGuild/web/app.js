@@ -22,6 +22,11 @@ const routes = {
   '/resume': { key: 'resume', requiresAuth: true },
   '/characters': { key: 'characters', requiresAuth: true },
   '/settings': { key: 'settings', requiresAuth: true },
+  '/utilities/notifications': { key: 'utilitiesNotifications', requiresAuth: true },
+  '/utilities/invites': { key: 'utilitiesInvites', requiresAuth: true },
+  '/utilities/room-updates': { key: 'utilitiesRoomUpdates', requiresAuth: true },
+  '/utilities/scenario-updates': { key: 'utilitiesScenarioUpdates', requiresAuth: true },
+  '/utilities/tools': { key: 'utilitiesTools', requiresAuth: true },
   '/profile/direct-chat': { key: 'directChat', requiresAuth: true },
   '/profile/scenario-chat': { key: 'scenarioChat', requiresAuth: true },
   '/profile/area-chat': { key: 'areaChat', requiresAuth: true },
@@ -1257,7 +1262,7 @@ function GlowCard({ title, body, className = '' }) {
   return `<section class="card glow-card panel-surface panel-surface--soft ${className}"><h3>${escapeHtml(title)}</h3>${body}</section>`;
 }
 
-function ScenarioCard({ title, summary, status, timeRemaining, tone = 'harbor' }) {
+function ScenarioCard({ title, summary, status, timeRemaining, tone = 'harbor', actionHref = '/nexus/professional' }) {
   return `
     <article class="scenario-spotlight-card">
       <div class="scenario-spotlight-visual is-${tone}">
@@ -1269,7 +1274,7 @@ function ScenarioCard({ title, summary, status, timeRemaining, tone = 'harbor' }
         <p class="muted">${escapeHtml(summary)}</p>
         <div class="scenario-spotlight-meta">
           <span class="muted">${escapeHtml(timeRemaining)}</span>
-          <button class="pill-btn cta-primary" type="button">Enter</button>
+          <a class="pill-btn cta-primary" href="${linkFor(actionHref)}">Enter</a>
         </div>
       </div>
     </article>
@@ -1329,6 +1334,11 @@ function pageTitle(key) {
     hubSocial: ['Hub • Social', 'Manage contacts, search people, and jump into community discussions.'],
     hubRecruiter: ['Hub • Recruiter', 'Recruiter dashboard for candidate tracking, scenario progress, and scoring.'],
     hubReviews: ['Hub • Reviews', 'Planned workplace and company review insights are coming soon.'],
+    utilitiesNotifications: ['Utilities • Notifications', 'Notification preferences and recent alerts in one stable destination.'],
+    utilitiesInvites: ['Utilities • Invites', 'Invite queue and pending guild invitation placeholders.'],
+    utilitiesRoomUpdates: ['Utilities • Room Updates', 'Recent room activity, updates, and moderation-safe feed placeholders.'],
+    utilitiesScenarioUpdates: ['Utilities • Scenario Updates', 'Scenario assignment and status updates in a safe utility route.'],
+    utilitiesTools: ['Utilities • More Tools', 'Additional utility placeholders for future account and workflow tooling.'],
     arena: ['Trial Arena', 'Run starter leadership Trials and prepare for live simulation loops.'],
     guild: ['Guild World', 'Story streams, locations, and social immersion in one space.'],
     members: ['Guild Members', 'Discover member profiles and current contribution footprint.'],
@@ -2226,11 +2236,11 @@ function Header(path) {
         <div class="header-menu">
           <button type="button" class="pill-btn header-glass-btn ${isCollapsed ? 'hide-when-header-collapsed' : ''}" id="utilities-menu-btn" aria-haspopup="true" aria-expanded="false">Utilities ▾</button>
           <div class="account-menu-dropdown header-dropdown-menu" id="utilities-menu-dropdown">
-            <button type="button" class="menu-item-btn" data-utility-action="notifications">Notifications</button>
-            <button type="button" class="menu-item-btn" data-utility-action="invites">Invites</button>
-            <button type="button" class="menu-item-btn" data-utility-action="roomUpdates">Room updates</button>
-            <button type="button" class="menu-item-btn" data-utility-action="scenarioUpdates">Scenario updates</button>
-            <button type="button" class="menu-item-btn" data-utility-action="futureTools">More tools (soon)</button>
+            <a href="${linkFor('/utilities/notifications')}">Notifications</a>
+            <a href="${linkFor('/utilities/invites')}">Invites</a>
+            <a href="${linkFor('/utilities/room-updates')}">Room updates</a>
+            <a href="${linkFor('/utilities/scenario-updates')}">Scenario updates</a>
+            <a href="${linkFor('/utilities/tools')}">More tools (soon)</a>
           </div>
         </div>
         ${state.currentUser ? `
@@ -2283,6 +2293,7 @@ function homePage() {
       status: 'Priority Window',
       visual: 'Harbor Mistfront',
       tone: 'harbor',
+      actionHref: '/nexus/professional',
     },
     {
       title: 'Citadel Breach Council',
@@ -2291,6 +2302,7 @@ function homePage() {
       status: 'Command Review',
       visual: 'Glass Citadel',
       tone: 'citadel',
+      actionHref: '/nexus/professional',
     },
     {
       title: 'Nightwatch Supply Run',
@@ -2299,6 +2311,7 @@ function homePage() {
       status: 'Rapid Response',
       visual: 'Iron Route',
       tone: 'convoy',
+      actionHref: '/nexus/roleplay',
     },
   ];
 
@@ -3036,7 +3049,7 @@ function hubSocialPage() {
     <article class="card panel-surface panel-surface--soft hub-board-card">
       <h4>${escapeHtml(category.name)}</h4>
       <p class="muted">${escapeHtml(category.detail)}</p>
-      <button class="pill-btn" type="button">Open category</button>
+      <a class="pill-btn" href="${linkFor('/nexus/professional')}">Open category</a>
     </article>
   `).join('');
 
@@ -3179,9 +3192,9 @@ function profilePage() {
     <section class="card profile-tabs-card panel-surface panel-surface--soft" style="margin-top:12px;">
       <div class="tabs profile-tabs">
         <button class="active" type="button">Overview</button>
-        <button type="button">Arena Contributions</button>
-        <button type="button">Guild Activity</button>
-        <button type="button">Connections</button>
+        <button type="button" disabled title="Placeholder only: insights panel coming soon">Arena Contributions (soon)</button>
+        <button type="button" disabled title="Placeholder only: activity panel coming soon">Guild Activity (soon)</button>
+        <button type="button" disabled title="Placeholder only: connections panel coming soon">Connections (soon)</button>
       </div>
       <p class="muted" style="margin-top:10px;">Profile insights and contribution history panels are currently placeholder content backed by live account data above.</p>
     </section>
@@ -3854,6 +3867,69 @@ function hubReviewsPage() {
       </div>
     </section>
   `;
+}
+
+function utilityPlaceholderPage({ title, kicker, description, bullets = [] }) {
+  return `
+    <section class="card panel-surface panel-surface--transparent">
+      <p class="hero-kicker">${escapeHtml(kicker)}</p>
+      <h3>${escapeHtml(title)}</h3>
+      <p class="muted">${escapeHtml(description)}</p>
+      <div class="status-banner status-info" role="status" aria-live="polite" style="margin-top:10px;">
+        This utility route is intentionally wired as a polished placeholder while full backend integrations are in progress.
+      </div>
+      <ul class="list compact-list" style="margin-top:12px;">
+        ${bullets.length
+    ? bullets.map((item) => `<li><span>${escapeHtml(item)}</span><span class="muted">Placeholder</span></li>`).join('')
+    : '<li><span>No utility items configured yet.</span><span class="muted">Placeholder</span></li>'}
+      </ul>
+    </section>
+  `;
+}
+
+function utilitiesNotificationsPage() {
+  return utilityPlaceholderPage({
+    title: 'Notifications',
+    kicker: 'Utilities • Notifications',
+    description: 'Review your latest guild alerts and notification preferences from a stable, non-fallback page.',
+    bullets: ['Mentions and connection alerts', 'Room safety notifications', 'System status updates'],
+  });
+}
+
+function utilitiesInvitesPage() {
+  return utilityPlaceholderPage({
+    title: 'Invites',
+    kicker: 'Utilities • Invites',
+    description: 'Manage incoming and outgoing invites with clear empty states while invite workflows continue to evolve.',
+    bullets: ['Pending room invites', 'Pending guild invites', 'Invite history'],
+  });
+}
+
+function utilitiesRoomUpdatesPage() {
+  return utilityPlaceholderPage({
+    title: 'Room Updates',
+    kicker: 'Utilities • Room Updates',
+    description: 'Track room activity and moderation-safe change logs without broken routing.',
+    bullets: ['Recently active rooms', 'New room announcements', 'Room closure notices'],
+  });
+}
+
+function utilitiesScenarioUpdatesPage() {
+  return utilityPlaceholderPage({
+    title: 'Scenario Updates',
+    kicker: 'Utilities • Scenario Updates',
+    description: 'Scenario assignment and completion updates render safely here even when no scenario feed exists yet.',
+    bullets: ['Assigned scenario updates', 'Completion events', 'Grade/result release notices'],
+  });
+}
+
+function utilitiesToolsPage() {
+  return utilityPlaceholderPage({
+    title: 'More Tools (Soon)',
+    kicker: 'Utilities • More Tools',
+    description: 'Intentional placeholder for upcoming utility actions so menu clicks always land on a valid page.',
+    bullets: ['Account utility extensions', 'Recruiter utility shortcuts', 'Automation and workflow helpers'],
+  });
 }
 
 function fallbackPage() {
@@ -5192,21 +5268,6 @@ function attachHeaderActions() {
     };
   }
 
-  document.querySelectorAll('[data-utility-action]').forEach((button) => {
-    button.onclick = () => {
-      const action = String(button.dataset.utilityAction || '').trim();
-      const actionMap = {
-        notifications: 'Notifications',
-        invites: 'Invites',
-        roomUpdates: 'Room updates',
-        scenarioUpdates: 'Scenario updates',
-        futureTools: 'Additional utilities',
-      };
-      const label = actionMap[action] || 'Utilities';
-      setStatusMessage(`${label} are available in this menu.`, 'info');
-    };
-  });
-
   if (!headerOutsideClickHandlerBound) {
     document.addEventListener('click', (event) => {
       const accountButton = document.getElementById('account-menu-btn');
@@ -5426,6 +5487,11 @@ async function render() {
       hubSocial: hubSocialPage,
       hubRecruiter: hubRecruiterPage,
       hubReviews: hubReviewsPage,
+      utilitiesNotifications: utilitiesNotificationsPage,
+      utilitiesInvites: utilitiesInvitesPage,
+      utilitiesRoomUpdates: utilitiesRoomUpdatesPage,
+      utilitiesScenarioUpdates: utilitiesScenarioUpdatesPage,
+      utilitiesTools: utilitiesToolsPage,
       arena: arenaPage,
       guild: guildPage,
       roleplayHub: roleplayHubPage,
