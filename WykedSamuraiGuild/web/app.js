@@ -115,6 +115,41 @@ const STARTER_TRIALS = [
   },
 ];
 
+const PROFESSIONAL_ROOMS = [
+  {
+    id: 'interview-circle',
+    scenarioId: 'team-conflict',
+    name: 'Interview Circle • Team Conflict',
+    description: 'Temporary AI-run scenario focused on conflict mediation and hiring-panel communication.',
+    roomKind: 'scenario',
+    category: 'Interviewing',
+    users: [
+      { id: 'user-self', displayName: 'You', role: 'participant', isOnline: true },
+      { id: 'npc-hiring-manager', displayName: 'Hiring Manager NPC', role: 'participant', isOnline: true },
+      { id: 'observer-mentor', displayName: 'Mentor Observer', role: 'observer', isOnline: true },
+    ],
+    moderator: 'Aegis Moderator',
+    sfwPolicy: 'Professional SFW moderation active',
+    temporary: true,
+    status: 'Open • In Progress',
+  },
+  {
+    id: 'ops-debrief',
+    name: 'Ops Debrief Lounge',
+    description: 'Ongoing professional chat room for workplace operations, postmortems, and execution tradeoffs.',
+    roomKind: 'chat',
+    category: 'Workplace Practice',
+    users: [
+      { id: 'user-self', displayName: 'You', role: 'member', isOnline: true },
+      { id: 'npc-facilitator', displayName: 'Facilitator NPC', role: 'moderator', isOnline: true },
+    ],
+    moderator: 'Aegis Moderator',
+    sfwPolicy: 'Professional SFW moderation active',
+    temporary: false,
+    status: 'Open',
+  },
+];
+
 const ROLEPLAY_ROOMS = [
   {
     id: 'ember-crossing',
@@ -123,6 +158,12 @@ const ROLEPLAY_ROOMS = [
     description: 'Open council room where guild officers resolve faction disputes and keep fragile alliances intact.',
     tag: 'Diplomat',
     roomType: 'public',
+    roomKind: 'chat',
+    category: 'Social Roleplay',
+    moderator: 'Warden Echo',
+    sfwPolicy: 'NPC moderator enforces SFW room safety',
+    temporary: false,
+    status: 'Open',
     players: 7,
   },
   {
@@ -132,6 +173,12 @@ const ROLEPLAY_ROOMS = [
     description: 'High-pressure response room reacting to incoming merchant convoy failures and sponsor complaints.',
     tag: 'Incident Commander',
     roomType: 'public',
+    roomKind: 'chat',
+    category: 'Adventure Roleplay',
+    moderator: 'Warden Echo',
+    sfwPolicy: 'NPC moderator enforces SFW room safety',
+    temporary: false,
+    status: 'Open',
     players: 11,
   },
   {
@@ -141,6 +188,12 @@ const ROLEPLAY_ROOMS = [
     description: 'Strategy room balancing delivery speed against defense readiness during active threat windows.',
     tag: 'Strategist',
     roomType: 'private',
+    roomKind: 'chat',
+    category: 'Faction Roleplay',
+    moderator: 'Warden Echo',
+    sfwPolicy: 'NPC moderator enforces SFW room safety',
+    temporary: false,
+    status: 'Open',
     players: 5,
   },
   {
@@ -150,6 +203,12 @@ const ROLEPLAY_ROOMS = [
     description: 'Live operations room coordinating logistics, medical supply routes, and response priorities.',
     tag: 'Operations Lead',
     roomType: 'system',
+    roomKind: 'chat',
+    category: 'World Events',
+    moderator: 'Warden Echo',
+    sfwPolicy: 'NPC moderator enforces SFW room safety',
+    temporary: false,
+    status: 'Open',
     players: 9,
   },
 ];
@@ -371,6 +430,15 @@ const state = {
   },
   membersLoaded: false,
   loading: false,
+  nexus: {
+    activeProfessionalRoomId: PROFESSIONAL_ROOMS[0]?.id || '',
+    activeRoleplayRoomId: ROLEPLAY_ROOMS[0]?.id || '',
+    activeCategoryByMode: {
+      professional: 'all',
+      roleplay: 'all',
+    },
+    roomMessages: {},
+  },
   arena: {
     activeTrialId: '',
     activeRoomId: '',
@@ -2250,7 +2318,7 @@ function homePage() {
     className: 'home-support-card recruiter-teaser tier-3',
     body: `
       <p class="muted">Audit candidate signal quality and elevate high-potential operatives to shortlist.</p>
-      <a class="pill-btn" href="${linkFor('/recruiter-console')}">Open Recruiter Console</a>
+      <a class="pill-btn" href="${linkFor('/hub')}">Open Hub Recruiter Tools</a>
     `,
   })}
       </aside>
@@ -2606,156 +2674,239 @@ function scenarioDetailPage(path) {
   });
 }
 
+
 function nexusPage() {
   return `
     <section class="scenario-hero guild-hero panel-surface panel-surface--soft">
       <p class="hero-kicker">Nexus Gateway</p>
-      <h3>Choose your mode</h3>
-      <p class="hero-description">Nexus is the shared gateway for Professional and Roleplay branches. Switch context without leaving the same product area.</p>
+      <h3>Choose Professional or Roleplay</h3>
+      <p class="hero-description">One shared gateway, two mirrored modes. Professional uses burnt orange and brass styling while Roleplay uses blue and teal.</p>
     </section>
     <div class="grid two">
       ${GlowCard({
-    title: 'Professional',
+    title: 'Professional Mode',
     body: `
-          <p class="muted">Scenarios, interviewing, workplace practice, and career-development interactions.</p>
-          <div class="actions"><a class="pill-btn cta-primary" href="${linkFor('/nexus/professional')}">Open Professional</a></div>
+          <p class="muted">AI-run scenarios, interviewing practice, and ongoing professional rooms.</p>
+          <div class="actions"><a class="pill-btn cta-primary" href="${linkFor('/nexus/professional')}">Open Professional Rooms</a></div>
         `,
   })}
       ${GlowCard({
-    title: 'Roleplay',
+    title: 'Roleplay Mode',
     body: `
-          <p class="muted">Roleplay rooms, social play, and reputation building while staying active on the platform.</p>
-          <div class="actions"><a class="pill-btn cta-primary" href="${linkFor('/nexus/roleplay')}">Open Roleplay</a></div>
+          <p class="muted">AI-moderated roleplay and social rooms for reputation and community activity.</p>
+          <div class="actions"><a class="pill-btn cta-primary" href="${linkFor('/nexus/roleplay')}">Open Roleplay Rooms</a></div>
         `,
   })}
     </div>
   `;
 }
 
-function guildPage() {
+function getNexusRooms(mode) {
+  const rooms = mode === 'professional'
+    ? (Array.isArray(PROFESSIONAL_ROOMS) ? PROFESSIONAL_ROOMS : [])
+    : (Array.isArray(state.arena.roleplayRooms) ? state.arena.roleplayRooms : []);
+
+  const currentUserName = state.currentUser?.displayName || state.currentUser?.username || 'You';
+  return rooms.map((room) => ({
+    ...room,
+    users: Array.isArray(room.users) && room.users.length
+      ? room.users.map((user) => ({ ...user, displayName: user.id === 'user-self' ? currentUserName : user.displayName }))
+      : [{ id: 'user-self', displayName: currentUserName, role: 'member', isOnline: true }],
+  }));
+}
+
+function getActiveNexusRoom(mode) {
+  const rooms = getNexusRooms(mode);
+  const activeId = mode === 'professional' ? state.nexus.activeProfessionalRoomId : state.nexus.activeRoleplayRoomId;
+  return rooms.find((room) => room.id === activeId) || rooms[0] || null;
+}
+
+function roomMessageKey(mode, roomId) {
+  return `${mode}:${roomId}`;
+}
+
+function getRoomMessages(mode, room) {
+  if (!room) return [];
+  const key = roomMessageKey(mode, room.id);
+  const seeded = {
+    professional: [
+      { sender: room.moderator || 'Aegis Moderator', role: 'system', text: room.roomKind === 'scenario' ? 'Scenario is live. Tagged participants may answer prompts directly; observers may chat.' : 'Professional room is live with SFW safeguards enabled.' },
+    ],
+    roleplay: [
+      { sender: room.moderator || 'Warden Echo', role: 'system', text: 'Welcome to the room. NPC moderation is active for safe-for-work roleplay chat.' },
+    ],
+  };
+  if (!Array.isArray(state.nexus.roomMessages[key])) {
+    state.nexus.roomMessages[key] = seeded[mode] || [];
+  }
+  return state.nexus.roomMessages[key];
+}
+
+function renderNexusModePage(mode) {
+  const toneClass = mode === 'professional' ? 'nexus-mode--professional' : 'nexus-mode--roleplay';
+  const modeLabel = mode === 'professional' ? 'Professional' : 'Roleplay';
+  const rooms = getNexusRooms(mode);
+  const activeRoom = getActiveNexusRoom(mode);
+  const selectedCategory = state.nexus.activeCategoryByMode?.[mode] || 'all';
+  const categories = ['all', ...new Set(rooms.map((room) => room.category || 'General'))];
+  const filteredRooms = selectedCategory === 'all' ? rooms : rooms.filter((room) => (room.category || 'General') === selectedCategory);
+  const messages = getRoomMessages(mode, activeRoom);
+  const userId = state.currentUser?.id ? `user-${state.currentUser.id}` : 'user-self';
+  const userRecord = (activeRoom?.users || []).find((user) => user.id === userId || user.id === 'user-self');
+  const userIsScenarioParticipant = activeRoom?.roomKind === 'scenario' && ((userRecord?.role || '').toLowerCase() === 'participant');
+
+  const roomListMarkup = filteredRooms.length
+    ? filteredRooms.map((room) => `
+      <button type="button" class="nexus-room-row ${activeRoom?.id === room.id ? 'is-active' : ''}" data-open-nexus-room="${escapeAttr(mode)}:${escapeAttr(room.id)}">
+        <strong>${escapeHtml(room.name || 'Untitled Room')}</strong>
+        <small>${escapeHtml(room.roomKind === 'scenario' ? 'Scenario' : 'Chat Room')} · ${escapeHtml(room.status || 'Open')}</small>
+        <small class="muted">${escapeHtml(room.description || 'No description available.')}</small>
+      </button>
+    `).join('')
+    : '<p class="muted">No rooms are available for this filter yet.</p>';
+
+  const participantMarkup = (activeRoom?.users || []).length
+    ? activeRoom.users.map((user) => {
+      const normalizedRole = String(user.role || 'member').toLowerCase();
+      const badge = normalizedRole === 'participant'
+        ? '<span class="participant-badge participant-badge--tagged">Participant</span>'
+        : '<span class="participant-badge participant-badge--observer">Observer</span>';
+      return `<li><span>${escapeHtml(user.displayName || 'Unknown')}</span>${badge}</li>`;
+    }).join('')
+    : '<li class="muted">No participants in this room.</li>';
+
+  const messageMarkup = messages.length
+    ? messages.map((message) => `<article class="message arena-chat-message ${message.role === 'user' ? 'user' : 'system'}"><div class="message-label">${escapeHtml(message.sender || 'System')}</div><p>${escapeHtml(message.text || '')}</p></article>`).join('')
+    : '<p class="muted">No room messages yet.</p>';
+
   return `
-    <section class="scenario-hero guild-hero panel-surface panel-surface--soft">
-      <p class="hero-kicker">World RP</p>
-      <h3>Living World Nexus</h3>
-      <p class="hero-description">Follow roleplay dispatches, jump into featured locations, and track recent story beats across the guild world.</p>
+    <section class="nexus-mode-layout ${toneClass}">
+      <aside class="nexus-room-browser panel-surface panel-surface--soft">
+        <h3>${modeLabel} Room Browser</h3>
+        <p class="muted">Classic room-list scanning inspired by early chat clients.</p>
+        <div class="nexus-room-categories">
+          ${categories.map((category) => `<button type="button" class="pill-btn ${selectedCategory === category ? 'active' : ''}" data-room-category="${escapeAttr(mode)}:${escapeAttr(category)}">${escapeHtml(category === 'all' ? 'All Categories' : category)}</button>`).join('')}
+        </div>
+        <div class="nexus-room-list">${roomListMarkup}</div>
+      </aside>
+
+      <section class="nexus-chat-window panel-surface panel-surface--transparent">
+        <header class="nexus-chat-head">
+          <div>
+            <p class="hero-kicker">${escapeHtml(modeLabel)} Nexus Room</p>
+            <h3>${escapeHtml(activeRoom?.name || `${modeLabel} Room`)}</h3>
+            <p class="muted">${escapeHtml(activeRoom?.description || 'Select a room to begin.')}</p>
+          </div>
+          <div class="nexus-room-meta">
+            <span class="scenario-status-badge is-active">${escapeHtml(activeRoom?.roomKind === 'scenario' ? 'Scenario Room' : 'Chat Room')}</span>
+            <span class="muted">AI Moderator: ${escapeHtml(activeRoom?.moderator || 'NPC Moderator')}</span>
+          </div>
+        </header>
+        ${activeRoom?.roomKind === 'scenario' ? `<div class="status-banner status-info">Only tagged participants can answer scenario prompts directly. Observers can still chat with everyone.</div>` : ''}
+        <div class="conversation-log roleplay-chat-log">${messageMarkup}</div>
+        <form class="arena-input roleplay-input-form" data-nexus-chat-form="${escapeAttr(mode)}:${escapeAttr(activeRoom?.id || '')}">
+          <input name="message" placeholder="${escapeAttr(activeRoom?.roomKind === 'scenario' ? 'Speak in room chat (everyone can chat)...' : 'Send a room message...')}" ${!activeRoom ? 'disabled' : ''}/>
+          <button class="pill-btn cta-primary" type="submit" ${!activeRoom ? 'disabled' : ''}>Send Chat</button>
+          ${activeRoom?.roomKind === 'scenario' ? `<button class="pill-btn" type="button" id="scenario-direct-answer-btn" ${userIsScenarioParticipant ? '' : 'disabled title="Only tagged participants can answer prompts directly."'}>Answer Prompt</button>` : ''}
+        </form>
+      </section>
+
+      <aside class="nexus-user-list panel-surface panel-surface--soft">
+        <h3>Room Roster</h3>
+        <p class="muted">NPC safety moderation is active in all rooms.</p>
+        <ul class="nexus-roster-list">${participantMarkup}</ul>
+        <div class="nexus-moderator-card">
+          <strong>${escapeHtml(activeRoom?.moderator || 'NPC Moderator')}</strong>
+          <p class="muted">${escapeHtml(activeRoom?.sfwPolicy || 'AI moderation placeholder active for SFW compliance and room safety.')}</p>
+          <p class="muted">${activeRoom?.temporary ? 'Temporary scenario session: this room closes when complete.' : 'Ongoing chat room: persists for continuing conversation.'}</p>
+        </div>
+      </aside>
     </section>
-    <div class="grid two">
-      ${GlowCard({
-    title: 'Roleplay Feed',
-    body: list(['"Mist over Kagemori as scouts return."', '"Alliance envoy arrives at moon gate."', '"Campfire confessions in the cedar court."'].map((s) => `<span>${s}</span><span class="muted">Story</span>`)),
-  })}
-      ${GlowCard({
-    title: 'Featured Locations',
-    body: list(['Moonfall Harbor', 'Cinder Dojo', 'Glass Pine Ridge'].map((s) => `<span>${s}</span><span class="muted">Live scene</span>`)),
-  })}
-      ${GlowCard({
-    title: 'Recent Stories',
-    body: list(['The Ridge Oath renewed at dusk.', 'Sentinel lanterns relit across the harbor.', 'An envoy requested aid from the Iron Route.'].map((s) => `<span>${s}</span><span class="muted">Chronicle</span>`)),
-  })}
-      ${GlowCard({
-    title: 'Social Presence',
-    body: '<p class="muted">Use the right sidebar to see friends online, launch chats, and coordinate ongoing world scenes.</p>',
-  })}
-    </div>
   `;
+}
+
+function professionalRoomsPage() {
+  return renderNexusModePage('professional');
+}
+
+function roleplayRoomsPage() {
+  return renderNexusModePage('roleplay');
+}
+
+
+
+function guildPage() {
+  return nexusPage();
 }
 
 function roleplayHubPage() {
-  const session = ensureRoleplaySession();
-  const isToolsCollapsed = Boolean(state.roleplay.toolsCollapsed);
-  const activeToolsTab = state.roleplay.activeToolsTab || 'participants';
-  const messages = Array.isArray(session.messages) ? session.messages : [];
-  const participantsMarkup = buildParticipantListMarkup(getRoleplayParticipants(), { interactive: true, routeResolver: roleplayParticipantRoute });
-  const messagesMarkup = messages.map((message) => `
-    <article class="message arena-chat-message ${message.type === 'user' ? 'user' : 'system'}">
-      <div class="message-label">${message.type === 'user' ? 'You' : 'Roleplay Nexus'}</div>
-      <p>${escapeHtml(message.content)}</p>
-    </article>
-  `).join('');
-
-  return buildWorkspaceShell({
-    title: 'Roleplay Nexus',
-    subtitle: 'Enter the story and speak to the world.',
-    sideHeadTitle: isToolsCollapsed ? 'Tools' : 'Roleplay Tools',
-    collapseButtonId: 'roleplay-tools-toggle',
-    collapseAriaLabel: isToolsCollapsed ? 'Expand roleplay tools' : 'Collapse roleplay tools',
-    collapseIcon: isToolsCollapsed ? '⟨' : '⟩',
-    tabsMarkup: `
-      <button type="button" class="roleplay-tools-tab ${activeToolsTab === 'participants' ? 'active' : ''}" data-roleplay-tools-tab="participants" role="tab" aria-selected="${activeToolsTab === 'participants'}" title="Participants">👥<span>Participants</span></button>
-      <button type="button" class="roleplay-tools-tab ${activeToolsTab === 'scene' ? 'active' : ''}" data-roleplay-tools-tab="scene" role="tab" aria-selected="${activeToolsTab === 'scene'}" title="Scene">🗺️<span>Scene</span></button>
-      <button type="button" class="roleplay-tools-tab ${activeToolsTab === 'tools' ? 'active' : ''}" data-roleplay-tools-tab="tools" role="tab" aria-selected="${activeToolsTab === 'tools'}" title="Tools">🛠️<span>Tools</span></button>
-    `,
-    body: `
-      <div id="roleplay-conversation-log" class="conversation-log roleplay-chat-log">
-        ${messagesMarkup || '<p class="muted">Your scene is quiet. Speak to begin the story.</p>'}
-      </div>
-      <form id="roleplay-input-form" class="arena-input roleplay-input-form">
-        <input id="roleplay-input" name="message" placeholder="Speak, act, or describe what you do..." ${state.roleplay.pending ? 'disabled' : ''} />
-        <button class="pill-btn cta-primary" type="submit" ${state.roleplay.pending ? 'disabled' : ''}>${state.roleplay.pending ? 'Sending...' : 'Send'}</button>
-      </form>
-      <div class="roleplay-input-examples muted">
-        <span>I step into the ruined shrine and look for movement.</span>
-        <span>I bow slightly and ask the innkeeper what he knows.</span>
-        <span>I draw my blade but do not attack.</span>
-      </div>
-      ${state.roleplay.error ? `<p class="muted" style="color:#ff7b7b;margin-top:8px;" role="alert">${escapeHtml(state.roleplay.error)}</p>` : ''}
-    `,
-    contentMarkup: `
-      ${activeToolsTab === 'participants' ? `
-        <div class="roleplay-participant-list">
-          ${participantsMarkup || '<p class="muted">No participants are visible in this room yet.</p>'}
-        </div>
-      ` : ''}
-      ${activeToolsTab === 'scene' ? '<p class="muted">Scene state, room info, and location tools will appear here later.</p>' : ''}
-      ${activeToolsTab === 'tools' ? '<p class="muted">NPC controls, room tools, and scene utilities will be added later.</p>' : ''}
-    `,
-    isToolsCollapsed,
-  });
+  return roleplayRoomsPage();
 }
 
 function hubPage() {
   const searchQuery = String(state.network.searchTerm || '').trim();
   const sourceProfiles = searchQuery ? (state.network.results || []) : (state.members || []);
-  const fallbackProfiles = sourceProfiles.length ? sourceProfiles : (state.network.connections || []);
-  const profileSnapshots = fallbackProfiles.slice(0, 8);
+  const profileSnapshots = Array.isArray(sourceProfiles) ? sourceProfiles.slice(0, 6) : [];
   const companySnapshots = [
-    { id: 'moonline-industries', name: 'Moonline Industries', summary: 'Distributed logistics and autonomous operations.', score: 88, badges: ['Hiring', 'Verified'], reputation: 'High Trust' },
-    { id: 'kagemori-systems', name: 'Kagemori Systems', summary: 'Security engineering and reliability consulting.', score: 91, badges: ['Top Rated', 'Enterprise'], reputation: 'Elite' },
+    { id: 'moonline-industries', name: 'Moonline Industries', summary: 'Distributed logistics and autonomous operations.', score: 88, badges: ['Hiring', 'Verified'], reputation: 'High Trust', metadata: '212 openings · Hybrid' },
+    { id: 'kagemori-systems', name: 'Kagemori Systems', summary: 'Security engineering and reliability consulting.', score: 91, badges: ['Top Rated', 'Enterprise'], reputation: 'Elite', metadata: '74 openings · Remote-first' },
   ];
-  const profileCards = profileSnapshots.map((profile) => `
-    <article class="card panel-surface panel-surface--soft">
-      <p class="hero-kicker">Profile Snapshot</p>
-      <h4>${escapeHtml(profile.displayName || profile.username || 'Unknown User')}</h4>
-      <p class="muted">${escapeHtml(profile.role || profile.headline || 'Community member')}</p>
-      <p class="muted">Score: ${escapeHtml(String(profile.score || '—'))} · Reputation: ${escapeHtml(String(profile.reputation || 'Building'))}</p>
-      <p class="muted">Badges: ${escapeHtml(Array.isArray(profile.badges) && profile.badges.length ? profile.badges.join(', ') : 'Newcomer')}</p>
-      <a class="pill-btn" href="${linkFor(`/members/${profile.id || ''}`)}">Open full profile</a>
-    </article>
-  `).join('');
+  const recruiterSnapshots = [
+    { id: 'rec-1', name: 'Ari Vale', company: 'Moonline Industries', focus: 'Ops + Product', score: 93, badges: ['Verified Recruiter', 'Fast Response'] },
+    { id: 'rec-2', name: 'Niko Sato', company: 'Kagemori Systems', focus: 'Security + Infra', score: 89, badges: ['Specialist', 'Top Match'] },
+  ];
+
+  const profileCards = profileSnapshots.length
+    ? profileSnapshots.map((profile) => `
+      <article class="card panel-surface panel-surface--soft hub-snapshot-card">
+        <p class="hero-kicker">Profile Snapshot</p>
+        <h4>${escapeHtml(profile.displayName || profile.username || 'Unknown User')}</h4>
+        <p class="muted">${escapeHtml(profile.role || profile.headline || 'Community member')}</p>
+        <p class="muted">Badges: ${escapeHtml(Array.isArray(profile.badges) && profile.badges.length ? profile.badges.join(', ') : 'Newcomer')}</p>
+        <p class="muted">Score: ${escapeHtml(String(profile.score || '—'))} · Reputation: ${escapeHtml(String(profile.reputation || 'Building'))}</p>
+        <p class="muted">Metadata: ${escapeHtml(profile.location || 'Location pending')} · ${escapeHtml(profile.availability || 'Status pending')}</p>
+        <a class="pill-btn" href="${linkFor(`/members/${profile.id || ''}`)}">Open profile</a>
+      </article>
+    `).join('')
+    : '<article class="card panel-surface panel-surface--soft"><h4>No profile results</h4><p class="muted">Try a broader term. Empty states are safe by design.</p></article>';
+
   const companyCards = companySnapshots.map((company) => `
-    <article class="card panel-surface panel-surface--soft">
+    <article class="card panel-surface panel-surface--soft hub-snapshot-card">
       <p class="hero-kicker">Company Snapshot</p>
       <h4>${escapeHtml(company.name)}</h4>
       <p class="muted">${escapeHtml(company.summary)}</p>
-      <p class="muted">Score: ${escapeHtml(String(company.score))} · Reputation: ${escapeHtml(company.reputation)}</p>
       <p class="muted">Badges: ${escapeHtml(company.badges.join(', '))}</p>
+      <p class="muted">Score: ${escapeHtml(String(company.score))} · Reputation: ${escapeHtml(company.reputation)}</p>
+      <p class="muted">Metadata: ${escapeHtml(company.metadata)}</p>
       <button class="pill-btn" type="button">Open company profile</button>
+    </article>
+  `).join('');
+
+  const recruiterCards = recruiterSnapshots.map((recruiter) => `
+    <article class="card panel-surface panel-surface--soft hub-snapshot-card">
+      <p class="hero-kicker">Recruiter Tools Snapshot</p>
+      <h4>${escapeHtml(recruiter.name)}</h4>
+      <p class="muted">${escapeHtml(recruiter.company)} · ${escapeHtml(recruiter.focus)}</p>
+      <p class="muted">Badges: ${escapeHtml(recruiter.badges.join(', '))}</p>
+      <p class="muted">Recruiter Signal Score: ${escapeHtml(String(recruiter.score))}</p>
+      <button class="pill-btn" type="button">Open recruiter tools</button>
     </article>
   `).join('');
 
   return `
     <section class="card panel-surface panel-surface--transparent">
       <p class="hero-kicker">Hub Discovery</p>
-      <h3>Search people, companies, and platform activity</h3>
-      <p class="muted">Snapshot cards provide quick-glance metadata before opening fuller profile pages.</p>
+      <h3>Discover profiles, companies, and recruiters</h3>
+      <p class="muted">Hub is the search and discovery area. Recruiter tools stay here as a Hub surface, not a top-level tab.</p>
       <form id="connection-search-form" class="arena-input" style="margin-top:10px;">
-        <input id="connection-search-input" type="search" placeholder="Search profiles or companies..." value="${escapeAttr(searchQuery)}" />
+        <input id="connection-search-input" type="search" placeholder="Search profiles, companies, or recruiters..." value="${escapeAttr(searchQuery)}" />
         <button class="pill-btn cta-primary" type="submit">Search Hub</button>
       </form>
     </section>
-    <section class="grid two" style="margin-top:12px;">
-      ${profileCards || card('No profile results', '<p class="muted">Try another term, or browse without a filter.</p>')}
-      ${companyCards}
+    <section class="hub-result-grid" style="margin-top:12px;">
+      <div><h4>Profiles</h4><div class="grid two">${profileCards}</div></div>
+      <div><h4>Companies</h4><div class="grid two">${companyCards}</div></div>
+      <div><h4>Recruiter Tools</h4><div class="grid two">${recruiterCards}</div></div>
     </section>
   `;
 }
@@ -3867,6 +4018,10 @@ function applyRouteGuards(path) {
     '/guild-world': '/nexus/roleplay',
     '/roleplay': '/nexus/roleplay',
     '/members': '/hub',
+    '/recruiter-console': '/hub',
+    '/discussions': '/nexus/professional',
+    '/profile/scenario-chat': '/nexus/professional',
+    '/profile/area-chat': '/nexus/roleplay',
   };
   if (aliasRoutes[path]) {
     return aliasRoutes[path];
@@ -4860,11 +5015,6 @@ function setMode(nextMode) {
   if (state.mode === 'roleplay') {
     ensureRoleplaySession();
   }
-  const currentPath = location.hash.replace('#', '') || '/home';
-  if (currentPath === '/nexus' || currentPath.startsWith('/nexus/')) {
-    location.hash = state.mode === 'roleplay' ? '/nexus/roleplay' : '/nexus/professional';
-    return;
-  }
   render();
 }
 
@@ -4972,15 +5122,6 @@ async function render() {
     if (path === '/recruiter-console' || path === '/hub' || path === '/members') {
       await ensureMembersLoaded();
     }
-    if (path === '/nexus/professional' || path === '/arena' || path === '/profile/scenario-chat' || path === '/discussions') {
-      await loadScenarioChat();
-    }
-    if (path === '/profile/area-chat') {
-      await loadAreaChat();
-    }
-    if (path === '/nexus/roleplay' || path === '/roleplay') {
-      ensureRoleplaySession();
-    }
     if (path !== '/profile') {
       state.onboarding.starterModalOpen = false;
     } else {
@@ -5000,8 +5141,8 @@ async function render() {
       landing: landingPage,
       home: homePage,
       nexus: nexusPage,
-      nexusProfessional: arenaPage,
-      nexusRoleplay: roleplayHubPage,
+      nexusProfessional: professionalRoomsPage,
+      nexusRoleplay: roleplayRoomsPage,
       hub: hubPage,
       arena: arenaPage,
       guild: guildPage,
@@ -5202,6 +5343,7 @@ async function render() {
   attachProfileEditHandler();
   attachArenaHandlers();
   attachRoleplayHandlers();
+  attachNexusRoomHandlers();
   attachScenarioDetailHandlers();
   attachHomeChatHandlers();
   attachChatPaneHandlers();
@@ -5219,6 +5361,63 @@ async function render() {
         </main>
       </div>
     `;
+  }
+}
+
+
+function attachNexusRoomHandlers() {
+  document.querySelectorAll('[data-open-nexus-room]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const token = button.getAttribute('data-open-nexus-room') || '';
+      const [mode, roomId] = token.split(':');
+      if (!mode || !roomId) return;
+      if (mode === 'professional') {
+        state.nexus.activeProfessionalRoomId = roomId;
+      } else {
+        state.nexus.activeRoleplayRoomId = roomId;
+      }
+      render();
+    });
+  });
+
+  document.querySelectorAll('[data-room-category]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const token = button.getAttribute('data-room-category') || '';
+      const [mode, category] = token.split(':');
+      if (!mode || !category) return;
+      state.nexus.activeCategoryByMode[mode] = category;
+      render();
+    });
+  });
+
+  document.querySelectorAll('[data-nexus-chat-form]').forEach((form) => {
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const token = form.getAttribute('data-nexus-chat-form') || '';
+      const [mode, roomId] = token.split(':');
+      if (!mode || !roomId) return;
+      const input = form.querySelector('input[name="message"]');
+      const text = String(input?.value || '').trim();
+      if (!text) return;
+      const key = roomMessageKey(mode, roomId);
+      const roomMessages = Array.isArray(state.nexus.roomMessages[key]) ? state.nexus.roomMessages[key] : [];
+      roomMessages.push({
+        sender: state.currentUser?.displayName || state.currentUser?.username || 'You',
+        role: 'user',
+        text,
+      });
+      state.nexus.roomMessages[key] = roomMessages.slice(-80);
+      if (input) input.value = '';
+      render();
+    });
+  });
+
+  const answerButton = document.getElementById('scenario-direct-answer-btn');
+  if (answerButton) {
+    answerButton.addEventListener('click', () => {
+      setStatusMessage('Scenario prompt answer submitted (placeholder). Full scoring flow stays in dedicated scenario routes.', 'info');
+      render();
+    });
   }
 }
 
