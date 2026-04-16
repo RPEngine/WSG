@@ -1343,6 +1343,50 @@ function formatDate(value) {
   return new Date(value).toLocaleString();
 }
 
+function readProfileFrameworkSource(profile, activeData = {}, isOwnProfile = false) {
+  const onboardingProfile = isOwnProfile ? (readOnboardingProfile(profile?.id) || {}) : {};
+  const resumeProfile = onboardingProfile.resumeProfile || {};
+  const skillProfile = onboardingProfile.skillProfile || {};
+  const companyProfile = onboardingProfile.companyProfile || {};
+  return {
+    onboardingProfile,
+    resumeProfile,
+    skillProfile,
+    companyProfile,
+    activeData: activeData || {},
+  };
+}
+
+function normalizeProfileType(profile = {}) {
+  const role = String(profile.role || '').toLowerCase();
+  if (role === 'recruiter') return 'Recruiter';
+  if (role === 'employer') return 'Company';
+  return 'Person';
+}
+
+function renderFrameworkField(label, value, fallback = 'Not provided yet') {
+  const normalized = typeof value === 'string' ? value.trim() : value;
+  const hasValue = Array.isArray(normalized) ? normalized.length > 0 : Boolean(normalized);
+  return `
+    <article class="profile-framework-field">
+      <span class="profile-framework-label">${escapeHtml(label)}</span>
+      <strong>${hasValue ? escapeHtml(Array.isArray(normalized) ? normalized.join(', ') : String(normalized)) : `<span class="muted">${escapeHtml(fallback)}</span>`}</strong>
+    </article>
+  `;
+}
+
+function renderProfileFrameworkSection(title, intro, fields = []) {
+  return `
+    <section class="card panel-surface panel-surface--transparent profile-framework-section">
+      <h3>${escapeHtml(title)}</h3>
+      ${intro ? `<p class="muted">${escapeHtml(intro)}</p>` : ''}
+      <div class="profile-framework-grid">
+        ${fields.map((field) => renderFrameworkField(field.label, field.value, field.fallback)).join('')}
+      </div>
+    </section>
+  `;
+}
+
 function pageTitle(key) {
   return {
     landing: ['Wyked Samurai Guild', 'Professional simulation and roleplay training for modern teams.'],
@@ -3176,20 +3220,48 @@ function membersPage() {
 }
 
 function profilePage() {
-  const profile = state.currentUser;
+  const path = location.hash.replace('#', '') || '/profile';
+  const isOwnProfileRoute = path === '/profile';
+  const profile = isOwnProfileRoute ? state.currentUser : state.activeProfile;
   if (!profile) {
-    return card('Profile', '<p class="muted">Please log in first.</p>');
+    return card('Profile', '<p class="muted">Profile is unavailable right now.</p>');
   }
 
-  const activeLayer = state.activeLayer || 'free';
-  const activeData = state.layers?.[activeLayer] || {};
+  const activeLayer = isOwnProfileRoute ? (state.activeLayer || 'free') : 'free';
+  const activeData = isOwnProfileRoute ? (state.layers?.[activeLayer] || {}) : (profile.layers?.free || {});
+  const profileType = normalizeProfileType(profile);
+  const isCompanyProfile = profileType === 'Company' || profileType === 'Recruiter';
+  const profileSource = readProfileFrameworkSource(profile, activeData, isOwnProfileRoute);
+  const allSkills = [
+    ...(Array.isArray(activeData.skills) ? activeData.skills : []),
+    ...(Array.isArray(profileSource.skillProfile?.skills) ? profileSource.skillProfile.skills : []),
+  ].map((skill) => String(skill || '').trim()).filter(Boolean);
+  const uniqueSkills = [...new Set(allSkills)];
+  const identityName = isCompanyProfile
+    ? (profile.organizationName || profile.displayName || profile.legalName || profile.username)
+    : (activeData.displayName || profile.displayName || profile.legalName || profile.username);
+  const headlineText = activeData.headline || profileSource.resumeProfile?.headline || profile.bio || '';
+  const joinedLabel = formatDate(profile.createdAt);
+  const personWorkModes = [
+    profileSource.onboardingProfile?.workPreferences?.remote ? 'Remote' : '',
+    profileSource.onboardingProfile?.workPreferences?.onSite ? 'On-site' : '',
+    profileSource.onboardingProfile?.workPreferences?.hybrid ? 'Hybrid' : '',
+    profileSource.onboardingProfile?.workPreferences?.reliableTransportation ? 'Reliable transportation' : '',
+    profileSource.onboardingProfile?.workPreferences?.publicTransportation ? 'Public transportation' : '',
+    profileSource.onboardingProfile?.workPreferences?.relocationNeeded ? 'Relocation needed' : '',
+  ].filter(Boolean);
+  const companyWorkModes = [
+    profileSource.companyProfile?.workModel || '',
+    profileSource.companyProfile?.relocationSupport ? 'Relocation support available' : '',
+    profileSource.companyProfile?.schedulingExpectations || '',
+  ].filter(Boolean);
+
   const tabMarkup = PROFILE_LAYER_ORDER.map((layerKey) => {
     const meta = PROFILE_LAYER_META[layerKey];
     const isLocked = state.lockedLayers.includes(layerKey);
     const isActive = activeLayer === layerKey;
     return `<button type="button" class="pill-btn ${isActive ? 'active' : ''}" data-layer-tab="${layerKey}" ${isLocked ? 'disabled title="Upgrade to unlock"' : ''}>${meta.label}${isLocked ? ' 🔒' : ''}</button>`;
   }).join('');
-
   const isLayerLocked = state.lockedLayers.includes(activeLayer);
   const skillsList = Array.isArray(activeData.skills) ? activeData.skills : [];
   const roleplayCharacters = Array.isArray(profile.roleplayCharacters) ? profile.roleplayCharacters : [];
@@ -3201,28 +3273,91 @@ function profilePage() {
   const layerBioLabel = activeLayer === 'professional' ? 'Professional Bio' : activeLayer === 'roleplay' ? 'Roleplay Bio' : 'Short Bio';
   const layerSkillsLabel = activeLayer === 'free' ? 'Basic Tags' : 'Tags / Skills';
 
+  const identitySection = renderProfileFrameworkSection(
+    '1. Identity',
+    'Who are they, when did they join, and where are they based?',
+    [
+      { label: isCompanyProfile ? 'Company / Recruiter Name' : 'Real Name', value: isCompanyProfile ? (profile.organizationName || profile.legalName) : profile.legalName },
+      { label: isCompanyProfile ? 'Display Name' : 'Preferred / Display Name', value: identityName },
+      { label: 'Username', value: profile.username },
+      { label: 'Profile Type', value: profileType },
+      { label: 'Joined Date', value: joinedLabel, fallback: 'Join date pending' },
+      { label: 'Location', value: profileSource.resumeProfile?.location || profileSource.companyProfile?.hqLocation || profile.location, fallback: 'Location pending' },
+    ],
+  );
+
+  const purposeSection = renderProfileFrameworkSection(
+    '2. Purpose on Platform',
+    'What do they want to get out of being here?',
+    [
+      {
+        label: 'Platform Goal',
+        value: profile.motivation || profileSource.onboardingProfile?.platformGoal || profileSource.resumeProfile?.desiredRoles || profileSource.companyProfile?.platformGoal,
+        fallback: 'Purpose not shared yet',
+      },
+      {
+        label: isCompanyProfile ? 'Mission / Company Summary' : 'Professional Summary / About',
+        value: activeData.bio || headlineText || profileSource.resumeProfile?.summary || profileSource.companyProfile?.missionStatement,
+        fallback: 'Summary not added yet',
+      },
+    ],
+  );
+
+  const workStyleSection = renderProfileFrameworkSection(
+    '3. Work Style / Work Access',
+    isCompanyProfile ? 'How they operate and treat employees.' : 'How they work best and what access needs they have.',
+    isCompanyProfile
+      ? [
+        { label: 'Work Model', value: companyWorkModes, fallback: 'Work model not listed yet' },
+        { label: 'Employment Policies', value: profileSource.companyProfile?.employmentPolicies, fallback: 'Employment policies pending' },
+        { label: 'Social / Workplace Policies', value: profileSource.companyProfile?.socialPolicies, fallback: 'Workplace policy details pending' },
+        { label: 'How Employees Are Treated', value: profileSource.companyProfile?.employeeTreatment, fallback: 'Employee experience details pending' },
+      ]
+      : [
+        { label: 'Willing to Relocate', value: profileSource.onboardingProfile?.workPreferences?.relocationWillingness, fallback: 'Relocation preference not set' },
+        { label: 'Transportation / Work Access', value: personWorkModes, fallback: 'Work access preferences pending' },
+      ],
+  );
+
+  const experienceSection = renderProfileFrameworkSection(
+    '4. Experience / Skills / Services',
+    isCompanyProfile ? 'What the organization does and who they want to hire.' : 'Experience details, resume signals, and practical skills.',
+    isCompanyProfile
+      ? [
+        { label: 'Business (What They Do)', value: profileSource.companyProfile?.business, fallback: 'Business focus pending' },
+        { label: 'Services (How They Do It)', value: profileSource.companyProfile?.services, fallback: 'Service model pending' },
+        { label: 'Hiring Priorities', value: profileSource.companyProfile?.hiringPriorities, fallback: 'Hiring priorities not listed yet' },
+      ]
+      : [
+        { label: 'Resume / Work History', value: profileSource.resumeProfile?.workHistory || profileSource.onboardingProfile?.resumeUpload?.fileName, fallback: 'Resume details pending' },
+        { label: 'Skills / Specialties', value: uniqueSkills.length ? uniqueSkills : profileSource.skillProfile?.specialties, fallback: 'Skills not listed yet' },
+        { label: 'Certifications / Education', value: [profileSource.resumeProfile?.certifications, profileSource.resumeProfile?.education].filter(Boolean), fallback: 'Certifications or education not added yet' },
+      ],
+  );
+
   return `
     <section class="feature profile-display-hero guild-identity-hero panel-surface panel-surface--transparent">
       <div class="profile-summary-row">
         ${avatarMarkup(profile, 'lg')}
         <div>
-          <p class="hero-kicker">Guild Identity Page</p>
-          <h3 style="margin:0;">${escapeHtml(activeData.displayName || profile.displayName || profile.username)}</h3>
-          <p class="muted" style="margin:4px 0;">@${escapeHtml(profile.username)}</p>
+          <p class="hero-kicker">Unified Profile Framework</p>
+          <h3 style="margin:0;">${escapeHtml(identityName)}</h3>
+          <p class="muted" style="margin:4px 0;">${escapeHtml(profileType)} · @${escapeHtml(profile.username || 'username-pending')}</p>
           <p class="muted" style="margin:0;">Tier: ${escapeHtml(profile.accessTier || 'free')} · Subscription: ${escapeHtml(profile.subscriptionStatus || 'inactive')}</p>
         </div>
       </div>
-      <p class="profile-display-bio">${escapeHtml(activeData.bio || 'No profile story published yet for this layer.')}</p>
+      <p class="profile-display-bio">${escapeHtml(headlineText || 'Profile summary will appear here when available.')}</p>
       <div class="tag-list profile-tag-list">
-        ${skillsList.length ? skillsList.map((skill) => `<span class="skill-tag">${escapeHtml(skill)}</span>`).join('') : '<span class="muted">No skills listed yet.</span>'}
-      </div>
-      <div class="profile-progress-grid">
-        <article class="profile-progression-card"><span>Current Layer</span><strong>${escapeHtml(PROFILE_LAYER_META[activeLayer]?.label || activeLayer)}</strong></article>
-        <article class="profile-progression-card"><span>Unlocked Layers</span><strong>${state.availableLayers.length}</strong></article>
-        <article class="profile-progression-card"><span>Connections</span><strong>${state.network.connections.length}</strong></article>
+        ${uniqueSkills.length ? uniqueSkills.map((skill) => `<span class="skill-tag">${escapeHtml(skill)}</span>`).join('') : '<span class="muted">No skills or services listed yet.</span>'}
       </div>
     </section>
 
+    ${identitySection}
+    ${purposeSection}
+    ${workStyleSection}
+    ${experienceSection}
+
+    ${!isOwnProfileRoute ? '' : `
     <section class="card profile-tabs-card panel-surface panel-surface--soft" style="margin-top:12px;">
       <div class="tabs profile-tabs">
         <button class="active" type="button">Overview</button>
@@ -3245,7 +3380,7 @@ function profilePage() {
                   <strong>${escapeHtml(character.name || 'Unnamed Character')}</strong><br/>
                   <span class="muted">${escapeHtml(character.system || 'WSG RP System')}</span>
                 </span>
-                <span class="muted">${formatDateTime(character.createdAt)}</span>
+                <span class="muted">${formatDate(character.createdAt)}</span>
               </li>
             `).join('')}
           </ul>`
@@ -3295,6 +3430,7 @@ function profilePage() {
         <button class="pill-btn" id="save-profile-hub-btn" type="submit" ${state.profileHub.saving ? 'disabled' : ''}>${state.profileHub.saving ? 'Saving Account...' : 'Save Account Settings'}</button>
       </form>
     </section>
+    `}
   `;
 }
 
