@@ -3274,11 +3274,8 @@ h1, h2, h3, h4, .title, .lockup-title { font-family: var(--heading-font); }
 }
 
 .main-content {
-  background:
-    linear-gradient(170deg, rgba(7, 12, 19, 0.8), rgba(6, 10, 16, 0.86)),
-    var(--panel-center-frame);
-  background-size: cover, 100% 100%;
-  background-position: center;
+  background: transparent;
+  background-image: none;
 }
 
 .right-sidebar {
@@ -3505,7 +3502,6 @@ h1, h2, h3, h4, .title, .lockup-title { font-family: var(--heading-font); }
 }
 
 .header,
-.main-content,
 .public-header,
 .public-content,
 .panel,
@@ -3524,6 +3520,12 @@ h1, h2, h3, h4, .title, .lockup-title { font-family: var(--heading-font); }
 
 .main-content {
   padding: 20px;
+  background: transparent !important;
+  background-image: none !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
 }
 
 .status-banner,
