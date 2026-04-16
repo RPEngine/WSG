@@ -2091,7 +2091,7 @@ function MainContent(key, statusMarkup, pageHtml) {
   const isArena = key === 'arena';
   const compactTopSpacing = 10;
   return `
-    <main class="main-content panel ${isArena ? 'arena-main-shell' : ''}">
+    <main class="main-content ${isArena ? 'arena-main-shell' : ''}">
       ${statusMarkup}
       <section class="main-content-body ${isArena ? 'arena-content-body' : ''}" style="margin-top:${compactTopSpacing}px;">${pageHtml}</section>
     </main>
