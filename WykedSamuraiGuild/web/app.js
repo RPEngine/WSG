@@ -355,8 +355,8 @@ const SCENARIO_BLUEPRINTS = Object.freeze({
 });
 
 const BRAND_ASSETS = Object.freeze({
-  logo: '/assets/WGSGuildLogo.png',
-  compactLogo: '/assets/WGSGuildLogo.png',
+  logo: '/assets/banner_logo.png',
+  compactLogo: '/assets/banner_logo.png',
 });
 
 
@@ -2229,10 +2229,6 @@ function Header(path) {
       <div class="header-left">
         <div class="brand">
           ${guildBrandMark({ className: 'header-brand-mark' })}
-          <div class="header-brand-copy">
-            <div class="title">Wyked Samurai Guild</div>
-            <div class="subtitle">Strategic Guild Network • Nebula Nexus</div>
-          </div>
         </div>
       </div>
       <div class="header-actions">
@@ -2241,10 +2237,9 @@ function Header(path) {
           <div class="account-menu-dropdown header-dropdown-menu" id="main-menu-dropdown">
             <a href="${linkFor('/home')}">Home</a>
             <a href="${linkFor('/nexus')}">Nexus</a>
-            <a href="${linkFor('/hub')}">Hub</a>
-            <a href="${linkFor('/hub/social')}">Hub / Social</a>
-            <a href="${linkFor('/hub/recruiter')}">Hub / Recruiter</a>
-            <a href="${linkFor('/hub/reviews')}">Hub / Reviews</a>
+            <a href="${linkFor('/hub/social')}">Social Hub</a>
+            <a href="${linkFor('/hub/recruiter')}">Recruiter Hub</a>
+            <a href="${linkFor('/hub/reviews')}">Reviews Hub</a>
           </div>
         </div>
         <div class="header-menu">
@@ -5436,10 +5431,6 @@ function renderPublicLayout(path, key, pageHtml) {
         <div class="public-container public-header-inner">
           <div class="brand">
             ${guildBrandMark({ className: 'header-brand-mark' })}
-            <div>
-              <div class="title">Wyked Samurai Guild</div>
-              <div class="subtitle">Strategic Guild Network • Nebula Nexus</div>
-            </div>
           </div>
           <div class="header-actions">
             <a class="pill-btn" href="#/login">Log In</a>
