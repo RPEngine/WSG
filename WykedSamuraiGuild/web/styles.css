@@ -304,9 +304,10 @@ body {
   overflow: hidden;
 }
 
-.header.is-collapsed .guild-brand-mark img {
-  width: 30px;
+.header.is-collapsed .header-brand-mark img {
   height: 30px;
+  width: auto;
+  max-width: 140px;
 }
 
 .header.is-collapsed .brand {
@@ -341,8 +342,9 @@ body {
 }
 
 .header-brand-mark img {
-  width: 34px;
-  height: 34px;
+  height: clamp(28px, 3.2vw, 38px);
+  width: auto;
+  max-width: min(34vw, 210px);
 }
 
 .sidebar-brand-mark img {
@@ -706,6 +708,10 @@ body {
   }
   .grid.two { grid-template-columns: 1fr; }
   .header { flex-wrap: nowrap; padding-right: 36px; }
+  .header-brand-mark img {
+    max-width: min(45vw, 180px);
+    height: clamp(24px, 5vw, 34px);
+  }
   .global-chat-dock {
     right: 10px;
     left: 10px;
