@@ -33,59 +33,6 @@ const routes = {
   '/recruiter-console': { key: 'recruiter', requiresAuth: true },
 };
 
-const topLevelNavItems = [
-  {
-    label: 'Home',
-    path: '/home',
-    items: [
-      { label: 'Profile', path: '/profile' },
-      { label: 'Resume', path: '/resume' },
-      { label: 'Character 1', path: '/characters/character-1' },
-      { label: 'Character 2', path: '/characters/character-2' },
-      { label: 'Character 3', path: '/characters/character-3' },
-      { label: 'Character 4', path: '/characters/character-4' },
-      { label: 'Character 5', path: '/characters/character-5' },
-      { label: 'Settings', path: '/settings' },
-    ],
-  },
-  {
-    label: 'Nexus',
-    path: '/nexus',
-    items: [
-      { label: 'Professional', path: '/nexus/professional' },
-      { label: 'Roleplay', path: '/nexus/roleplay' },
-    ],
-  },
-  {
-    label: 'Hub',
-    path: '/hub',
-    items: [
-      { label: 'Social Landing Page', path: '/hub' },
-    ],
-  },
-];
-
-function visibleNavItems() {
-  return topLevelNavItems;
-}
-
-function isNavItemActive(pathname, itemPath) {
-  if (itemPath === '/nexus') {
-    return pathname === '/nexus' || pathname.startsWith('/nexus/');
-  }
-  if (itemPath === '/home') {
-    return pathname === '/home'
-      || pathname === '/profile'
-      || pathname === '/resume'
-      || pathname === '/settings'
-      || pathname.startsWith('/characters');
-  }
-  if (itemPath === '/hub') {
-    return pathname === '/hub' || pathname === '/members';
-  }
-  return pathname === itemPath;
-}
-
 const STARTER_TRIALS = [
   {
     id: 'find-your-why',
@@ -2251,14 +2198,6 @@ function SiteFooter() {
 function Header(path) {
   const isCollapsed = state.shell.headerCollapsed;
   const accountLabel = state.currentUser ? 'Account' : 'Log in';
-  const topNav = visibleNavItems().map((item) => `
-    <div class="top-nav-group">
-      <a href="${linkFor(item.path)}" class="top-nav-link ${isNavItemActive(path, item.path) ? 'active' : ''}">${escapeHtml(item.label)}</a>
-      <div class="top-nav-dropdown">
-        ${(item.items || []).map((subItem) => `<a href="${linkFor(subItem.path)}">${escapeHtml(subItem.label)}</a>`).join('')}
-      </div>
-    </div>
-  `).join('');
   return `
     <header class="header panel ${isCollapsed ? 'is-collapsed' : ''}">
       <button type="button" class="header-collapse-btn" id="header-collapse-toggle" aria-label="${isCollapsed ? 'Expand header' : 'Collapse header'}" title="${isCollapsed ? 'Expand header' : 'Collapse header'}">${isCollapsed ? '▼' : '▲'}</button>
@@ -2270,11 +2209,16 @@ function Header(path) {
             <div class="subtitle">Strategic Guild Network • Nebula Nexus</div>
           </div>
         </div>
-        <nav class="top-nav ${isCollapsed ? 'hide-when-header-collapsed' : ''}" aria-label="Primary">
-          ${topNav}
-        </nav>
       </div>
       <div class="header-actions">
+        <div class="header-menu">
+          <button type="button" class="pill-btn header-glass-btn ${isCollapsed ? 'hide-when-header-collapsed' : ''}" id="main-menu-btn" aria-haspopup="true" aria-expanded="false">Menu ▾</button>
+          <div class="account-menu-dropdown header-dropdown-menu" id="main-menu-dropdown">
+            <a href="${linkFor('/home')}">Home</a>
+            <a href="${linkFor('/nexus')}">Nexus</a>
+            <a href="${linkFor('/hub')}">Hub</a>
+          </div>
+        </div>
         <div class="header-menu">
           <button type="button" class="pill-btn header-glass-btn ${isCollapsed ? 'hide-when-header-collapsed' : ''}" id="utilities-menu-btn" aria-haspopup="true" aria-expanded="false">Utilities ▾</button>
           <div class="account-menu-dropdown header-dropdown-menu" id="utilities-menu-dropdown">
@@ -5129,35 +5073,50 @@ function attachHeaderActions() {
 
   const utilitiesMenuButton = document.getElementById('utilities-menu-btn');
   const utilitiesMenuDropdown = document.getElementById('utilities-menu-dropdown');
+  const mainMenuButton = document.getElementById('main-menu-btn');
+  const mainMenuDropdown = document.getElementById('main-menu-dropdown');
+  const accountMenuButton = document.getElementById('account-menu-btn');
+  const accountMenuDropdown = document.getElementById('account-menu-dropdown');
+
+  const closeHeaderMenus = (except) => {
+    const menus = [
+      { id: 'main', button: mainMenuButton, dropdown: mainMenuDropdown },
+      { id: 'utilities', button: utilitiesMenuButton, dropdown: utilitiesMenuDropdown },
+      { id: 'account', button: accountMenuButton, dropdown: accountMenuDropdown },
+    ];
+    menus.forEach((menu) => {
+      if (!menu.button || !menu.dropdown || menu.id === except) {
+        return;
+      }
+      menu.dropdown.classList.remove('is-open');
+      menu.button.setAttribute('aria-expanded', 'false');
+    });
+  };
+
+  if (mainMenuButton && mainMenuDropdown) {
+    mainMenuButton.onclick = (event) => {
+      event.stopPropagation();
+      const isOpen = mainMenuDropdown.classList.toggle('is-open');
+      mainMenuButton.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      closeHeaderMenus('main');
+    };
+  }
+
   if (utilitiesMenuButton && utilitiesMenuDropdown) {
     utilitiesMenuButton.onclick = (event) => {
       event.stopPropagation();
       const isOpen = utilitiesMenuDropdown.classList.toggle('is-open');
       utilitiesMenuButton.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-      const accountDropdown = document.getElementById('account-menu-dropdown');
-      const accountButton = document.getElementById('account-menu-btn');
-      if (accountDropdown) {
-        accountDropdown.classList.remove('is-open');
-      }
-      if (accountButton) {
-        accountButton.setAttribute('aria-expanded', 'false');
-      }
+      closeHeaderMenus('utilities');
     };
   }
 
-  const accountMenuButton = document.getElementById('account-menu-btn');
-  const accountMenuDropdown = document.getElementById('account-menu-dropdown');
   if (accountMenuButton && accountMenuDropdown) {
     accountMenuButton.onclick = (event) => {
       event.stopPropagation();
       const isOpen = accountMenuDropdown.classList.toggle('is-open');
       accountMenuButton.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-      if (utilitiesMenuDropdown) {
-        utilitiesMenuDropdown.classList.remove('is-open');
-      }
-      if (utilitiesMenuButton) {
-        utilitiesMenuButton.setAttribute('aria-expanded', 'false');
-      }
+      closeHeaderMenus('account');
     };
   }
 
@@ -5182,6 +5141,12 @@ function attachHeaderActions() {
       const accountDropdown = document.getElementById('account-menu-dropdown');
       const utilitiesButton = document.getElementById('utilities-menu-btn');
       const utilitiesDropdown = document.getElementById('utilities-menu-dropdown');
+      const mainButton = document.getElementById('main-menu-btn');
+      const mainDropdown = document.getElementById('main-menu-dropdown');
+      if (mainDropdown && mainButton && !mainDropdown.contains(event.target) && event.target !== mainButton) {
+        mainDropdown.classList.remove('is-open');
+        mainButton.setAttribute('aria-expanded', 'false');
+      }
       if (accountDropdown && accountButton && !accountDropdown.contains(event.target) && event.target !== accountButton) {
         accountDropdown.classList.remove('is-open');
         accountButton.setAttribute('aria-expanded', 'false');
