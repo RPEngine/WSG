@@ -49,6 +49,9 @@ app.use(cors({
 app.use(express.json({ limit: "100kb" }));
 
 app.get("/health", healthCheck);
+app.get("/api/connections", (_req, res) => {
+  res.json({ items: [], connections: [], count: 0 });
+});
 app.use("/api", apiRoutes);
 app.post("/chat", aiChat);
 app.post("/scenario", generateAiScenario);
