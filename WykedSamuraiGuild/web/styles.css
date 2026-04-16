@@ -80,11 +80,11 @@ body {
     "header"
     "main";
   min-height: 100vh;
-  height: 100vh;
+  height: auto;
   gap: 14px;
   padding: 14px;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .app-shell.is-header-collapsed {
@@ -151,7 +151,8 @@ body {
   min-height: var(--header-height);
   height: var(--header-height);
   padding: var(--header-padding-y) 14px;
-  position: relative;
+  position: sticky;
+  top: 14px;
   overflow: visible;
   z-index: 40;
   transition: height 0.25s ease, min-height 0.25s ease, padding 0.25s ease;
@@ -421,27 +422,27 @@ body {
   width: min(100%, 1380px);
   justify-self: center;
   padding: 16px;
-  overflow: auto;
+  overflow: visible;
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  min-height: auto;
   min-width: 0;
 }
 
 .main-content-body {
-  min-height: 0;
+  min-height: auto;
 }
 
 .arena-main-shell {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
   min-height: 0;
   min-width: 0;
 }
 
 .main-content.arena-main-shell {
-  overflow: hidden;
+  overflow: visible;
 }
 
 .arena-main-shell .arena-content-body {
@@ -450,7 +451,7 @@ body {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .arena-content-body {
@@ -3389,9 +3390,20 @@ h1, h2, h3, h4, .title, .lockup-title { font-family: var(--heading-font); }
 }
 
 .nexus-mode-layout {
+  --nexus-left-panel-width: 280px;
+  --nexus-right-panel-width: 260px;
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr) 260px;
+  grid-template-columns: var(--nexus-left-panel-width) minmax(0, 1fr) var(--nexus-right-panel-width);
   gap: 14px;
+  align-items: start;
+}
+
+.nexus-mode-layout.is-left-collapsed {
+  --nexus-left-panel-width: 64px;
+}
+
+.nexus-mode-layout.is-right-collapsed {
+  --nexus-right-panel-width: 64px;
 }
 
 .nexus-room-browser,
@@ -3399,6 +3411,28 @@ h1, h2, h3, h4, .title, .lockup-title { font-family: var(--heading-font); }
 .nexus-user-list {
   border-radius: 14px;
   padding: 14px;
+}
+
+.nexus-room-browser,
+.nexus-user-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.nexus-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.nexus-panel-title {
+  margin: 0;
+}
+
+.nexus-panel-toggle-btn {
+  flex: 0 0 auto;
 }
 
 .nexus-room-categories {
@@ -3413,6 +3447,32 @@ h1, h2, h3, h4, .title, .lockup-title { font-family: var(--heading-font); }
   gap: 8px;
   max-height: 62vh;
   overflow: auto;
+}
+
+.nexus-room-browser.is-collapsed,
+.nexus-user-list.is-collapsed {
+  padding-left: 8px;
+  padding-right: 8px;
+  align-items: center;
+}
+
+.nexus-room-browser.is-collapsed .nexus-panel-head,
+.nexus-user-list.is-collapsed .nexus-panel-head {
+  width: 100%;
+  flex-direction: column;
+}
+
+.nexus-room-browser.is-collapsed .nexus-panel-title,
+.nexus-user-list.is-collapsed .nexus-panel-title {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.nexus-room-browser.is-collapsed .nexus-panel-body,
+.nexus-user-list.is-collapsed .nexus-panel-body {
+  display: none;
 }
 
 .nexus-room-row {

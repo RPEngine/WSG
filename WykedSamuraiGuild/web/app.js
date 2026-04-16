@@ -403,6 +403,7 @@ const PROFILE_LAYER_META = {
 };
 const PROFILE_LAYER_ORDER = ['free', 'professional', 'roleplay'];
 const arenaLayoutPrefs = loadArenaLayoutPrefs();
+const nexusLayoutPrefs = loadNexusPanelPrefs();
 
 const state = {
   mode: localStorage.getItem('wsg-mode') || 'professional',
@@ -464,6 +465,16 @@ const state = {
     activeCategoryByMode: {
       professional: 'all',
       roleplay: 'all',
+    },
+    panelCollapsedByMode: {
+      professional: {
+        left: nexusLayoutPrefs.professional.left,
+        right: nexusLayoutPrefs.professional.right,
+      },
+      roleplay: {
+        left: nexusLayoutPrefs.roleplay.left,
+        right: nexusLayoutPrefs.roleplay.right,
+      },
     },
     roomMessages: {},
   },
@@ -535,6 +546,7 @@ const GOOGLE_CLIENT_ID_META_KEY = 'wsg-google-client-id';
 const SHELL_LAYOUT_STORAGE_KEY = 'wsg-shell-layout';
 const HEADER_COLLAPSED_STORAGE_KEY = 'ui.headerCollapsed';
 const ROLEPLAY_TOOLS_COLLAPSED_STORAGE_KEY = 'ui.roleplayToolsCollapsed';
+const NEXUS_LAYOUT_STORAGE_KEY = 'ui.nexusRoomLayout';
 const HOME_ROUTE = '/home';
 const POLICY_ACCEPT_ROUTE = '/policy/accept';
 const CURRENT_POLICY_VERSION = 'v1.0';
@@ -622,6 +634,50 @@ function persistArenaLayoutPrefs() {
 function persistRoleplayToolsCollapsedPreference() {
   try {
     localStorage.setItem(ROLEPLAY_TOOLS_COLLAPSED_STORAGE_KEY, String(state.roleplay.toolsCollapsed));
+  } catch {
+    // no-op: localStorage might be unavailable
+  }
+}
+
+function loadNexusPanelPrefs() {
+  const defaults = {
+    professional: { left: false, right: false },
+    roleplay: { left: false, right: false },
+  };
+  try {
+    const raw = localStorage.getItem(NEXUS_LAYOUT_STORAGE_KEY);
+    if (!raw) return defaults;
+    const parsed = JSON.parse(raw);
+    return {
+      professional: {
+        left: Boolean(parsed?.professional?.left),
+        right: Boolean(parsed?.professional?.right),
+      },
+      roleplay: {
+        left: Boolean(parsed?.roleplay?.left),
+        right: Boolean(parsed?.roleplay?.right),
+      },
+    };
+  } catch {
+    return defaults;
+  }
+}
+
+function persistNexusPanelPrefs() {
+  try {
+    localStorage.setItem(
+      NEXUS_LAYOUT_STORAGE_KEY,
+      JSON.stringify({
+        professional: {
+          left: Boolean(state.nexus.panelCollapsedByMode?.professional?.left),
+          right: Boolean(state.nexus.panelCollapsedByMode?.professional?.right),
+        },
+        roleplay: {
+          left: Boolean(state.nexus.panelCollapsedByMode?.roleplay?.left),
+          right: Boolean(state.nexus.panelCollapsedByMode?.roleplay?.right),
+        },
+      })
+    );
   } catch {
     // no-op: localStorage might be unavailable
   }
@@ -2730,6 +2786,9 @@ function getRoomMessages(mode, room) {
 function renderNexusModePage(mode) {
   const toneClass = mode === 'professional' ? 'nexus-mode--professional' : 'nexus-mode--roleplay';
   const modeLabel = mode === 'professional' ? 'Professional' : 'Roleplay';
+  const panelState = state.nexus.panelCollapsedByMode?.[mode] || { left: false, right: false };
+  const isLeftCollapsed = Boolean(panelState.left);
+  const isRightCollapsed = Boolean(panelState.right);
   const rooms = getNexusRooms(mode);
   const activeRoom = getActiveNexusRoom(mode);
   const selectedCategory = state.nexus.activeCategoryByMode?.[mode] || 'all';
@@ -2765,14 +2824,19 @@ function renderNexusModePage(mode) {
     : '<p class="muted">No room messages yet.</p>';
 
   return `
-    <section class="nexus-mode-layout ${toneClass}">
-      <aside class="nexus-room-browser panel-surface panel-surface--soft">
-        <h3>${modeLabel} Room Browser</h3>
-        <p class="muted">Classic room-list scanning inspired by early chat clients.</p>
-        <div class="nexus-room-categories">
-          ${categories.map((category) => `<button type="button" class="pill-btn ${selectedCategory === category ? 'active' : ''}" data-room-category="${escapeAttr(mode)}:${escapeAttr(category)}">${escapeHtml(category === 'all' ? 'All Categories' : category)}</button>`).join('')}
+    <section class="nexus-mode-layout ${toneClass} ${isLeftCollapsed ? 'is-left-collapsed' : ''} ${isRightCollapsed ? 'is-right-collapsed' : ''}">
+      <aside class="nexus-room-browser panel-surface panel-surface--soft ${isLeftCollapsed ? 'is-collapsed' : ''}">
+        <div class="nexus-panel-head">
+          <h3 class="nexus-panel-title">${isLeftCollapsed ? 'Rooms' : `${modeLabel} Room Browser`}</h3>
+          <button type="button" class="panel-toggle-btn nexus-panel-toggle-btn" data-nexus-panel-toggle="${escapeAttr(mode)}:left" aria-label="${isLeftCollapsed ? 'Expand room browser panel' : 'Collapse room browser panel'}" aria-expanded="${String(!isLeftCollapsed)}">${isLeftCollapsed ? '⟩' : '⟨'}</button>
         </div>
-        <div class="nexus-room-list">${roomListMarkup}</div>
+        <div class="nexus-panel-body">
+          <p class="muted">Classic room-list scanning inspired by early chat clients.</p>
+          <div class="nexus-room-categories">
+            ${categories.map((category) => `<button type="button" class="pill-btn ${selectedCategory === category ? 'active' : ''}" data-room-category="${escapeAttr(mode)}:${escapeAttr(category)}">${escapeHtml(category === 'all' ? 'All Categories' : category)}</button>`).join('')}
+          </div>
+          <div class="nexus-room-list">${roomListMarkup}</div>
+        </div>
       </aside>
 
       <section class="nexus-chat-window panel-surface panel-surface--transparent">
@@ -2796,14 +2860,19 @@ function renderNexusModePage(mode) {
         </form>
       </section>
 
-      <aside class="nexus-user-list panel-surface panel-surface--soft">
-        <h3>Room Roster</h3>
-        <p class="muted">NPC safety moderation is active in all rooms.</p>
-        <ul class="nexus-roster-list">${participantMarkup}</ul>
-        <div class="nexus-moderator-card">
-          <strong>${escapeHtml(activeRoom?.moderator || 'NPC Moderator')}</strong>
-          <p class="muted">${escapeHtml(activeRoom?.sfwPolicy || 'AI moderation placeholder active for SFW compliance and room safety.')}</p>
-          <p class="muted">${activeRoom?.temporary ? 'Temporary scenario session: this room closes when complete.' : 'Ongoing chat room: persists for continuing conversation.'}</p>
+      <aside class="nexus-user-list panel-surface panel-surface--soft ${isRightCollapsed ? 'is-collapsed' : ''}">
+        <div class="nexus-panel-head">
+          <h3 class="nexus-panel-title">${isRightCollapsed ? 'Roster' : 'Room Roster'}</h3>
+          <button type="button" class="panel-toggle-btn nexus-panel-toggle-btn" data-nexus-panel-toggle="${escapeAttr(mode)}:right" aria-label="${isRightCollapsed ? 'Expand room roster panel' : 'Collapse room roster panel'}" aria-expanded="${String(!isRightCollapsed)}">${isRightCollapsed ? '⟨' : '⟩'}</button>
+        </div>
+        <div class="nexus-panel-body">
+          <p class="muted">NPC safety moderation is active in all rooms.</p>
+          <ul class="nexus-roster-list">${participantMarkup}</ul>
+          <div class="nexus-moderator-card">
+            <strong>${escapeHtml(activeRoom?.moderator || 'NPC Moderator')}</strong>
+            <p class="muted">${escapeHtml(activeRoom?.sfwPolicy || 'AI moderation placeholder active for SFW compliance and room safety.')}</p>
+            <p class="muted">${activeRoom?.temporary ? 'Temporary scenario session: this room closes when complete.' : 'Ongoing chat room: persists for continuing conversation.'}</p>
+          </div>
         </div>
       </aside>
     </section>
@@ -5365,6 +5434,18 @@ async function render() {
 
 
 function attachNexusRoomHandlers() {
+  document.querySelectorAll('[data-nexus-panel-toggle]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const token = button.getAttribute('data-nexus-panel-toggle') || '';
+      const [mode, side] = token.split(':');
+      if (!mode || !side || !state.nexus.panelCollapsedByMode?.[mode]) return;
+      if (side !== 'left' && side !== 'right') return;
+      state.nexus.panelCollapsedByMode[mode][side] = !Boolean(state.nexus.panelCollapsedByMode[mode][side]);
+      persistNexusPanelPrefs();
+      render();
+    });
+  });
+
   document.querySelectorAll('[data-open-nexus-room]').forEach((button) => {
     button.addEventListener('click', () => {
       const token = button.getAttribute('data-open-nexus-room') || '';
