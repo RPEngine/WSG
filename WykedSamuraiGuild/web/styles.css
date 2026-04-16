@@ -333,18 +333,33 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto;
 }
 
 .guild-brand-mark img {
+  display: block;
   width: 44px;
   height: 44px;
   object-fit: contain;
 }
 
+.header-brand-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: clamp(28px, 3.2vw, 38px);
+  max-height: clamp(28px, 3.2vw, 38px);
+  overflow: hidden;
+}
+
 .header-brand-mark img {
+  display: block;
   height: clamp(28px, 3.2vw, 38px);
+  max-height: 100%;
   width: auto;
   max-width: min(34vw, 210px);
+  object-fit: contain;
+  flex: 0 0 auto;
 }
 
 .sidebar-brand-mark img {
@@ -711,6 +726,12 @@ body {
   .header-brand-mark img {
     max-width: min(45vw, 180px);
     height: clamp(24px, 5vw, 34px);
+    max-height: 100%;
+  }
+
+  .header-brand-mark {
+    min-height: clamp(24px, 5vw, 34px);
+    max-height: clamp(24px, 5vw, 34px);
   }
   .global-chat-dock {
     right: 10px;
