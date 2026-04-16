@@ -1732,8 +1732,9 @@ function layoutColumns({ className = '', left = '', center = '', right = '' }) {
 }
 
 function messagingRail({ title = 'Messaging Rail', description = '', includeAreaChat = false }) {
-  const connectionRows = state.network.connections.length
-    ? state.network.connections.slice(0, 8).map((connection) => `
+  const connections = getSafeConnections();
+  const connectionRows = connections.length
+    ? connections.slice(0, 8).map((connection) => `
       <li>
         <div>
           <strong>${escapeHtml(connection.displayName || connection.username)}</strong>
@@ -1874,15 +1875,23 @@ function getConnectionDisplayName(connection) {
   return connection?.displayName || connection?.username || 'Guild Member';
 }
 
+function getSafeConnections() {
+  if (!Array.isArray(state.network.connections)) {
+    return [];
+  }
+  return state.network.connections.filter((connection) => connection && typeof connection === 'object');
+}
+
 function selectedConnection() {
-  return state.network.connections.find((connection) => connection.id === state.shell.selectedConversation)
-    || state.network.connections.find((connection) => connection.id === state.directChat.activeConnectionId)
+  const connections = getSafeConnections();
+  return connections.find((connection) => connection.id === state.shell.selectedConversation)
+    || connections.find((connection) => connection.id === state.directChat.activeConnectionId)
     || null;
 }
 
 function SocialSidebar() {
   const isCollapsed = state.shell.rightSidebarCollapsed;
-  const connections = state.network.connections || [];
+  const connections = getSafeConnections();
   const selectedConversation = state.shell.selectedConversation || state.directChat.activeConnectionId || '';
   const friendsOnline = connections.filter((connection) => connection.status === 'online').length || Math.min(connections.length, 4);
   const filteredConnections = connections
@@ -3645,8 +3654,26 @@ async function loadConnections() {
   if (!state.currentUser) {
     return;
   }
-  const data = await apiRequest('/connections');
-  state.network.connections = data.items || [];
+  try {
+    const data = await apiRequest('/connections');
+    if (Array.isArray(data)) {
+      state.network.connections = data;
+      return;
+    }
+    if (Array.isArray(data?.items)) {
+      state.network.connections = data.items;
+      return;
+    }
+    if (Array.isArray(data?.connections)) {
+      state.network.connections = data.connections;
+      return;
+    }
+    state.network.connections = [];
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn('[connections:frontend] loadConnections failed; using empty list fallback.', { message });
+    state.network.connections = [];
+  }
 }
 
 async function searchConnectionCandidates(query = '') {
