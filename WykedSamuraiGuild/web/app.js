@@ -2250,7 +2250,7 @@ function SiteFooter() {
 
 function Header(path) {
   const isCollapsed = state.shell.headerCollapsed;
-  const accountLabel = state.currentUser?.displayName || state.currentUser?.username || 'My account';
+  const accountLabel = state.currentUser ? 'Account' : 'Log in';
   const topNav = visibleNavItems().map((item) => `
     <div class="top-nav-group">
       <a href="${linkFor(item.path)}" class="top-nav-link ${isNavItemActive(path, item.path) ? 'active' : ''}">${escapeHtml(item.label)}</a>
@@ -2275,16 +2275,26 @@ function Header(path) {
         </nav>
       </div>
       <div class="header-actions">
-        <button type="button" class="pill-btn ${isCollapsed ? 'hide-when-header-collapsed' : ''}" id="global-dm-btn">Private Chat / DMs</button>
-        <button type="button" class="pill-btn ${isCollapsed ? 'hide-when-header-collapsed' : ''}" id="global-notifications-btn">Notifications</button>
-        <div class="account-menu">
-          <button type="button" class="pill-btn account-menu-btn ${isCollapsed ? 'hide-when-header-collapsed' : ''}" id="account-menu-btn">${escapeHtml(accountLabel)} ▾</button>
-          <div class="account-menu-dropdown" id="account-menu-dropdown">
-            <a href="${linkFor('/profile')}">Profile</a>
-            <a href="${linkFor('/settings')}">Settings</a>
+        <div class="header-menu">
+          <button type="button" class="pill-btn header-glass-btn ${isCollapsed ? 'hide-when-header-collapsed' : ''}" id="utilities-menu-btn" aria-haspopup="true" aria-expanded="false">Utilities ▾</button>
+          <div class="account-menu-dropdown header-dropdown-menu" id="utilities-menu-dropdown">
+            <button type="button" class="menu-item-btn" data-utility-action="notifications">Notifications</button>
+            <button type="button" class="menu-item-btn" data-utility-action="invites">Invites</button>
+            <button type="button" class="menu-item-btn" data-utility-action="roomUpdates">Room updates</button>
+            <button type="button" class="menu-item-btn" data-utility-action="scenarioUpdates">Scenario updates</button>
           </div>
         </div>
-        ${state.currentUser ? `${avatarMarkup(state.currentUser, 'md')}<button class="pill-btn ${isCollapsed ? 'hide-when-header-collapsed' : ''}" id="logout-btn">Log out</button>` : '<a class="pill-btn" href="#/login">Log in</a>'}
+        ${state.currentUser ? `
+          <div class="account-menu">
+            <button type="button" class="pill-btn header-glass-btn account-menu-btn ${isCollapsed ? 'hide-when-header-collapsed' : ''}" id="account-menu-btn" aria-haspopup="true" aria-expanded="false">${escapeHtml(accountLabel)} ▾</button>
+            <div class="account-menu-dropdown header-dropdown-menu" id="account-menu-dropdown">
+              <a href="${linkFor('/profile')}">Profile</a>
+              <a href="${linkFor('/settings')}">Settings</a>
+              <a href="${linkFor('/settings')}#account">Account</a>
+              <button type="button" class="menu-item-btn" id="logout-btn">Log out</button>
+            </div>
+          </div>
+        ` : `<a class="pill-btn header-glass-btn" href="#/login">${escapeHtml(accountLabel)}</a>`}
       </div>
     </header>
   `;
@@ -5110,47 +5120,67 @@ function attachHeaderActions() {
     };
   }
 
+  const utilitiesMenuButton = document.getElementById('utilities-menu-btn');
+  const utilitiesMenuDropdown = document.getElementById('utilities-menu-dropdown');
+  if (utilitiesMenuButton && utilitiesMenuDropdown) {
+    utilitiesMenuButton.onclick = (event) => {
+      event.stopPropagation();
+      const isOpen = utilitiesMenuDropdown.classList.toggle('is-open');
+      utilitiesMenuButton.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      const accountDropdown = document.getElementById('account-menu-dropdown');
+      const accountButton = document.getElementById('account-menu-btn');
+      if (accountDropdown) {
+        accountDropdown.classList.remove('is-open');
+      }
+      if (accountButton) {
+        accountButton.setAttribute('aria-expanded', 'false');
+      }
+    };
+  }
+
   const accountMenuButton = document.getElementById('account-menu-btn');
   const accountMenuDropdown = document.getElementById('account-menu-dropdown');
   if (accountMenuButton && accountMenuDropdown) {
     accountMenuButton.onclick = (event) => {
       event.stopPropagation();
-      accountMenuDropdown.classList.toggle('is-open');
-    };
-  }
-
-  const notificationsButton = document.getElementById('global-notifications-btn');
-  if (notificationsButton) {
-    notificationsButton.onclick = () => {
-      const alerts = [
-        'Messages',
-        'Invites',
-        'Room updates',
-        'Scenario updates',
-        'Social activity',
-      ];
-      setStatusMessage(`Notification center: ${alerts.join(' • ')}`, 'info');
-    };
-  }
-
-  const dmButton = document.getElementById('global-dm-btn');
-  if (dmButton) {
-    dmButton.onclick = async () => {
-      if (state.network.connections.length) {
-        await loadDirectChat(state.network.connections[0].id);
+      const isOpen = accountMenuDropdown.classList.toggle('is-open');
+      accountMenuButton.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      if (utilitiesMenuDropdown) {
+        utilitiesMenuDropdown.classList.remove('is-open');
       }
-      state.shell.chatOpen = true;
-      state.shell.chatMinimized = false;
-      render();
+      if (utilitiesMenuButton) {
+        utilitiesMenuButton.setAttribute('aria-expanded', 'false');
+      }
     };
   }
+
+  document.querySelectorAll('[data-utility-action]').forEach((button) => {
+    button.onclick = () => {
+      const action = String(button.dataset.utilityAction || '').trim();
+      const actionMap = {
+        notifications: 'Notifications',
+        invites: 'Invites',
+        roomUpdates: 'Room updates',
+        scenarioUpdates: 'Scenario updates',
+      };
+      const label = actionMap[action] || 'Utilities';
+      setStatusMessage(`${label} are available in this menu.`, 'info');
+    };
+  });
 
   if (!headerOutsideClickHandlerBound) {
     document.addEventListener('click', (event) => {
-      const button = document.getElementById('account-menu-btn');
-      const dropdown = document.getElementById('account-menu-dropdown');
-      if (dropdown && button && !dropdown.contains(event.target) && event.target !== button) {
-        dropdown.classList.remove('is-open');
+      const accountButton = document.getElementById('account-menu-btn');
+      const accountDropdown = document.getElementById('account-menu-dropdown');
+      const utilitiesButton = document.getElementById('utilities-menu-btn');
+      const utilitiesDropdown = document.getElementById('utilities-menu-dropdown');
+      if (accountDropdown && accountButton && !accountDropdown.contains(event.target) && event.target !== accountButton) {
+        accountDropdown.classList.remove('is-open');
+        accountButton.setAttribute('aria-expanded', 'false');
+      }
+      if (utilitiesDropdown && utilitiesButton && !utilitiesDropdown.contains(event.target) && event.target !== utilitiesButton) {
+        utilitiesDropdown.classList.remove('is-open');
+        utilitiesButton.setAttribute('aria-expanded', 'false');
       }
     });
     headerOutsideClickHandlerBound = true;
