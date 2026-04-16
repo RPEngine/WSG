@@ -370,8 +370,8 @@ const SCENARIO_BLUEPRINTS = Object.freeze({
 });
 
 const BRAND_ASSETS = Object.freeze({
-  logo: './assets/branding/wyked-samurai-guild-logo-design.svg',
-  compactLogo: './assets/branding/wyked-samurai-under-the-glowing-moon.svg',
+  logo: '/assets/WGSGuildLogo.png',
+  compactLogo: '/assets/WGSGuildLogo.png',
 });
 
 
