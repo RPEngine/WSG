@@ -6,14 +6,17 @@ const routes = {
   '/nexus': { key: 'nexus', requiresAuth: true },
   '/nexus/professional': { key: 'nexusProfessional', requiresAuth: true },
   '/nexus/roleplay': { key: 'nexusRoleplay', requiresAuth: true },
-  '/hub': { key: 'hub', requiresAuth: true },
+  '/hub': { key: 'hubSocial', requiresAuth: true },
+  '/hub/social': { key: 'hubSocial', requiresAuth: true },
+  '/hub/recruiter': { key: 'hubRecruiter', requiresAuth: true },
+  '/hub/reviews': { key: 'hubReviews', requiresAuth: true },
   '/app': { key: 'home', requiresAuth: true },
   '/arena': { key: 'nexusProfessional', requiresAuth: true },
   '/roleplay': { key: 'nexusRoleplay', requiresAuth: true },
   '/guild': { key: 'nexus', requiresAuth: true },
   '/world': { key: 'nexusRoleplay', requiresAuth: true },
   '/guild-world': { key: 'nexusRoleplay', requiresAuth: true },
-  '/members': { key: 'hub', requiresAuth: true },
+  '/members': { key: 'hubSocial', requiresAuth: true },
   '/discussions': { key: 'scenarioChat', requiresAuth: true },
   '/profile': { key: 'profile', requiresAuth: true },
   '/resume': { key: 'resume', requiresAuth: true },
@@ -30,7 +33,7 @@ const routes = {
   '/content-policy': { key: 'contentPolicy' },
   '/platform-rules': { key: 'platformRules' },
   '/privacy': { key: 'privacy' },
-  '/recruiter-console': { key: 'recruiter', requiresAuth: true },
+  '/recruiter-console': { key: 'hubRecruiter', requiresAuth: true },
 };
 
 const STARTER_TRIALS = [
@@ -347,7 +350,7 @@ function pageSetClass(path, key) {
   if (path === '/nexus/professional' || ['nexusProfessional', 'scenarioDetail', 'scenarioChat', 'areaChat'].includes(key) || path === '/scenario' || path.startsWith('/scenario/')) return 'page-set--scenario';
   if (path === '/guild') return 'page-set--guild';
   if (path === '/nexus/roleplay' || path === '/world' || path === '/roleplay' || key === 'nexusRoleplay' || key === 'roleplayHub') return 'page-set--world-rp';
-  if (path === '/hub' || path === '/members' || path === '/recruiter-console' || key === 'recruiter' || key === 'hub' || key === 'members') return 'page-set--recruiter';
+  if (path.startsWith('/hub') || path === '/members' || path === '/recruiter-console' || key === 'hubSocial' || key === 'hubRecruiter' || key === 'hubReviews') return 'page-set--recruiter';
   if (path === '/profile' || key === 'profile' || ['directChat'].includes(key)) {
     return 'page-set--profile';
   }
@@ -1323,7 +1326,9 @@ function pageTitle(key) {
     nexus: ['Nexus', 'Choose Professional or Roleplay experiences from one unified gateway.'],
     nexusProfessional: ['Nexus • Professional', 'Scenarios, interviewing, workplace practice, and career development.'],
     nexusRoleplay: ['Nexus • Roleplay', 'Roleplay rooms, social play, and platform reputation building.'],
-    hub: ['Hub', 'Search and discover people, companies, and platform activity snapshots.'],
+    hubSocial: ['Hub • Social', 'Manage contacts, search people, and jump into community discussions.'],
+    hubRecruiter: ['Hub • Recruiter', 'Recruiter dashboard for candidate tracking, scenario progress, and scoring.'],
+    hubReviews: ['Hub • Reviews', 'Planned workplace and company review insights are coming soon.'],
     arena: ['Trial Arena', 'Run starter leadership Trials and prepare for live simulation loops.'],
     guild: ['Guild World', 'Story streams, locations, and social immersion in one space.'],
     members: ['Guild Members', 'Discover member profiles and current contribution footprint.'],
@@ -1341,7 +1346,6 @@ function pageTitle(key) {
     contentPolicy: ['Content Policy', 'Safe for Work content requirements across all platform surfaces.'],
     platformRules: ['Platform Rules', 'Core platform integrity and job-board participation standards.'],
     privacy: ['Privacy Policy', 'How WSG currently handles account and moderation data.'],
-    recruiter: ['Recruiter Console', 'Talent intelligence for strategic hiring conversations.'],
     fallback: ['Page Placeholder', 'This section is not built yet, but routing remains intact.'],
   }[key] || ['Wyked Samurai Guild', ''];
 }
@@ -2978,42 +2982,46 @@ function roleplayHubPage() {
   return roleplayRoomsPage();
 }
 
-function hubPage() {
+function hubSectionTabs(activePath) {
+  const tabs = [
+    { label: 'Social', href: '/hub/social' },
+    { label: 'Recruiter', href: '/hub/recruiter' },
+    { label: 'Reviews', href: '/hub/reviews' },
+  ];
+  return `
+    <nav class="card panel-surface panel-surface--transparent" aria-label="Hub sections">
+      <p class="hero-kicker">Hub Navigation</p>
+      <div class="quick-actions">
+        ${tabs.map((tab) => `
+          <a class="pill-btn ${activePath === tab.href || (activePath === '/hub' && tab.href === '/hub/social') ? 'cta-primary' : ''}" href="${linkFor(tab.href)}">${escapeHtml(tab.label)}</a>
+        `).join('')}
+      </div>
+    </nav>
+  `;
+}
+
+function hubSocialPage() {
   const searchQuery = String(state.network.searchTerm || '').trim();
   const sourceProfiles = searchQuery ? (state.network.results || []) : (state.members || []);
   const profileSnapshots = Array.isArray(sourceProfiles) ? sourceProfiles.slice(0, 6) : [];
-  const companySnapshots = [
-    { id: 'moonline-industries', name: 'Moonline Industries', summary: 'Distributed logistics and autonomous operations.', score: 88, badges: ['Hiring', 'Verified'], reputation: 'High Trust', metadata: '212 openings · Hybrid' },
-    { id: 'kagemori-systems', name: 'Kagemori Systems', summary: 'Security engineering and reliability consulting.', score: 91, badges: ['Top Rated', 'Enterprise'], reputation: 'Elite', metadata: '74 openings · Remote-first' },
-  ];
-  const recruiterSnapshots = [
-    { id: 'rec-1', name: 'Ari Vale', company: 'Moonline Industries', focus: 'Ops + Product', score: 93, badges: ['Verified Recruiter', 'Fast Response'] },
-    { id: 'rec-2', name: 'Niko Sato', company: 'Kagemori Systems', focus: 'Security + Infra', score: 89, badges: ['Specialist', 'Top Match'] },
-  ];
-  const hubToolEntrypoints = [
-    { title: 'Company Pipeline Workspace', summary: 'Track open roles, talent funnels, and employer branding activity in one place.', status: 'Stub UI ready' },
-    { title: 'Recruiter Outreach Console', summary: 'Launch outreach campaigns, track response velocity, and manage follow-up cadences.', status: 'Stub UI ready' },
-    { title: 'Partner Analytics', summary: 'Review recruiter/company engagement metrics and conversion snapshots.', status: 'Stub UI ready' },
-  ];
-  const contactChannels = [
-    { label: 'Send Product Feedback', description: 'Share ideas, UX notes, and feature requests directly with the platform team.' },
-    { label: 'Ask a Hub Question', description: 'Get clarification on company/recruiter tools and network workflows.' },
-    { label: 'Report an Issue', description: 'Submit bug reports and reliability concerns for quick triage.' },
-    { label: 'Contact Platform Team', description: 'Reach operations for account support, partner questions, or escalations.' },
-  ];
   const boardCategories = [
-    { name: 'FAQs', detail: 'Quick answers for onboarding, discovery, and partner workflows.' },
-    { name: 'Announcements', detail: 'Official notices from the platform team.' },
-    { name: 'Updates & Expansions', detail: 'Projected updates, roadmap signals, and planned expansion notes.' },
-    { name: 'Feedback', detail: 'Community suggestions and improvement threads.' },
-    { name: 'Support Questions', detail: 'Fast platform support conversations and troubleshooting.' },
-    { name: 'Recruiter / Company Discussions', detail: 'Network conversations focused on recruiting and employer collaboration.' },
+    { name: 'General Discussion', detail: 'Community conversations, introductions, and shared updates.' },
+    { name: 'FAQs', detail: 'Quick answers about people search, networking, and account visibility.' },
+    { name: 'Announcements', detail: 'Official platform notices and community change logs.' },
+    { name: 'Recruiter / Company Discussions', detail: 'Cross-team discussion space for roles, hiring, and business collaboration.' },
+    { name: 'Support Questions', detail: 'Fast troubleshooting threads and guidance from the platform team.' },
+    { name: 'Feedback', detail: 'Suggestions and improvement requests from the community.' },
+  ];
+  const quickGlanceStats = [
+    { label: 'Contacts in Network', value: String(state.network.connections.length || 0) },
+    { label: 'People Search Results', value: String(profileSnapshots.length || 0) },
+    { label: 'Discussion Categories', value: String(boardCategories.length) },
   ];
 
   const profileCards = profileSnapshots.length
     ? profileSnapshots.map((profile) => `
       <article class="card panel-surface panel-surface--soft hub-snapshot-card">
-        <p class="hero-kicker">Profile Snapshot</p>
+        <p class="hero-kicker">People Search</p>
         <h4>${escapeHtml(profile.displayName || profile.username || 'Unknown User')}</h4>
         <p class="muted">${escapeHtml(profile.role || profile.headline || 'Community member')}</p>
         <p class="muted">Badges: ${escapeHtml(Array.isArray(profile.badges) && profile.badges.length ? profile.badges.join(', ') : 'Newcomer')}</p>
@@ -3022,48 +3030,7 @@ function hubPage() {
         <a class="pill-btn" href="${linkFor(`/members/${profile.id || ''}`)}">Open profile</a>
       </article>
     `).join('')
-    : '<article class="card panel-surface panel-surface--soft"><h4>No profile results</h4><p class="muted">Try a broader term. Empty states are safe by design.</p></article>';
-
-  const companyCards = companySnapshots.map((company) => `
-    <article class="card panel-surface panel-surface--soft hub-snapshot-card">
-      <p class="hero-kicker">Company Snapshot</p>
-      <h4>${escapeHtml(company.name)}</h4>
-      <p class="muted">${escapeHtml(company.summary)}</p>
-      <p class="muted">Badges: ${escapeHtml(company.badges.join(', '))}</p>
-      <p class="muted">Score: ${escapeHtml(String(company.score))} · Reputation: ${escapeHtml(company.reputation)}</p>
-      <p class="muted">Metadata: ${escapeHtml(company.metadata)}</p>
-      <button class="pill-btn" type="button">Open company profile</button>
-    </article>
-  `).join('');
-
-  const recruiterCards = recruiterSnapshots.map((recruiter) => `
-    <article class="card panel-surface panel-surface--soft hub-snapshot-card">
-      <p class="hero-kicker">Recruiter Tools Snapshot</p>
-      <h4>${escapeHtml(recruiter.name)}</h4>
-      <p class="muted">${escapeHtml(recruiter.company)} · ${escapeHtml(recruiter.focus)}</p>
-      <p class="muted">Badges: ${escapeHtml(recruiter.badges.join(', '))}</p>
-      <p class="muted">Recruiter Signal Score: ${escapeHtml(String(recruiter.score))}</p>
-      <button class="pill-btn" type="button">Open recruiter tools</button>
-    </article>
-  `).join('');
-
-  const toolCards = hubToolEntrypoints.map((tool) => `
-    <article class="card panel-surface panel-surface--soft hub-snapshot-card">
-      <p class="hero-kicker">Hub Tool Entry Point</p>
-      <h4>${escapeHtml(tool.title)}</h4>
-      <p class="muted">${escapeHtml(tool.summary)}</p>
-      <p class="muted">Status: ${escapeHtml(tool.status)}</p>
-      <button class="pill-btn" type="button">Open tool workspace</button>
-    </article>
-  `).join('');
-
-  const contactCards = contactChannels.map((channel) => `
-    <article class="card panel-surface panel-surface--soft hub-contact-card">
-      <h4>${escapeHtml(channel.label)}</h4>
-      <p class="muted">${escapeHtml(channel.description)}</p>
-      <button class="pill-btn" type="button">Start request</button>
-    </article>
-  `).join('');
+    : '<article class="card panel-surface panel-surface--soft"><h4>No people found yet</h4><p class="muted">Try a broader search term. This page handles empty states safely.</p></article>';
 
   const boardCards = boardCategories.map((category) => `
     <article class="card panel-surface panel-surface--soft hub-board-card">
@@ -3074,42 +3041,43 @@ function hubPage() {
   `).join('');
 
   return `
+    ${hubSectionTabs('/hub/social')}
     <section class="card panel-surface panel-surface--transparent">
-      <p class="hero-kicker">Hub • Network & Business Center</p>
-      <h3>Company and recruiter discovery + platform information center</h3>
-      <p class="muted">Hub is the primary place to discover companies and recruiters, open business tools, contact the platform team, and follow official updates.</p>
+      <p class="hero-kicker">Hub • Social</p>
+      <h3>People and community interaction center</h3>
+      <p class="muted">Social is the main Hub landing page: manage contacts, search people, and jump into discussions quickly.</p>
       <form id="connection-search-form" class="arena-input" style="margin-top:10px;">
-        <input id="connection-search-input" type="search" placeholder="Search profiles, companies, or recruiters..." value="${escapeAttr(searchQuery)}" />
-        <button class="pill-btn cta-primary" type="submit">Search Hub</button>
+        <input id="connection-search-input" type="search" placeholder="Search people by name, role, or headline..." value="${escapeAttr(searchQuery)}" />
+        <button class="pill-btn cta-primary" type="submit">Search People</button>
       </form>
     </section>
 
     <section class="hub-result-grid" style="margin-top:12px;">
       <div>
-        <h4>Companies / Recruiters Discovery</h4>
-        <p class="muted">Browse people and organizations, then jump into company/recruiter workflows.</p>
+        <h4>Quick-Glance Community Activity</h4>
+        <div class="grid three">
+          ${quickGlanceStats.map((item) => `<article class="card panel-surface panel-surface--soft metric-card"><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.value)}</strong></article>`).join('')}
+        </div>
+      </div>
+      <div>
+        <h4>Contact + Network Management</h4>
+        <p class="muted">Manage your visible network and open profiles directly from search results.</p>
         <div class="grid two">${profileCards}</div>
       </div>
-      <div><h4>Company Snapshots</h4><div class="grid two">${companyCards}</div></div>
-      <div><h4>Recruiter Snapshots</h4><div class="grid two">${recruiterCards}</div></div>
       <div>
-        <h4>Company / Recruiter Tools</h4>
-        <p class="muted">Stub entry points are available now to preserve the final Hub IA and navigation.</p>
-        <div class="grid two">${toolCards}</div>
+        <h4>Related Hub Sections</h4>
+        <p class="muted">Use clean Hub routes for recruiter workflow and planned review transparency tools.</p>
+        <div class="quick-actions">
+          <a class="pill-btn" href="${linkFor('/hub/recruiter')}">Go to Recruiter Dashboard</a>
+          <a class="pill-btn" href="${linkFor('/hub/reviews')}">Go to Reviews Placeholder</a>
+        </div>
       </div>
-    </section>
-
-    <section class="card panel-surface panel-surface--transparent hub-contact-section" style="margin-top:12px;">
-      <p class="hero-kicker">Feedback / Contact Us</p>
-      <h3>Talk to the platform team</h3>
-      <p class="muted">Use Hub contact channels to send feedback, ask questions, report issues, or request support.</p>
-      <div class="grid two" style="margin-top:10px;">${contactCards}</div>
     </section>
 
     <section class="card panel-surface panel-surface--transparent hub-board-section" style="margin-top:12px;">
-      <p class="hero-kicker">Discussion Board</p>
-      <h3>FAQs, announcements, updates, and community support</h3>
-      <p class="muted">Structured categories make browsing easy while keeping conversations quick and lightweight inside Hub.</p>
+      <p class="hero-kicker">Discussion Forum Access</p>
+      <h3>Community categories and communication visibility</h3>
+      <p class="muted">Structured categories make discussion navigation clear while keeping social interaction in one Hub area.</p>
       <div class="grid three hub-board-grid" style="margin-top:10px;">${boardCards}</div>
     </section>
   `;
@@ -3784,73 +3752,108 @@ function policyAcceptPage() {
 }
 
 
-function recruiterPage() {
-  const profile = state.currentUser || {};
-  const participants = (state.network.connections || []).slice(0, 4);
+function hubRecruiterPage() {
+  const recentlyViewed = (state.network.connections || []).slice(0, 4).map((candidate, index) => ({
+    id: candidate.id || `recent-${index + 1}`,
+    name: candidate.displayName || candidate.username || `Candidate ${index + 1}`,
+    role: candidate.role || 'Member',
+    viewedAt: `${index + 1}h ago`,
+  }));
+  const topCandidates = (state.members || []).slice(0, 3).map((candidate, index) => ({
+    id: candidate.id || `top-${index + 1}`,
+    name: candidate.displayName || candidate.username || `Top Candidate ${index + 1}`,
+    fitScore: 90 - index * 4,
+    position: index % 2 === 0 ? 'Senior Operations Lead' : 'Security Program Manager',
+  }));
+  const openPositions = [
+    { title: 'Senior Operations Lead', candidates: 12, scenariosAssigned: 8 },
+    { title: 'Security Program Manager', candidates: 9, scenariosAssigned: 6 },
+  ];
+  const scenarioProgress = [
+    { candidate: 'Ari Vale', scenario: 'Team Conflict', status: 'Completed', grade: 'A-' },
+    { candidate: 'Niko Sato', scenario: 'Customer Escalation', status: 'In Progress', grade: 'Pending' },
+    { candidate: 'Jun Park', scenario: 'Leadership Decision', status: 'Completed', grade: 'B+' },
+  ];
+  const recruiterBreakdown = [
+    { parameter: 'Communication Clarity', result: 'Strong (82%)' },
+    { parameter: 'Decision Quality Under Pressure', result: 'Moderate (74%)' },
+    { parameter: 'Stakeholder Alignment', result: 'Strong (79%)' },
+  ];
 
-  return layoutColumns({
-    className: 'recruiter-layout',
-    left: `
-      <section class="recruiter-hero recruiter-command-hero panel-surface panel-surface--soft">
-        <p class="hero-kicker">Wyked Samurai Guild</p>
-        <h3>Recruiter Console</h3>
-        <p>Talent intelligence command center for scenario-based hiring decisions.</p>
-      </section>
-      <div class="candidate-card-stack">
-        ${(participants.map((candidate, index) => `
-          <article class="candidate-insight-card candidate-insight-spotlight panel-surface panel-surface--soft">
-            <div class="profile-summary-row">
-              ${avatarMarkup(candidate, 'md')}
-              <div>
-                <strong>${escapeHtml(candidate.displayName || candidate.username)}</strong>
-                <p class="muted">${escapeHtml(candidate.role || 'member')}</p>
-              </div>
-              <span class="candidate-rank">P${index + 1}</span>
-            </div>
-            <p class="muted">Connection active · Available for scenario review.</p>
-          </article>
-        `).join('')) || '<p class="muted">Add guild connections to unlock candidate insights.</p>'}
+  const listOrSafeEmpty = (items, emptyLabel) => items.length
+    ? items
+    : [`<li><span>${escapeHtml(emptyLabel)}</span><span class="muted">No data yet</span></li>`];
+
+  return `
+    ${hubSectionTabs('/hub/recruiter')}
+    <section class="card panel-surface panel-surface--transparent">
+      <p class="hero-kicker">Hub • Recruiter</p>
+      <h3>Recruiter dashboard and candidate tracking</h3>
+      <p class="muted">Dedicated recruiter workspace for recently viewed candidates, open positions, scenario status, and result breakdowns.</p>
+    </section>
+    <section class="grid two" style="margin-top:12px;">
+      <article class="card panel-surface panel-surface--soft">
+        <h4>Recently Viewed</h4>
+        <ul class="list compact-list">
+          ${listOrSafeEmpty(recentlyViewed.map((entry) => `<li><span>${escapeHtml(entry.name)} · ${escapeHtml(entry.role)}</span><span class="muted">${escapeHtml(entry.viewedAt)}</span></li>`), 'No recently viewed candidates').join('')}
+        </ul>
+      </article>
+      <article class="card panel-surface panel-surface--soft">
+        <h4>Top Candidates</h4>
+        <ul class="list compact-list">
+          ${listOrSafeEmpty(topCandidates.map((entry) => `<li><span>${escapeHtml(entry.name)} → ${escapeHtml(entry.position)}</span><span class="muted">Fit ${escapeHtml(String(entry.fitScore))}%</span></li>`), 'No top candidates available').join('')}
+        </ul>
+      </article>
+      <article class="card panel-surface panel-surface--transparent">
+        <h4>Open Positions</h4>
+        <ul class="list compact-list">
+          ${listOrSafeEmpty(openPositions.map((entry) => `<li><span>${escapeHtml(entry.title)}</span><span class="muted">${escapeHtml(String(entry.candidates))} candidates · ${escapeHtml(String(entry.scenariosAssigned))} scenarios</span></li>`), 'No open positions configured').join('')}
+        </ul>
+      </article>
+      <article class="card panel-surface panel-surface--transparent">
+        <h4>Scenario Completion Status + Scenario Grades</h4>
+        <ul class="list compact-list">
+          ${listOrSafeEmpty(scenarioProgress.map((entry) => `<li><span>${escapeHtml(entry.candidate)} · ${escapeHtml(entry.scenario)}</span><span class="muted">${escapeHtml(entry.status)} · Grade: ${escapeHtml(entry.grade)}</span></li>`), 'No scenario assignments yet').join('')}
+        </ul>
+      </article>
+    </section>
+    <section class="card panel-surface panel-surface--transparent" style="margin-top:12px;">
+      <p class="hero-kicker">Breakdown by Recruiter Parameters</p>
+      <h4>Custom scoring breakdown</h4>
+      <ul class="list compact-list">
+        ${listOrSafeEmpty(recruiterBreakdown.map((entry) => `<li><span>${escapeHtml(entry.parameter)}</span><span class="muted">${escapeHtml(entry.result)}</span></li>`), 'No recruiter parameter data yet').join('')}
+      </ul>
+      <p class="muted">Current values are placeholder-safe data while backend parameterized analytics finalize.</p>
+    </section>
+  `;
+}
+
+function hubReviewsPage() {
+  return `
+    ${hubSectionTabs('/hub/reviews')}
+    <section class="card panel-surface panel-surface--transparent">
+      <p class="hero-kicker">Hub • Company Reviews</p>
+      <h3>Workplace reviews (planned feature)</h3>
+      <p class="muted">This is a clearly labeled placeholder for future Glassdoor-style company and workplace review functionality.</p>
+      <div class="status-banner status-info" role="status" aria-live="polite" style="margin-top:10px;">
+        Planned feature: review insights, employer/user transparency tools, and structured review workflows are coming in a future release.
       </div>
-    `,
-    center: `
-      <h3>Recruiter Intelligence Core</h3>
-      <div class="grid two recruiter-insights-grid" style="margin-top:10px;">
-        <section class="card candidate-insight-card insight-emphasis panel-surface panel-surface--soft">
-          <h4>Candidate Insights</h4>
-          <p class="muted">Primary role fit: ${escapeHtml(profile.role || 'member')}</p>
-          <p class="muted">Organization: ${escapeHtml(profile.organizationName || 'Independent')}</p>
-          <p class="muted">Active connections: ${state.network.connections.length}</p>
-        </section>
-        <section class="card activity-records records-table panel-surface panel-surface--transparent">
-          <h4>Recent Performance</h4>
-          <ul class="list compact-list">
-            ${['Trial execution consistency', 'Communication clarity trend', 'Stakeholder response quality'].map((item) => `<li><span>${item}</span><span class="muted">Logged · 7d</span></li>`).join('')}
-          </ul>
-        </section>
-        <section class="card metric-card-grid recruiter-metric-section panel-surface panel-surface--transparent">
-          <h4>Participation Analytics</h4>
-          <div class="metric-grid recruiter-metric-grid">
-            <article class="metric-card recruiter-metric-card"><span>Participation Depth</span><strong>84%</strong></article>
-            <article class="metric-card recruiter-metric-card"><span>Team Contribution</span><strong>71%</strong></article>
-            <article class="metric-card recruiter-metric-card"><span>Response Latency</span><strong>42s</strong></article>
-          </div>
-        </section>
-        <section class="card candidate-insight-card panel-surface panel-surface--transparent">
-          <h4>Scenario Intelligence</h4>
-          <p class="muted">Top pressure scenarios, risk behavior patterns, and coaching prompts are prioritized for shortlist decisions.</p>
-        </section>
+      <div class="grid three" style="margin-top:10px;">
+        <article class="card panel-surface panel-surface--soft">
+          <h4>Future Review Insights</h4>
+          <p class="muted">Aggregated sentiment and topic trends for recruiters and job seekers.</p>
+        </article>
+        <article class="card panel-surface panel-surface--soft">
+          <h4>Employer Transparency Tools</h4>
+          <p class="muted">Structured company reporting and review response visibility.</p>
+        </article>
+        <article class="card panel-surface panel-surface--soft">
+          <h4>User Trust Signals</h4>
+          <p class="muted">Verification states, moderation signals, and quality markers.</p>
+        </article>
       </div>
-      <section class="card network-feature-panel panel-surface panel-surface--transparent">
-        <div class="network-panel-head">
-          <h4>Guild Network Map</h4>
-          <span class="muted">Static strategic layer</span>
-        </div>
-        <p class="muted">Cluster map of guild influence, trust bridges, and high-collaboration nodes.</p>
-        <div class="network-map-placeholder">Strategic Network View</div>
-      </section>
-    `,
-    right: messagingRail({ title: 'Messaging + Network Panel', description: 'Recruiter communications and relationship activity.', includeAreaChat: true }),
-  });
+    </section>
+  `;
 }
 
 function fallbackPage() {
@@ -4221,8 +4224,8 @@ function applyRouteGuards(path) {
     '/world': '/nexus/roleplay',
     '/guild-world': '/nexus/roleplay',
     '/roleplay': '/nexus/roleplay',
-    '/members': '/hub',
-    '/recruiter-console': '/hub',
+    '/members': '/hub/social',
+    '/recruiter-console': '/hub/recruiter',
     '/discussions': '/nexus/professional',
     '/profile/scenario-chat': '/nexus/professional',
     '/profile/area-chat': '/nexus/roleplay',
@@ -5385,7 +5388,7 @@ async function render() {
       return;
     }
 
-    if (path === '/hub' || path === '/members') {
+    if (path.startsWith('/hub') || path === '/members') {
       await ensureMembersLoaded();
     }
     if (path === '/profile' || /^\/(?:members|profile)\/[^/]+$/.test(path)) {
@@ -5396,7 +5399,7 @@ async function render() {
     if (state.currentUser && !isPublicRoute && !isPolicyAcceptRoute) {
       await loadConnections();
     }
-    if (path === '/recruiter-console' || path === '/hub' || path === '/members') {
+    if (path === '/recruiter-console' || path.startsWith('/hub') || path === '/members') {
       await ensureMembersLoaded();
     }
     if (path !== '/profile') {
@@ -5420,7 +5423,9 @@ async function render() {
       nexus: nexusPage,
       nexusProfessional: professionalRoomsPage,
       nexusRoleplay: roleplayRoomsPage,
-      hub: hubPage,
+      hubSocial: hubSocialPage,
+      hubRecruiter: hubRecruiterPage,
+      hubReviews: hubReviewsPage,
       arena: arenaPage,
       guild: guildPage,
       roleplayHub: roleplayHubPage,
@@ -5442,7 +5447,6 @@ async function render() {
       contentPolicy: contentPolicyPage,
       platformRules: platformRulesPage,
       privacy: privacyPage,
-      recruiter: recruiterPage,
       fallback: fallbackPage,
     }[resolvedRoute.key]();
 
