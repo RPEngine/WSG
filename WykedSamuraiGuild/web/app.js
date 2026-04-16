@@ -2242,6 +2242,9 @@ function Header(path) {
             <a href="${linkFor('/home')}">Home</a>
             <a href="${linkFor('/nexus')}">Nexus</a>
             <a href="${linkFor('/hub')}">Hub</a>
+            <a href="${linkFor('/hub/social')}">Hub / Social</a>
+            <a href="${linkFor('/hub/recruiter')}">Hub / Recruiter</a>
+            <a href="${linkFor('/hub/reviews')}">Hub / Reviews</a>
           </div>
         </div>
         <div class="header-menu">
@@ -3006,24 +3009,6 @@ function roleplayHubPage() {
   return roleplayRoomsPage();
 }
 
-function hubSectionTabs(activePath) {
-  const tabs = [
-    { label: 'Social', href: '/hub/social' },
-    { label: 'Recruiter', href: '/hub/recruiter' },
-    { label: 'Reviews', href: '/hub/reviews' },
-  ];
-  return `
-    <nav class="card panel-surface panel-surface--transparent" aria-label="Hub sections">
-      <p class="hero-kicker">Hub Navigation</p>
-      <div class="quick-actions">
-        ${tabs.map((tab) => `
-          <a class="pill-btn ${activePath === tab.href || (activePath === '/hub' && tab.href === '/hub/social') ? 'cta-primary' : ''}" href="${linkFor(tab.href)}">${escapeHtml(tab.label)}</a>
-        `).join('')}
-      </div>
-    </nav>
-  `;
-}
-
 function hubSocialPage() {
   const searchType = state.network.searchType === 'companies' ? 'companies' : 'people';
   const searchQuery = String(state.network.searchTerm || '').trim();
@@ -3076,12 +3061,11 @@ function hubSocialPage() {
   `).join('');
 
   return `
-    ${hubSectionTabs('/hub/social')}
     <section class="card panel-surface panel-surface--transparent">
       <p class="hero-kicker">Hub • Social</p>
       <h3>People and community interaction center</h3>
       <p class="muted">Social is the main Hub landing page: discussion/forum access, people/company search, and easy community interaction.</p>
-      <form id="connection-search-form" class="arena-input" style="margin-top:10px;">
+      <form id="connection-search-form" class="arena-input hub-search-controls" style="margin-top:10px;">
         <select id="connection-search-type" aria-label="Search type">
           <option value="people" ${searchType === 'people' ? 'selected' : ''}>People</option>
           <option value="companies" ${searchType === 'companies' ? 'selected' : ''}>Companies</option>
@@ -3824,7 +3808,6 @@ function hubRecruiterPage() {
     : [`<li><span>${escapeHtml(emptyLabel)}</span><span class="muted">No data yet</span></li>`];
 
   return `
-    ${hubSectionTabs('/hub/recruiter')}
     <section class="card panel-surface panel-surface--transparent">
       <p class="hero-kicker">Hub • Recruiter</p>
       <h3>Recruiter dashboard and candidate tracking</h3>
@@ -3869,7 +3852,6 @@ function hubRecruiterPage() {
 
 function hubReviewsPage() {
   return `
-    ${hubSectionTabs('/hub/reviews')}
     <section class="card panel-surface panel-surface--transparent">
       <p class="hero-kicker">Hub • Company Reviews</p>
       <h3>Workplace reviews (planned feature)</h3>

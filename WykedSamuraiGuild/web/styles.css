@@ -1337,6 +1337,26 @@ body {
   gap: 8px;
 }
 
+.hub-search-controls {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.hub-search-controls select {
+  width: auto;
+  min-width: 128px;
+  max-width: 160px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel-soft);
+  color: var(--text-main);
+}
+
+.hub-search-controls button {
+  white-space: nowrap;
+}
+
 .arena-input input {
   width: 100%;
   padding: 10px 12px;
@@ -3587,6 +3607,16 @@ h1, h2, h3, h4, .title, .lockup-title { font-family: var(--heading-font); }
 @media (max-width: 760px) {
   .hub-board-grid {
     grid-template-columns: 1fr;
+  }
+
+  .hub-search-controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hub-search-controls select,
+  .hub-search-controls button {
+    width: 100%;
+    max-width: none;
   }
 }
 
