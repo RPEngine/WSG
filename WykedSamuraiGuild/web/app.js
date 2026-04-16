@@ -2,15 +2,23 @@ import { supabase, supabaseConfig, toAppUser } from './supabaseClient.js';
 
 const routes = {
   '/': { key: 'landing' },
+  '/home': { key: 'home', requiresAuth: true },
+  '/nexus': { key: 'nexus', requiresAuth: true },
+  '/nexus/professional': { key: 'nexusProfessional', requiresAuth: true },
+  '/nexus/roleplay': { key: 'nexusRoleplay', requiresAuth: true },
+  '/hub': { key: 'hub', requiresAuth: true },
   '/app': { key: 'home', requiresAuth: true },
-  '/arena': { key: 'arena', requiresAuth: true },
-  '/roleplay': { key: 'roleplayHub', requiresAuth: true },
-  '/guild': { key: 'guild', requiresAuth: true },
-  '/world': { key: 'guild', requiresAuth: true },
-  '/guild-world': { key: 'guild', requiresAuth: true },
-  '/members': { key: 'members', requiresAuth: true },
+  '/arena': { key: 'nexusProfessional', requiresAuth: true },
+  '/roleplay': { key: 'nexusRoleplay', requiresAuth: true },
+  '/guild': { key: 'nexus', requiresAuth: true },
+  '/world': { key: 'nexusRoleplay', requiresAuth: true },
+  '/guild-world': { key: 'nexusRoleplay', requiresAuth: true },
+  '/members': { key: 'hub', requiresAuth: true },
   '/discussions': { key: 'scenarioChat', requiresAuth: true },
   '/profile': { key: 'profile', requiresAuth: true },
+  '/resume': { key: 'resume', requiresAuth: true },
+  '/characters': { key: 'characters', requiresAuth: true },
+  '/settings': { key: 'settings', requiresAuth: true },
   '/profile/direct-chat': { key: 'directChat', requiresAuth: true },
   '/profile/scenario-chat': { key: 'scenarioChat', requiresAuth: true },
   '/profile/area-chat': { key: 'areaChat', requiresAuth: true },
@@ -25,33 +33,28 @@ const routes = {
   '/recruiter-console': { key: 'recruiter', requiresAuth: true },
 };
 
-const sharedNavItems = [
-  { label: 'Home', path: '/app', icon: '🏠' },
-  { label: 'Arena', path: '/arena', icon: '⚔️' },
-  { label: 'Members', path: '/members', icon: '🧑‍🤝‍🧑' },
-  { label: 'Discussions', path: '/discussions', icon: '💬' },
-  { label: 'Profile', path: '/profile', icon: '👤' },
-  { label: 'Recruiter Console', path: '/recruiter-console', icon: '🛰️' },
+const topLevelNavItems = [
+  { label: 'Home', path: '/home', icon: '🏠' },
+  { label: 'Nexus', path: '/nexus', icon: '🧭' },
+  { label: 'Hub', path: '/hub', icon: '🔎' },
 ];
 
-function modeNavItem(mode) {
-  if (mode === 'roleplay') {
-    return { label: 'Roleplay Nexus', path: '/roleplay', icon: '🧭' };
-  }
-  return { label: 'Guild', path: '/guild', icon: '🌌' };
-}
+const personalMenuItems = [
+  { label: 'Resume', path: '/resume' },
+  { label: 'Characters', path: '/characters' },
+  { label: 'Profile', path: '/profile' },
+  { label: 'Settings', path: '/settings' },
+  { label: 'Personal Inbox (Stub)', path: '/home' },
+];
 
-function visibleNavItems(mode) {
-  const modeItem = modeNavItem(mode);
-  return [
-    sharedNavItems[0],
-    sharedNavItems[1],
-    modeItem,
-    ...sharedNavItems.slice(2),
-  ];
+function visibleNavItems() {
+  return topLevelNavItems;
 }
 
 function isNavItemActive(pathname, itemPath) {
+  if (itemPath === '/nexus') {
+    return pathname === '/nexus' || pathname.startsWith('/nexus/');
+  }
   return pathname === itemPath;
 }
 
@@ -286,12 +289,12 @@ const BRAND_ASSETS = Object.freeze({
 
 
 function pageSetClass(path, key) {
-  if (path === '/arena' || key === 'arena') return 'page-set--arena';
+  if (path === '/nexus/professional' || path === '/arena' || key === 'nexusProfessional' || key === 'arena') return 'page-set--arena';
   if (path === '/scenario' || path.startsWith('/scenario/') || ['scenarioDetail', 'scenarioChat', 'areaChat'].includes(key)) return 'page-set--scenario';
-  if (path === '/guild' || path === '/guild-world' || key === 'guild') return 'page-set--guild';
-  if (path === '/world' || path === '/roleplay' || key === 'roleplayHub') return 'page-set--world-rp';
+  if (path === '/nexus' || key === 'nexus') return 'page-set--guild';
+  if (path === '/nexus/roleplay' || path === '/world' || path === '/roleplay' || key === 'nexusRoleplay' || key === 'roleplayHub') return 'page-set--world-rp';
   if (path === '/recruiter-console' || key === 'recruiter') return 'page-set--recruiter';
-  if (path === '/profile' || path === '/members' || key === 'profile' || key === 'members' || ['directChat'].includes(key)) {
+  if (path === '/hub' || path === '/profile' || path === '/members' || key === 'profile' || key === 'members' || key === 'hub' || ['directChat'].includes(key)) {
     return 'page-set--profile';
   }
   return 'page-set--home';
@@ -436,7 +439,7 @@ const GOOGLE_CLIENT_ID_META_KEY = 'wsg-google-client-id';
 const SHELL_LAYOUT_STORAGE_KEY = 'wsg-shell-layout';
 const HEADER_COLLAPSED_STORAGE_KEY = 'ui.headerCollapsed';
 const ROLEPLAY_TOOLS_COLLAPSED_STORAGE_KEY = 'ui.roleplayToolsCollapsed';
-const HOME_ROUTE = '/app';
+const HOME_ROUTE = '/home';
 const POLICY_ACCEPT_ROUTE = '/policy/accept';
 const CURRENT_POLICY_VERSION = 'v1.0';
 const REQUIRED_POLICY_KEYS = Object.freeze(['codeOfConduct', 'contentPolicy', 'platformRules', 'privacyPolicy']);
@@ -1189,10 +1192,17 @@ function pageTitle(key) {
   return {
     landing: ['Wyked Samurai Guild', 'Professional simulation and roleplay training for modern teams.'],
     home: ['Welcome to Wyked Samurai Guild', 'Your command center for tactical collaboration and growth.'],
+    nexus: ['Nexus', 'Choose Professional or Roleplay experiences from one unified gateway.'],
+    nexusProfessional: ['Nexus • Professional', 'Scenarios, interviewing, workplace practice, and career development.'],
+    nexusRoleplay: ['Nexus • Roleplay', 'Roleplay rooms, social play, and platform reputation building.'],
+    hub: ['Hub', 'Search and discover people, companies, and platform activity snapshots.'],
     arena: ['Trial Arena', 'Run starter leadership Trials and prepare for live simulation loops.'],
     guild: ['Guild World', 'Story streams, locations, and social immersion in one space.'],
     members: ['Guild Members', 'Discover member profiles and current contribution footprint.'],
     profile: ['Profile', 'Identity-focused profile details, activity snapshot, and quick connection actions.'],
+    resume: ['Resume', 'Your resume workspace and publication controls.'],
+    characters: ['Characters', 'Manage your roleplay and persona character roster.'],
+    settings: ['Settings', 'Personal account preferences and platform controls.'],
     directChat: ['Direct Chat', 'Messaging now lives in dedicated collaboration rails outside Profile.'],
     scenarioChat: ['Scenario Chat', 'Scenario messaging for active Arena sessions.'],
     areaChat: ['Area Chat', 'Shared location-based roleplay chat stream.'],
@@ -2006,7 +2016,7 @@ function ChatDock() {
 
 function Sidebar(path, key) {
   const isCollapsed = state.shell.leftSidebarCollapsed;
-  const items = visibleNavItems(state.mode);
+  const items = visibleNavItems();
   return `
     <aside class="left-sidebar panel ${key === 'home' ? 'home-left-sidebar' : ''} ${isCollapsed ? 'is-collapsed' : ''}">
       <div class="left-pane-brand">
@@ -2062,6 +2072,10 @@ function SiteFooter() {
 
 function Header() {
   const isCollapsed = state.shell.headerCollapsed;
+  const accountLabel = state.currentUser?.displayName || state.currentUser?.username || 'My account';
+  const personalLinks = personalMenuItems.map((item) => `
+    <a href="${linkFor(item.path)}">${escapeHtml(item.label)}</a>
+  `).join('');
   return `
     <header class="header panel ${isCollapsed ? 'is-collapsed' : ''}">
       <button type="button" class="header-collapse-btn" id="header-collapse-toggle" aria-label="${isCollapsed ? 'Expand header' : 'Collapse header'}" title="${isCollapsed ? 'Expand header' : 'Collapse header'}">${isCollapsed ? '▼' : '▲'}</button>
@@ -2073,9 +2087,11 @@ function Header() {
         </div>
       </div>
       <div class="header-actions">
-        <div class="toggle">
-          <button id="professional-mode" class="${state.mode === 'professional' ? 'active' : ''}">Professional</button>
-          <button id="roleplay-mode" class="${state.mode === 'roleplay' ? 'active' : ''}">Roleplay</button>
+        <div class="account-menu">
+          <button type="button" class="pill-btn account-menu-btn ${isCollapsed ? 'hide-when-header-collapsed' : ''}" id="account-menu-btn">${escapeHtml(accountLabel)} ▾</button>
+          <div class="account-menu-dropdown" id="account-menu-dropdown">
+            ${personalLinks}
+          </div>
         </div>
         ${state.currentUser ? `${avatarMarkup(state.currentUser, 'md')}<button class="pill-btn ${isCollapsed ? 'hide-when-header-collapsed' : ''}" id="logout-btn">Log out</button>` : '<a class="pill-btn" href="#/login">Log in</a>'}
       </div>
@@ -2097,7 +2113,6 @@ function AppShell(path, key, pageHtml, statusMarkup, pageSet) {
 
 function homePage() {
   const displayName = state.currentUser?.displayName || 'Guild Member';
-  const modeDestination = modeNavItem(state.mode);
   const onboardingSummary = state.currentUser?.onboarding?.findYourWhyCompleted
     ? {
       motivation: String(state.currentUser?.motivation || '').trim(),
@@ -2176,8 +2191,8 @@ function homePage() {
       <h1>Welcome, ${escapeHtml(displayName)}</h1>
       <p>Your watch begins under the silver moon. Track active operations, gather guild intel, and deploy where your presence shifts the story.</p>
       <div class="home-hero-actions">
-        <button class="pill-btn cta-primary" type="button">Enter Mission Queue</button>
-        <a class="pill-btn home-secondary-action" href="${linkFor(modeDestination.path)}">Review ${escapeHtml(modeDestination.label)}</a>
+        <a class="pill-btn cta-primary" href="${linkFor('/nexus')}">Open Nexus</a>
+        <a class="pill-btn home-secondary-action" href="${linkFor('/hub')}">Explore Hub</a>
       </div>
     </section>
 
@@ -2591,6 +2606,32 @@ function scenarioDetailPage(path) {
   });
 }
 
+function nexusPage() {
+  return `
+    <section class="scenario-hero guild-hero panel-surface panel-surface--soft">
+      <p class="hero-kicker">Nexus Gateway</p>
+      <h3>Choose your mode</h3>
+      <p class="hero-description">Nexus is the shared gateway for Professional and Roleplay branches. Switch context without leaving the same product area.</p>
+    </section>
+    <div class="grid two">
+      ${GlowCard({
+    title: 'Professional',
+    body: `
+          <p class="muted">Scenarios, interviewing, workplace practice, and career-development interactions.</p>
+          <div class="actions"><a class="pill-btn cta-primary" href="${linkFor('/nexus/professional')}">Open Professional</a></div>
+        `,
+  })}
+      ${GlowCard({
+    title: 'Roleplay',
+    body: `
+          <p class="muted">Roleplay rooms, social play, and reputation building while staying active on the platform.</p>
+          <div class="actions"><a class="pill-btn cta-primary" href="${linkFor('/nexus/roleplay')}">Open Roleplay</a></div>
+        `,
+  })}
+    </div>
+  `;
+}
+
 function guildPage() {
   return `
     <section class="scenario-hero guild-hero panel-surface panel-surface--soft">
@@ -2672,6 +2713,65 @@ function roleplayHubPage() {
   });
 }
 
+function hubPage() {
+  const searchQuery = String(state.network.searchTerm || '').trim();
+  const sourceProfiles = searchQuery ? (state.network.results || []) : (state.members || []);
+  const fallbackProfiles = sourceProfiles.length ? sourceProfiles : (state.network.connections || []);
+  const profileSnapshots = fallbackProfiles.slice(0, 8);
+  const companySnapshots = [
+    { id: 'moonline-industries', name: 'Moonline Industries', summary: 'Distributed logistics and autonomous operations.', score: 88, badges: ['Hiring', 'Verified'], reputation: 'High Trust' },
+    { id: 'kagemori-systems', name: 'Kagemori Systems', summary: 'Security engineering and reliability consulting.', score: 91, badges: ['Top Rated', 'Enterprise'], reputation: 'Elite' },
+  ];
+  const profileCards = profileSnapshots.map((profile) => `
+    <article class="card panel-surface panel-surface--soft">
+      <p class="hero-kicker">Profile Snapshot</p>
+      <h4>${escapeHtml(profile.displayName || profile.username || 'Unknown User')}</h4>
+      <p class="muted">${escapeHtml(profile.role || profile.headline || 'Community member')}</p>
+      <p class="muted">Score: ${escapeHtml(String(profile.score || '—'))} · Reputation: ${escapeHtml(String(profile.reputation || 'Building'))}</p>
+      <p class="muted">Badges: ${escapeHtml(Array.isArray(profile.badges) && profile.badges.length ? profile.badges.join(', ') : 'Newcomer')}</p>
+      <a class="pill-btn" href="${linkFor(`/members/${profile.id || ''}`)}">Open full profile</a>
+    </article>
+  `).join('');
+  const companyCards = companySnapshots.map((company) => `
+    <article class="card panel-surface panel-surface--soft">
+      <p class="hero-kicker">Company Snapshot</p>
+      <h4>${escapeHtml(company.name)}</h4>
+      <p class="muted">${escapeHtml(company.summary)}</p>
+      <p class="muted">Score: ${escapeHtml(String(company.score))} · Reputation: ${escapeHtml(company.reputation)}</p>
+      <p class="muted">Badges: ${escapeHtml(company.badges.join(', '))}</p>
+      <button class="pill-btn" type="button">Open company profile</button>
+    </article>
+  `).join('');
+
+  return `
+    <section class="card panel-surface panel-surface--transparent">
+      <p class="hero-kicker">Hub Discovery</p>
+      <h3>Search people, companies, and platform activity</h3>
+      <p class="muted">Snapshot cards provide quick-glance metadata before opening fuller profile pages.</p>
+      <form id="connection-search-form" class="arena-input" style="margin-top:10px;">
+        <input id="connection-search-input" type="search" placeholder="Search profiles or companies..." value="${escapeAttr(searchQuery)}" />
+        <button class="pill-btn cta-primary" type="submit">Search Hub</button>
+      </form>
+    </section>
+    <section class="grid two" style="margin-top:12px;">
+      ${profileCards || card('No profile results', '<p class="muted">Try another term, or browse without a filter.</p>')}
+      ${companyCards}
+    </section>
+  `;
+}
+
+function resumePage() {
+  return card('Resume', '<p class="muted">Resume builder and publishing tools are stubbed for now. Your place in the IA is ready.</p>');
+}
+
+function charactersPage() {
+  return card('Characters', '<p class="muted">Character roster management is available in Profile today. Dedicated Characters page is stubbed for next iteration.</p>');
+}
+
+function settingsPage() {
+  return card('Settings', '<p class="muted">Account and preference controls will be expanded here. Current editable settings remain in Profile.</p>');
+}
+
 function characterDetailPage(path) {
   const characterId = path.replace('/characters/', '').split('/')[0];
   const knownCharacters = Array.isArray(state.currentUser?.roleplayCharacters) ? state.currentUser.roleplayCharacters : [];
@@ -2682,7 +2782,7 @@ function characterDetailPage(path) {
       <h3>${escapeHtml(character?.name || 'Character Detail')}</h3>
       <p class="muted">${escapeHtml(character?.bio || 'This character profile page is a placeholder route for upcoming roleplay character details.')}</p>
       <p class="muted">Character ID: ${escapeHtml(characterId)}</p>
-      <a class="pill-btn" href="${linkFor('/roleplay')}">Back to Roleplay Nexus</a>
+      <a class="pill-btn" href="${linkFor('/nexus/roleplay')}">Back to Roleplay Nexus</a>
     </section>
   `;
 }
@@ -2852,7 +2952,7 @@ function roleplayChannelPage(type) {
         <button class="pill-btn" type="submit">Send</button>
       </form>
       <div class="actions" style="margin-top:10px;">
-        <a class="pill-btn" href="#/arena">Back to Arena Workspace</a>
+        <a class="pill-btn" href="#/nexus/professional">Back to Professional Workspace</a>
       </div>
     </section>
   `;
@@ -3759,24 +3859,17 @@ async function loadProfileForRoute(path) {
 }
 
 function applyRouteGuards(path) {
-  if (path === '/guild-world') {
-    return state.mode === 'roleplay' ? '/roleplay' : '/guild';
-  }
-
-  if (path === '/guild' && state.mode === 'roleplay') {
-    return '/roleplay';
-  }
-
-  if (path === '/world' && state.mode === 'roleplay') {
-    return '/roleplay';
-  }
-
-  if (path === '/roleplay' && state.mode !== 'roleplay') {
-    return '/guild';
-  }
-
-  if (path === '/arena' && state.mode === 'roleplay') {
-    return '/roleplay';
+  const aliasRoutes = {
+    '/app': '/home',
+    '/arena': '/nexus/professional',
+    '/guild': '/nexus',
+    '/world': '/nexus/roleplay',
+    '/guild-world': '/nexus/roleplay',
+    '/roleplay': '/nexus/roleplay',
+    '/members': '/hub',
+  };
+  if (aliasRoutes[path]) {
+    return aliasRoutes[path];
   }
 
   const isScenarioRoute = path === '/scenario' || path.startsWith('/scenario/');
@@ -4690,14 +4783,17 @@ function attachHeaderActions() {
     };
   }
 
-  const professionalModeButton = document.getElementById('professional-mode');
-  if (professionalModeButton) {
-    professionalModeButton.onclick = () => setMode('professional');
-  }
-
-  const roleplayModeButton = document.getElementById('roleplay-mode');
-  if (roleplayModeButton) {
-    roleplayModeButton.onclick = () => setMode('roleplay');
+  const accountMenuButton = document.getElementById('account-menu-btn');
+  const accountMenuDropdown = document.getElementById('account-menu-dropdown');
+  if (accountMenuButton && accountMenuDropdown) {
+    accountMenuButton.onclick = () => {
+      accountMenuDropdown.classList.toggle('is-open');
+    };
+    document.addEventListener('click', (event) => {
+      if (!accountMenuDropdown.contains(event.target) && event.target !== accountMenuButton) {
+        accountMenuDropdown.classList.remove('is-open');
+      }
+    }, { once: true });
   }
 
   const logoutButton = document.getElementById('logout-btn');
@@ -4727,10 +4823,10 @@ function starterScenarioModalMarkup() {
     <div class="modal-backdrop" id="starter-scenario-modal" role="dialog" aria-modal="true" aria-labelledby="starter-scenario-title">
       <section class="panel" style="max-width:560px;margin:8vh auto;padding:20px;">
         <h3 id="starter-scenario-title">Starter Scenario Ready</h3>
-        <p class="muted">Your onboarding scenario is loaded. Start in the Trial Arena to complete your first guided challenge.</p>
+        <p class="muted">Your onboarding scenario is loaded. Start in Nexus Professional to complete your first guided challenge.</p>
         <div class="header-actions" style="justify-content:flex-end;">
           <button class="pill-btn" type="button" id="dismiss-starter-scenario-btn">Later</button>
-          <button class="pill-btn cta-primary" type="button" id="open-starter-scenario-btn">Open Trial Arena</button>
+          <button class="pill-btn cta-primary" type="button" id="open-starter-scenario-btn">Open Nexus Professional</button>
         </div>
       </section>
     </div>
@@ -4752,7 +4848,7 @@ function attachOnboardingHandlers() {
     openButton.onclick = () => {
       markStarterScenarioSeen();
       state.onboarding.starterModalOpen = false;
-      location.hash = '/arena';
+      location.hash = '/nexus/professional';
     };
   }
 }
@@ -4764,13 +4860,9 @@ function setMode(nextMode) {
   if (state.mode === 'roleplay') {
     ensureRoleplaySession();
   }
-  const currentPath = location.hash.replace('#', '') || '/';
-  if (state.mode === 'roleplay') {
-    location.hash = '/roleplay';
-    return;
-  }
-  if (currentPath === '/guild' || currentPath === '/world' || currentPath === '/guild-world' || currentPath === '/roleplay') {
-    location.hash = '/guild';
+  const currentPath = location.hash.replace('#', '') || '/home';
+  if (currentPath === '/nexus' || currentPath.startsWith('/nexus/')) {
+    location.hash = state.mode === 'roleplay' ? '/nexus/roleplay' : '/nexus/professional';
     return;
   }
   render();
@@ -4866,7 +4958,7 @@ async function render() {
       return;
     }
 
-    if (path === '/members') {
+    if (path === '/hub' || path === '/members') {
       await ensureMembersLoaded();
     }
     if (path === '/profile' || /^\/(?:members|profile)\/[^/]+$/.test(path)) {
@@ -4877,16 +4969,16 @@ async function render() {
     if (state.currentUser && !isPublicRoute && !isPolicyAcceptRoute) {
       await loadConnections();
     }
-    if (path === '/recruiter-console' || path === '/members') {
+    if (path === '/recruiter-console' || path === '/hub' || path === '/members') {
       await ensureMembersLoaded();
     }
-    if (path === '/arena' || path === '/profile/scenario-chat' || path === '/discussions') {
+    if (path === '/nexus/professional' || path === '/arena' || path === '/profile/scenario-chat' || path === '/discussions') {
       await loadScenarioChat();
     }
     if (path === '/profile/area-chat') {
       await loadAreaChat();
     }
-    if (path === '/roleplay') {
+    if (path === '/nexus/roleplay' || path === '/roleplay') {
       ensureRoleplaySession();
     }
     if (path !== '/profile') {
@@ -4907,11 +4999,18 @@ async function render() {
     const pageHtml = {
       landing: landingPage,
       home: homePage,
+      nexus: nexusPage,
+      nexusProfessional: arenaPage,
+      nexusRoleplay: roleplayHubPage,
+      hub: hubPage,
       arena: arenaPage,
       guild: guildPage,
       roleplayHub: roleplayHubPage,
       members: membersPage,
       profile: profilePage,
+      resume: resumePage,
+      characters: charactersPage,
+      settings: settingsPage,
       characterDetail: () => characterDetailPage(path),
       directChat: directChatPage,
       scenarioChat: scenarioChatPage,
@@ -5101,14 +5200,6 @@ async function render() {
   }
 
   attachProfileEditHandler();
-  document.querySelectorAll('.mode-nav-btn').forEach((button) => {
-    button.addEventListener('click', () => {
-      const nextMode = button.getAttribute('data-mode');
-      if (nextMode === 'professional' || nextMode === 'roleplay') {
-        setMode(nextMode);
-      }
-    });
-  });
   attachArenaHandlers();
   attachRoleplayHandlers();
   attachScenarioDetailHandlers();

@@ -177,6 +177,39 @@ body {
 .subtitle { color: var(--text-muted); font-size: 12px; margin-top: 2px; }
 
 .header-actions { display: flex; align-items: center; gap: 12px; }
+.account-menu {
+  position: relative;
+}
+
+.account-menu-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  min-width: 200px;
+  border: 1px solid var(--border);
+  background: var(--panel-bg);
+  border-radius: 12px;
+  padding: 8px;
+  display: none;
+  z-index: 25;
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.28);
+}
+
+.account-menu-dropdown.is-open {
+  display: grid;
+  gap: 6px;
+}
+
+.account-menu-dropdown a {
+  color: var(--text-main);
+  text-decoration: none;
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+
+.account-menu-dropdown a:hover {
+  background: var(--panel-soft);
+}
 
 .header-collapse-btn {
   position: absolute;
