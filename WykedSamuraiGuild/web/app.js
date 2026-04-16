@@ -2990,6 +2990,25 @@ function hubPage() {
     { id: 'rec-1', name: 'Ari Vale', company: 'Moonline Industries', focus: 'Ops + Product', score: 93, badges: ['Verified Recruiter', 'Fast Response'] },
     { id: 'rec-2', name: 'Niko Sato', company: 'Kagemori Systems', focus: 'Security + Infra', score: 89, badges: ['Specialist', 'Top Match'] },
   ];
+  const hubToolEntrypoints = [
+    { title: 'Company Pipeline Workspace', summary: 'Track open roles, talent funnels, and employer branding activity in one place.', status: 'Stub UI ready' },
+    { title: 'Recruiter Outreach Console', summary: 'Launch outreach campaigns, track response velocity, and manage follow-up cadences.', status: 'Stub UI ready' },
+    { title: 'Partner Analytics', summary: 'Review recruiter/company engagement metrics and conversion snapshots.', status: 'Stub UI ready' },
+  ];
+  const contactChannels = [
+    { label: 'Send Product Feedback', description: 'Share ideas, UX notes, and feature requests directly with the platform team.' },
+    { label: 'Ask a Hub Question', description: 'Get clarification on company/recruiter tools and network workflows.' },
+    { label: 'Report an Issue', description: 'Submit bug reports and reliability concerns for quick triage.' },
+    { label: 'Contact Platform Team', description: 'Reach operations for account support, partner questions, or escalations.' },
+  ];
+  const boardCategories = [
+    { name: 'FAQs', detail: 'Quick answers for onboarding, discovery, and partner workflows.' },
+    { name: 'Announcements', detail: 'Official notices from the platform team.' },
+    { name: 'Updates & Expansions', detail: 'Projected updates, roadmap signals, and planned expansion notes.' },
+    { name: 'Feedback', detail: 'Community suggestions and improvement threads.' },
+    { name: 'Support Questions', detail: 'Fast platform support conversations and troubleshooting.' },
+    { name: 'Recruiter / Company Discussions', detail: 'Network conversations focused on recruiting and employer collaboration.' },
+  ];
 
   const profileCards = profileSnapshots.length
     ? profileSnapshots.map((profile) => `
@@ -3028,20 +3047,70 @@ function hubPage() {
     </article>
   `).join('');
 
+  const toolCards = hubToolEntrypoints.map((tool) => `
+    <article class="card panel-surface panel-surface--soft hub-snapshot-card">
+      <p class="hero-kicker">Hub Tool Entry Point</p>
+      <h4>${escapeHtml(tool.title)}</h4>
+      <p class="muted">${escapeHtml(tool.summary)}</p>
+      <p class="muted">Status: ${escapeHtml(tool.status)}</p>
+      <button class="pill-btn" type="button">Open tool workspace</button>
+    </article>
+  `).join('');
+
+  const contactCards = contactChannels.map((channel) => `
+    <article class="card panel-surface panel-surface--soft hub-contact-card">
+      <h4>${escapeHtml(channel.label)}</h4>
+      <p class="muted">${escapeHtml(channel.description)}</p>
+      <button class="pill-btn" type="button">Start request</button>
+    </article>
+  `).join('');
+
+  const boardCards = boardCategories.map((category) => `
+    <article class="card panel-surface panel-surface--soft hub-board-card">
+      <h4>${escapeHtml(category.name)}</h4>
+      <p class="muted">${escapeHtml(category.detail)}</p>
+      <button class="pill-btn" type="button">Open category</button>
+    </article>
+  `).join('');
+
   return `
     <section class="card panel-surface panel-surface--transparent">
-      <p class="hero-kicker">Hub Discovery</p>
-      <h3>Discover profiles, companies, and recruiters</h3>
-      <p class="muted">Hub is the search and discovery area. Recruiter tools stay here as a Hub surface, not a top-level tab.</p>
+      <p class="hero-kicker">Hub • Network & Business Center</p>
+      <h3>Company and recruiter discovery + platform information center</h3>
+      <p class="muted">Hub is the primary place to discover companies and recruiters, open business tools, contact the platform team, and follow official updates.</p>
       <form id="connection-search-form" class="arena-input" style="margin-top:10px;">
         <input id="connection-search-input" type="search" placeholder="Search profiles, companies, or recruiters..." value="${escapeAttr(searchQuery)}" />
         <button class="pill-btn cta-primary" type="submit">Search Hub</button>
       </form>
     </section>
+
     <section class="hub-result-grid" style="margin-top:12px;">
-      <div><h4>Profiles</h4><div class="grid two">${profileCards}</div></div>
-      <div><h4>Companies</h4><div class="grid two">${companyCards}</div></div>
-      <div><h4>Recruiter Tools</h4><div class="grid two">${recruiterCards}</div></div>
+      <div>
+        <h4>Companies / Recruiters Discovery</h4>
+        <p class="muted">Browse people and organizations, then jump into company/recruiter workflows.</p>
+        <div class="grid two">${profileCards}</div>
+      </div>
+      <div><h4>Company Snapshots</h4><div class="grid two">${companyCards}</div></div>
+      <div><h4>Recruiter Snapshots</h4><div class="grid two">${recruiterCards}</div></div>
+      <div>
+        <h4>Company / Recruiter Tools</h4>
+        <p class="muted">Stub entry points are available now to preserve the final Hub IA and navigation.</p>
+        <div class="grid two">${toolCards}</div>
+      </div>
+    </section>
+
+    <section class="card panel-surface panel-surface--transparent hub-contact-section" style="margin-top:12px;">
+      <p class="hero-kicker">Feedback / Contact Us</p>
+      <h3>Talk to the platform team</h3>
+      <p class="muted">Use Hub contact channels to send feedback, ask questions, report issues, or request support.</p>
+      <div class="grid two" style="margin-top:10px;">${contactCards}</div>
+    </section>
+
+    <section class="card panel-surface panel-surface--transparent hub-board-section" style="margin-top:12px;">
+      <p class="hero-kicker">Discussion Board</p>
+      <h3>FAQs, announcements, updates, and community support</h3>
+      <p class="muted">Structured categories make browsing easy while keeping conversations quick and lightweight inside Hub.</p>
+      <div class="grid three hub-board-grid" style="margin-top:10px;">${boardCards}</div>
     </section>
   `;
 }
