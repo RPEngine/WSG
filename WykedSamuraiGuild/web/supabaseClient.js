@@ -7,6 +7,7 @@ function cleanEnvValue(value) {
   const lower = trimmed.toLowerCase();
   if (lower === 'undefined' || lower === 'null') return '';
   if (/^__WSG_[A-Z0-9_]+__$/.test(trimmed)) return '';
+  if (/^PASTE_[A-Z0-9_]+$/i.test(trimmed)) return '';
   return trimmed;
 }
 
