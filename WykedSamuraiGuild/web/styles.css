@@ -3561,6 +3561,15 @@ h1, h2, h3, h4, .title, .lockup-title { font-family: var(--heading-font); }
   min-height: 180px;
 }
 
+.hub-contact-card,
+.hub-board-card {
+  min-height: 150px;
+}
+
+.hub-board-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 @media (max-width: 1100px) {
   .nexus-mode-layout {
     grid-template-columns: 1fr;
@@ -3568,6 +3577,16 @@ h1, h2, h3, h4, .title, .lockup-title { font-family: var(--heading-font); }
 
   .nexus-room-list {
     max-height: 28vh;
+  }
+
+  .hub-board-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .hub-board-grid {
+    grid-template-columns: 1fr;
   }
 }
 
