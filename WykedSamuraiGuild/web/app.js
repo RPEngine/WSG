@@ -149,8 +149,12 @@ const PROFESSIONAL_ROOMS = [
     scenarioId: 'team-conflict',
     name: 'Interview Circle • Team Conflict',
     description: 'Temporary AI-run scenario focused on conflict mediation and hiring-panel communication.',
+    visibility: 'private',
+    roomType: 'interview',
     roomKind: 'scenario',
     category: 'Interviewing',
+    allowedUsers: ['user-self', 'npc-hiring-manager', 'observer-mentor'],
+    hostUserId: 'user-self',
     users: [
       { id: 'user-self', displayName: 'You', role: 'participant', isOnline: true },
       { id: 'npc-hiring-manager', displayName: 'Hiring Manager NPC', role: 'participant', isOnline: true },
@@ -165,8 +169,12 @@ const PROFESSIONAL_ROOMS = [
     id: 'ops-debrief',
     name: 'Ops Debrief Lounge',
     description: 'Ongoing professional chat room for workplace operations, postmortems, and execution tradeoffs.',
+    visibility: 'public',
+    roomType: 'scenario',
     roomKind: 'chat',
     category: 'Workplace Practice',
+    allowedUsers: [],
+    hostUserId: 'user-self',
     users: [
       { id: 'user-self', displayName: 'You', role: 'member', isOnline: true },
       { id: 'npc-facilitator', displayName: 'Facilitator NPC', role: 'moderator', isOnline: true },
@@ -185,11 +193,14 @@ const ROLEPLAY_ROOMS = [
     name: 'Ember Crossing Council',
     description: 'Open council room where guild officers resolve faction disputes and keep fragile alliances intact.',
     tag: 'Diplomat',
-    roomType: 'public',
+    visibility: 'public',
+    roomType: 'roleplay',
     roomKind: 'chat',
     category: 'Social Roleplay',
     moderator: 'Warden Echo',
     sfwPolicy: 'NPC moderator enforces SFW room safety',
+    allowedUsers: [],
+    hostUserId: 'user-self',
     temporary: false,
     status: 'Open',
     players: 7,
@@ -200,11 +211,14 @@ const ROLEPLAY_ROOMS = [
     name: 'Dock 47 Distress Channel',
     description: 'High-pressure response room reacting to incoming merchant convoy failures and sponsor complaints.',
     tag: 'Incident Commander',
-    roomType: 'public',
+    visibility: 'public',
+    roomType: 'roleplay',
     roomKind: 'chat',
     category: 'Adventure Roleplay',
     moderator: 'Warden Echo',
     sfwPolicy: 'NPC moderator enforces SFW room safety',
+    allowedUsers: [],
+    hostUserId: 'user-self',
     temporary: false,
     status: 'Open',
     players: 11,
@@ -215,11 +229,14 @@ const ROLEPLAY_ROOMS = [
     name: 'Shadow Forge War Room',
     description: 'Strategy room balancing delivery speed against defense readiness during active threat windows.',
     tag: 'Strategist',
-    roomType: 'private',
+    visibility: 'private',
+    roomType: 'roleplay',
     roomKind: 'chat',
     category: 'Faction Roleplay',
     moderator: 'Warden Echo',
     sfwPolicy: 'NPC moderator enforces SFW room safety',
+    allowedUsers: ['user-self', 'npc-warden'],
+    hostUserId: 'user-self',
     temporary: false,
     status: 'Open',
     players: 5,
@@ -230,11 +247,14 @@ const ROLEPLAY_ROOMS = [
     name: 'Aurora Gate Operations',
     description: 'Live operations room coordinating logistics, medical supply routes, and response priorities.',
     tag: 'Operations Lead',
-    roomType: 'system',
+    visibility: 'public',
+    roomType: 'roleplay',
     roomKind: 'chat',
     category: 'World Events',
     moderator: 'Warden Echo',
     sfwPolicy: 'NPC moderator enforces SFW room safety',
+    allowedUsers: [],
+    hostUserId: 'user-self',
     temporary: false,
     status: 'Open',
     players: 9,
@@ -462,6 +482,14 @@ const state = {
   nexus: {
     activeProfessionalRoomId: PROFESSIONAL_ROOMS[0]?.id || '',
     activeRoleplayRoomId: ROLEPLAY_ROOMS[0]?.id || '',
+    createRoomOpenByMode: {
+      professional: false,
+      roleplay: false,
+    },
+    accessNoticeByMode: {
+      professional: '',
+      roleplay: '',
+    },
     activeCategoryByMode: {
       professional: 'all',
       roleplay: 'all',
@@ -1380,16 +1408,68 @@ function escapeHtml(value) {
     .replaceAll("'", '&#39;');
 }
 
+function getCurrentUserRoomId() {
+  return state.currentUser?.id ? `user-${state.currentUser.id}` : 'user-self';
+}
+
+function normalizeAllowedUsers(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return [...new Set(value.map((entry) => String(entry || '').trim()).filter(Boolean))];
+  }
+  return [...new Set(String(value).split(',').map((entry) => entry.trim()).filter(Boolean))];
+}
+
+function normalizeRoomRecord(room, fallbackRoomType) {
+  const fallbackType = fallbackRoomType || 'roleplay';
+  const visibility = room?.visibility === 'private' ? 'private' : 'public';
+  const roomType = ['interview', 'scenario', 'roleplay'].includes(room?.roomType) ? room.roomType : fallbackType;
+  const allowedUsers = normalizeAllowedUsers(room?.allowedUsers);
+  const hostUserId = String(room?.hostUserId || '').trim() || 'user-self';
+  return {
+    ...room,
+    visibility,
+    roomType,
+    allowedUsers,
+    hostUserId,
+  };
+}
+
+function canUserAccessRoom(room, currentUserId) {
+  const normalizedRoom = normalizeRoomRecord(room, room?.roomKind === 'scenario' ? 'scenario' : 'roleplay');
+  if (normalizedRoom.visibility !== 'private') {
+    return true;
+  }
+  if (!currentUserId) {
+    return false;
+  }
+  const hostUserId = String(normalizedRoom.hostUserId || '').trim();
+  const allowedUsers = normalizeAllowedUsers(normalizedRoom.allowedUsers);
+  if (!hostUserId || !allowedUsers.length) {
+    return false;
+  }
+  return hostUserId === currentUserId || allowedUsers.includes(currentUserId) || allowedUsers.includes('user-self');
+}
+
+function roomVisibilityLabel(room) {
+  return room?.visibility === 'private' ? 'Invite Only' : 'Public';
+}
+
 function getActiveTrial() {
   return STARTER_TRIALS.find((trial) => trial.id === state.arena.activeTrialId) || null;
 }
 
 function getRoleplayRooms() {
-  return Array.isArray(state.arena.roleplayRooms) ? state.arena.roleplayRooms : [];
+  const currentUserId = getCurrentUserRoomId();
+  const rooms = Array.isArray(state.arena.roleplayRooms) ? state.arena.roleplayRooms : [];
+  return rooms
+    .map((room) => normalizeRoomRecord(room, 'roleplay'))
+    .filter((room) => canUserAccessRoom(room, currentUserId));
 }
 
 function getActiveRoleplayRoom() {
-  return getRoleplayRooms().find((room) => room.id === state.arena.activeRoomId) || null;
+  const rooms = getRoleplayRooms();
+  return rooms.find((room) => room.id === state.arena.activeRoomId) || rooms[0] || null;
 }
 
 function getRoleplayParticipants() {
@@ -2427,7 +2507,7 @@ function arenaPage() {
           <p class="muted">${trialOrRoom.description}</p>
           <div class="trial-meta">
             ${isRoleplayMode
-    ? `<span>${escapeHtml((trialOrRoom.roomType || 'public').toUpperCase())}</span><span>${escapeHtml(trialOrRoom.tag || 'Open RP')}</span><span>Players: ${trialOrRoom.players || 0}</span>`
+    ? `<span>${escapeHtml((trialOrRoom.visibility || 'public').toUpperCase())}</span><span>${escapeHtml((trialOrRoom.roomType || 'roleplay').toUpperCase())}</span><span>${escapeHtml(trialOrRoom.tag || 'Open RP')}</span><span>Players: ${trialOrRoom.players || 0}</span>`
     : `<span>${trialOrRoom.difficulty}</span><span>${trialOrRoom.suggestedRole || 'Open role'}</span>`}
           </div>
           <button class="pill-btn ${isRoleplayMode ? 'select-room-btn' : 'start-trial-btn'}" ${isRoleplayMode ? `data-room-id="${escapeAttr(trialOrRoom.id)}"` : `data-trial-id="${trialId}"`}>
@@ -2505,7 +2585,14 @@ function arenaPage() {
                   <option value="private">Private</option>
                 </select>
               </label>
+              <label>Room Type
+                <select name="roomType">
+                  <option value="roleplay">Roleplay</option>
+                  <option value="scenario">Scenario</option>
+                </select>
+              </label>
               <label>Theme / Tag (optional)<input name="roomTag" maxlength="40" placeholder="Diplomacy, Strategy, Ops..." /></label>
+              <label>Invite User IDs (private only)<input name="allowedUsers" maxlength="260" placeholder="user-123, user-456" /></label>
               <button type="submit" class="pill-btn cta-primary">Create & Enter Room</button>
             </form>
           ` : ''}
@@ -2743,17 +2830,22 @@ function nexusPage() {
 }
 
 function getNexusRooms(mode) {
+  const currentUserId = getCurrentUserRoomId();
+  const fallbackRoomType = mode === 'professional' ? 'scenario' : 'roleplay';
   const rooms = mode === 'professional'
     ? (Array.isArray(PROFESSIONAL_ROOMS) ? PROFESSIONAL_ROOMS : [])
     : (Array.isArray(state.arena.roleplayRooms) ? state.arena.roleplayRooms : []);
 
   const currentUserName = state.currentUser?.displayName || state.currentUser?.username || 'You';
-  return rooms.map((room) => ({
-    ...room,
-    users: Array.isArray(room.users) && room.users.length
-      ? room.users.map((user) => ({ ...user, displayName: user.id === 'user-self' ? currentUserName : user.displayName }))
-      : [{ id: 'user-self', displayName: currentUserName, role: 'member', isOnline: true }],
-  }));
+  return rooms
+    .map((room) => normalizeRoomRecord(room, fallbackRoomType))
+    .filter((room) => canUserAccessRoom(room, currentUserId))
+    .map((room) => ({
+      ...room,
+      users: Array.isArray(room.users) && room.users.length
+        ? room.users.map((user) => ({ ...user, displayName: user.id === 'user-self' ? currentUserName : user.displayName }))
+        : [{ id: currentUserId, displayName: currentUserName, role: 'member', isOnline: true }],
+    }));
 }
 
 function getActiveNexusRoom(mode) {
@@ -2792,6 +2884,8 @@ function renderNexusModePage(mode) {
   const rooms = getNexusRooms(mode);
   const activeRoom = getActiveNexusRoom(mode);
   const selectedCategory = state.nexus.activeCategoryByMode?.[mode] || 'all';
+  const accessNotice = state.nexus.accessNoticeByMode?.[mode] || '';
+  const isCreateRoomOpen = Boolean(state.nexus.createRoomOpenByMode?.[mode]);
   const categories = ['all', ...new Set(rooms.map((room) => room.category || 'General'))];
   const filteredRooms = selectedCategory === 'all' ? rooms : rooms.filter((room) => (room.category || 'General') === selectedCategory);
   const messages = getRoomMessages(mode, activeRoom);
@@ -2804,6 +2898,7 @@ function renderNexusModePage(mode) {
       <button type="button" class="nexus-room-row ${activeRoom?.id === room.id ? 'is-active' : ''}" data-open-nexus-room="${escapeAttr(mode)}:${escapeAttr(room.id)}">
         <strong>${escapeHtml(room.name || 'Untitled Room')}</strong>
         <small>${escapeHtml(room.roomKind === 'scenario' ? 'Scenario' : 'Chat Room')} · ${escapeHtml(room.status || 'Open')}</small>
+        <small><span class="room-visibility-badge ${room.visibility === 'private' ? 'is-private' : 'is-public'}">${escapeHtml(roomVisibilityLabel(room))}</span> · ${escapeHtml((room.roomType || mode).toUpperCase())}</small>
         <small class="muted">${escapeHtml(room.description || 'No description available.')}</small>
       </button>
     `).join('')
@@ -2832,6 +2927,29 @@ function renderNexusModePage(mode) {
         </div>
         <div class="nexus-panel-body">
           <p class="muted">Classic room-list scanning inspired by early chat clients.</p>
+          <button type="button" class="pill-btn cta-primary" data-toggle-nexus-create-room="${escapeAttr(mode)}">${isCreateRoomOpen ? 'Close Room Builder' : 'Create Room'}</button>
+          ${isCreateRoomOpen ? `
+            <form class="create-room-form" data-nexus-create-room-form="${escapeAttr(mode)}">
+              <label>Room Name<input name="roomName" maxlength="60" required placeholder="Candidate Debrief" /></label>
+              <label>Room Type
+                <select name="roomType">
+                  ${mode === 'professional'
+    ? '<option value="interview">Interview</option><option value="scenario">Scenario</option>'
+    : '<option value="roleplay">Roleplay</option><option value="scenario">Scenario</option>'}
+                </select>
+              </label>
+              <label>Description<input name="roomDescription" maxlength="140" placeholder="Optional room objective or scene setup." /></label>
+              <label>Visibility
+                <select name="roomVisibility">
+                  <option value="public">Public</option>
+                  <option value="private">Private</option>
+                </select>
+              </label>
+              <label class="allowed-users-field">Invite User IDs (comma separated)<input name="allowedUsers" maxlength="260" placeholder="user-123, user-456" /></label>
+              <button type="submit" class="pill-btn cta-primary">Create Room</button>
+            </form>
+          ` : ''}
+          ${accessNotice ? `<p class="muted room-access-alert" role="status">${escapeHtml(accessNotice)}</p>` : ''}
           <div class="nexus-room-categories">
             ${categories.map((category) => `<button type="button" class="pill-btn ${selectedCategory === category ? 'active' : ''}" data-room-category="${escapeAttr(mode)}:${escapeAttr(category)}">${escapeHtml(category === 'all' ? 'All Categories' : category)}</button>`).join('')}
           </div>
@@ -2840,6 +2958,7 @@ function renderNexusModePage(mode) {
       </aside>
 
       <section class="nexus-chat-window panel-surface panel-surface--transparent">
+        ${!activeRoom ? `<div class="status-banner status-info">You do not have access to this room.</div>` : ''}
         <header class="nexus-chat-head">
           <div>
             <p class="hero-kicker">${escapeHtml(modeLabel)} Nexus Room</p>
@@ -2848,6 +2967,7 @@ function renderNexusModePage(mode) {
           </div>
           <div class="nexus-room-meta">
             <span class="scenario-status-badge is-active">${escapeHtml(activeRoom?.roomKind === 'scenario' ? 'Scenario Room' : 'Chat Room')}</span>
+            <span class="room-visibility-badge ${activeRoom?.visibility === 'private' ? 'is-private' : 'is-public'}">${escapeHtml(roomVisibilityLabel(activeRoom))}</span>
             <span class="muted">AI Moderator: ${escapeHtml(activeRoom?.moderator || 'NPC Moderator')}</span>
           </div>
         </header>
@@ -4593,8 +4713,16 @@ function attachProfileEditHandler() {
 
 function attachArenaHandlers() {
   function enterRoleplayRoom(roomId) {
-    const selectedRoom = getRoleplayRooms().find((room) => room.id === roomId);
+    const currentUserId = getCurrentUserRoomId();
+    const selectedRoom = (Array.isArray(state.arena.roleplayRooms) ? state.arena.roleplayRooms : [])
+      .map((room) => normalizeRoomRecord(room, 'roleplay'))
+      .find((room) => room.id === roomId);
     if (!selectedRoom) {
+      return;
+    }
+    if (!canUserAccessRoom(selectedRoom, currentUserId)) {
+      state.arena.error = 'You do not have access to this room.';
+      render();
       return;
     }
     const selectedTrial = STARTER_TRIALS.find((trial) => trial.id === selectedRoom.trialId) || STARTER_TRIALS[0];
@@ -4680,21 +4808,30 @@ function attachArenaHandlers() {
       const roomName = String(formData.get('roomName') || '').trim();
       const roomDescription = String(formData.get('roomDescription') || '').trim();
       const roomVisibility = String(formData.get('roomVisibility') || 'public').trim() || 'public';
+      const roomType = String(formData.get('roomType') || 'roleplay').trim() || 'roleplay';
       const roomTag = String(formData.get('roomTag') || '').trim();
+      const allowedUsers = normalizeAllowedUsers(formData.get('allowedUsers'));
       if (!roomName || !roomDescription) {
         return;
       }
       const fallbackTrial = STARTER_TRIALS[0];
+      const currentUserId = getCurrentUserRoomId();
+      const isPrivate = roomVisibility === 'private';
       const newRoom = {
         id: `custom-${slugifyScenario(roomName)}-${Date.now()}`,
         trialId: fallbackTrial?.id || '',
         name: roomName,
         description: roomDescription,
         tag: roomTag || 'Custom RP',
-        roomType: roomVisibility === 'private' ? 'private' : 'public',
+        visibility: isPrivate ? 'private' : 'public',
+        roomType: roomType === 'scenario' ? 'scenario' : 'roleplay',
+        roomKind: roomType === 'scenario' ? 'scenario' : 'chat',
+        status: 'Open',
+        hostUserId: currentUserId,
+        allowedUsers: isPrivate ? [...new Set([currentUserId, ...allowedUsers])] : [],
         players: 1,
       };
-      state.arena.roleplayRooms = [newRoom, ...getRoleplayRooms()];
+      state.arena.roleplayRooms = [newRoom, ...(Array.isArray(state.arena.roleplayRooms) ? state.arena.roleplayRooms : [])];
       state.arena.isCreateRoomOpen = false;
       enterRoleplayRoom(newRoom.id);
     };
@@ -5434,6 +5571,59 @@ async function render() {
 
 
 function attachNexusRoomHandlers() {
+  document.querySelectorAll('[data-toggle-nexus-create-room]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const mode = button.getAttribute('data-toggle-nexus-create-room') || '';
+      if (!mode || !(mode in (state.nexus.createRoomOpenByMode || {}))) return;
+      state.nexus.createRoomOpenByMode[mode] = !state.nexus.createRoomOpenByMode[mode];
+      render();
+    });
+  });
+
+  document.querySelectorAll('[data-nexus-create-room-form]').forEach((form) => {
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const mode = form.getAttribute('data-nexus-create-room-form') || '';
+      if (!mode) return;
+      const formData = new FormData(form);
+      const roomName = String(formData.get('roomName') || '').trim();
+      const roomType = String(formData.get('roomType') || (mode === 'professional' ? 'interview' : 'roleplay')).trim();
+      const roomDescription = String(formData.get('roomDescription') || '').trim();
+      const roomVisibility = String(formData.get('roomVisibility') || 'public').trim();
+      const isPrivate = roomVisibility === 'private';
+      const currentUserId = getCurrentUserRoomId();
+      const allowedUsers = normalizeAllowedUsers(formData.get('allowedUsers'));
+      if (!roomName) return;
+      const newRoom = normalizeRoomRecord({
+        id: `nexus-${mode}-${slugifyScenario(roomName)}-${Date.now()}`,
+        name: roomName,
+        description: roomDescription || 'Custom room',
+        status: 'Open',
+        roomKind: roomType === 'scenario' || roomType === 'interview' ? 'scenario' : 'chat',
+        visibility: isPrivate ? 'private' : 'public',
+        roomType: roomType === 'interview' ? 'interview' : roomType === 'scenario' ? 'scenario' : 'roleplay',
+        allowedUsers: isPrivate ? [...new Set([currentUserId, ...allowedUsers])] : [],
+        hostUserId: currentUserId,
+        category: mode === 'professional' ? (roomType === 'interview' ? 'Interviewing' : 'Scenarios') : 'Social Roleplay',
+        moderator: mode === 'professional' ? 'Aegis Moderator' : 'Warden Echo',
+        sfwPolicy: mode === 'professional' ? 'Professional SFW moderation active' : 'NPC moderator enforces SFW room safety',
+        temporary: roomType === 'scenario' || roomType === 'interview',
+        users: [{ id: currentUserId, displayName: state.currentUser?.displayName || state.currentUser?.username || 'You', role: 'host', isOnline: true }],
+      }, mode === 'professional' ? 'scenario' : 'roleplay');
+
+      if (mode === 'professional') {
+        PROFESSIONAL_ROOMS.unshift(newRoom);
+        state.nexus.activeProfessionalRoomId = newRoom.id;
+      } else {
+        state.arena.roleplayRooms = [newRoom, ...(Array.isArray(state.arena.roleplayRooms) ? state.arena.roleplayRooms : [])];
+        state.nexus.activeRoleplayRoomId = newRoom.id;
+      }
+      state.nexus.createRoomOpenByMode[mode] = false;
+      state.nexus.accessNoticeByMode[mode] = '';
+      render();
+    });
+  });
+
   document.querySelectorAll('[data-nexus-panel-toggle]').forEach((button) => {
     button.addEventListener('click', () => {
       const token = button.getAttribute('data-nexus-panel-toggle') || '';
@@ -5451,11 +5641,18 @@ function attachNexusRoomHandlers() {
       const token = button.getAttribute('data-open-nexus-room') || '';
       const [mode, roomId] = token.split(':');
       if (!mode || !roomId) return;
+      const targetRoom = getNexusRooms(mode).find((room) => room.id === roomId);
+      if (!targetRoom || !canUserAccessRoom(targetRoom, getCurrentUserRoomId())) {
+        state.nexus.accessNoticeByMode[mode] = 'You do not have access to this room.';
+        render();
+        return;
+      }
       if (mode === 'professional') {
         state.nexus.activeProfessionalRoomId = roomId;
       } else {
         state.nexus.activeRoleplayRoomId = roomId;
       }
+      state.nexus.accessNoticeByMode[mode] = '';
       render();
     });
   });

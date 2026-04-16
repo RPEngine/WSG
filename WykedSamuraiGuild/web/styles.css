@@ -1112,8 +1112,35 @@ body {
 }
 
 .create-room-form button,
-.create-room-form label:nth-child(4) {
+.create-room-form .allowed-users-field {
   grid-column: span 2;
+}
+
+.room-visibility-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.room-visibility-badge.is-private {
+  background: rgba(255, 122, 89, 0.2);
+  border: 1px solid rgba(255, 122, 89, 0.45);
+  color: #ffd1c4;
+}
+
+.room-visibility-badge.is-public {
+  background: rgba(83, 182, 255, 0.16);
+  border: 1px solid rgba(83, 182, 255, 0.35);
+  color: #cbe6ff;
+}
+
+.room-access-alert {
+  margin: 10px 0 0;
+  color: #ffd6a9;
 }
 
 .roleplay-room-empty-state {
@@ -3106,7 +3133,7 @@ h1, h2, h3, h4, .title, .lockup-title { font-family: var(--heading-font); }
   }
 
   .create-room-form button,
-  .create-room-form label:nth-child(4) {
+  .create-room-form .allowed-users-field {
     grid-column: span 1;
   }
 
