@@ -834,14 +834,28 @@ function withPersistedOnboardingProfile(user) {
   }
   const onboardingProfile = readOnboardingProfile(user.id);
   const mergedProfile = onboardingProfile ? { ...user, ...onboardingProfile } : user;
-  const roleplayCharacters = Array.isArray(mergedProfile.roleplayCharacters) ? mergedProfile.roleplayCharacters : [];
-  const roleplayCharacterLimit = Number.isFinite(Number(mergedProfile.roleplayCharacterLimit))
-    ? Math.max(1, Number(mergedProfile.roleplayCharacterLimit))
+  const profileType = normalizeSlotProfileType(mergedProfile);
+  const normalizedCharacters = Array.isArray(mergedProfile.characters)
+    ? mergedProfile.characters
+    : (Array.isArray(mergedProfile.roleplayCharacters) ? mergedProfile.roleplayCharacters : []);
+  const characterSlotLimit = Number.isFinite(Number(mergedProfile.characterSlotLimit))
+    ? Math.max(1, Number(mergedProfile.characterSlotLimit))
+    : (Number.isFinite(Number(mergedProfile.roleplayCharacterLimit))
+      ? Math.max(1, Number(mergedProfile.roleplayCharacterLimit))
+      : 5);
+  const recruiters = Array.isArray(mergedProfile.recruiters) ? mergedProfile.recruiters : [];
+  const recruiterSlotLimit = Number.isFinite(Number(mergedProfile.recruiterSlotLimit))
+    ? Math.max(1, Number(mergedProfile.recruiterSlotLimit))
     : 5;
   return {
     ...mergedProfile,
-    roleplayCharacters,
-    roleplayCharacterLimit,
+    profileType,
+    characters: normalizedCharacters,
+    characterSlotLimit,
+    roleplayCharacters: normalizedCharacters,
+    roleplayCharacterLimit: characterSlotLimit,
+    recruiters,
+    recruiterSlotLimit,
   };
 }
 
@@ -1358,10 +1372,66 @@ function readProfileFrameworkSource(profile, activeData = {}, isOwnProfile = fal
 }
 
 function normalizeProfileType(profile = {}) {
+  const explicitProfileType = String(profile.profileType || '').trim().toLowerCase();
+  if (explicitProfileType === 'company') return 'Company';
+  if (explicitProfileType === 'person') return 'Person';
   const role = String(profile.role || '').toLowerCase();
   if (role === 'recruiter') return 'Recruiter';
   if (role === 'employer') return 'Company';
   return 'Person';
+}
+
+function normalizeSlotProfileType(profile = {}) {
+  const explicitProfileType = String(profile.profileType || '').trim().toLowerCase();
+  if (explicitProfileType === 'company') return 'company';
+  if (explicitProfileType === 'person') return 'person';
+  const role = String(profile.role || '').toLowerCase();
+  return (role === 'employer' || role === 'recruiter') ? 'company' : 'person';
+}
+
+function readProfileSlotMeta(profile = {}) {
+  const slotProfileType = normalizeSlotProfileType(profile);
+  if (slotProfileType === 'company') {
+    const recruiterSlots = Array.isArray(profile.recruiters) ? profile.recruiters : [];
+    const recruiterSlotLimit = Number.isFinite(Number(profile.recruiterSlotLimit))
+      ? Math.max(1, Number(profile.recruiterSlotLimit))
+      : 5;
+    return {
+      slotProfileType,
+      sectionTitle: 'Recruiters',
+      sectionDescription: 'Manage recruiter seats attached to this company account.',
+      slots: recruiterSlots,
+      slotLimit: recruiterSlotLimit,
+      slotCountLabel: 'recruiter seats',
+      createButtonId: 'create-recruiter-slot-btn',
+      createButtonLabel: 'Add Recruiter',
+      emptyMessage: 'No recruiter seats assigned yet.',
+      limitMessage: 'Recruiter seat limit reached. Increase your plan to add more seats.',
+      savePayload: { recruiters: recruiterSlots, recruiterSlotLimit },
+    };
+  }
+
+  const characters = Array.isArray(profile.characters)
+    ? profile.characters
+    : (Array.isArray(profile.roleplayCharacters) ? profile.roleplayCharacters : []);
+  const characterSlotLimit = Number.isFinite(Number(profile.characterSlotLimit))
+    ? Math.max(1, Number(profile.characterSlotLimit))
+    : (Number.isFinite(Number(profile.roleplayCharacterLimit))
+      ? Math.max(1, Number(profile.roleplayCharacterLimit))
+      : 5);
+  return {
+    slotProfileType,
+    sectionTitle: 'Characters',
+    sectionDescription: 'Manage your saved RP characters used in Arena roleplay sessions.',
+    slots: characters,
+    slotLimit: characterSlotLimit,
+    slotCountLabel: 'character slots',
+    createButtonId: 'create-character-slot-btn',
+    createButtonLabel: 'Create Character',
+    emptyMessage: 'No characters saved yet.',
+    limitMessage: 'Character slot limit reached. Upgrade to add more slots.',
+    savePayload: { characters, characterSlotLimit, roleplayCharacters: characters, roleplayCharacterLimit: characterSlotLimit },
+  };
 }
 
 function renderFrameworkField(label, value, fallback = 'Not provided yet') {
@@ -2276,6 +2346,15 @@ function SiteFooter() {
 function Header(path) {
   const isCollapsed = state.shell.headerCollapsed;
   const accountLabel = state.currentUser ? 'Account' : 'Log in';
+  const slotMeta = state.currentUser ? readProfileSlotMeta(state.currentUser) : null;
+  const accountSlotMenu = slotMeta
+    ? `
+      <div class="menu-group-label">${escapeHtml(slotMeta.sectionTitle)}</div>
+      ${slotMeta.slots.length
+    ? slotMeta.slots.map((slot, index) => `<a href="${linkFor('/profile')}">${escapeHtml(slot.name || `${slotMeta.sectionTitle.slice(0, -1)} ${index + 1}`)}</a>`).join('')
+    : `<a href="${linkFor('/profile')}">${escapeHtml(slotMeta.sectionTitle)} (none yet)</a>`}
+    `
+    : '';
   return `
     <header class="header panel ${isCollapsed ? 'is-collapsed' : ''}">
       <button type="button" class="header-collapse-btn" id="header-collapse-toggle" aria-label="${isCollapsed ? 'Expand header' : 'Collapse header'}" title="${isCollapsed ? 'Expand header' : 'Collapse header'}">${isCollapsed ? '▼' : '▲'}</button>
@@ -2312,12 +2391,7 @@ function Header(path) {
               <a href="${linkFor('/profile')}">Profile</a>
               <a href="${linkFor('/settings')}">Settings</a>
               <a href="${linkFor('/resume')}">Resume</a>
-              <div class="menu-group-label">Characters</div>
-              <a href="${linkFor('/characters/character-1')}">Character 1</a>
-              <a href="${linkFor('/characters/character-2')}">Character 2</a>
-              <a href="${linkFor('/characters/character-3')}">Character 3</a>
-              <a href="${linkFor('/characters/character-4')}">Character 4</a>
-              <a href="${linkFor('/characters/character-5')}">Character 5</a>
+              ${accountSlotMenu}
               <button type="button" class="menu-item-btn" id="logout-btn">Log out</button>
             </div>
           </div>
@@ -3179,6 +3253,10 @@ function resumePage() {
 }
 
 function charactersPage() {
+  const slotMeta = readProfileSlotMeta(state.currentUser || {});
+  if (slotMeta.slotProfileType === 'company') {
+    return card('Recruiters', '<p class="muted">Recruiter seat management is available in Profile today. Dedicated Recruiters page is stubbed for next iteration.</p>');
+  }
   return card('Characters', '<p class="muted">Character roster management is available in Profile today. Dedicated Characters page is stubbed for next iteration.</p>');
 }
 
@@ -3188,7 +3266,9 @@ function settingsPage() {
 
 function characterDetailPage(path) {
   const characterId = path.replace('/characters/', '').split('/')[0];
-  const knownCharacters = Array.isArray(state.currentUser?.roleplayCharacters) ? state.currentUser.roleplayCharacters : [];
+  const knownCharacters = Array.isArray(state.currentUser?.characters)
+    ? state.currentUser.characters
+    : (Array.isArray(state.currentUser?.roleplayCharacters) ? state.currentUser.roleplayCharacters : []);
   const character = knownCharacters.find((entry) => String(entry.id) === String(characterId));
   return `
     <section class="card panel-surface panel-surface--transparent">
@@ -3264,12 +3344,10 @@ function profilePage() {
   }).join('');
   const isLayerLocked = state.lockedLayers.includes(activeLayer);
   const skillsList = Array.isArray(activeData.skills) ? activeData.skills : [];
-  const roleplayCharacters = Array.isArray(profile.roleplayCharacters) ? profile.roleplayCharacters : [];
-  const roleplayCharacterLimit = Number.isFinite(Number(profile.roleplayCharacterLimit))
-    ? Math.max(1, Number(profile.roleplayCharacterLimit))
-    : 5;
-  const roleplaySlotsUsed = roleplayCharacters.length;
-  const isRoleplayLimitReached = roleplaySlotsUsed >= roleplayCharacterLimit;
+  const slotMeta = readProfileSlotMeta(profile);
+  const slotEntries = slotMeta.slots;
+  const slotsUsed = slotEntries.length;
+  const isSlotLimitReached = slotsUsed >= slotMeta.slotLimit;
   const layerBioLabel = activeLayer === 'professional' ? 'Professional Bio' : activeLayer === 'roleplay' ? 'Roleplay Bio' : 'Short Bio';
   const layerSkillsLabel = activeLayer === 'free' ? 'Basic Tags' : 'Tags / Skills';
 
@@ -3369,26 +3447,26 @@ function profilePage() {
     </section>
 
     <section class="card profile-edit-section panel-surface panel-surface--transparent" style="margin-top:12px;">
-      <h3>Roleplay Characters</h3>
-      <p class="muted">Manage your saved RP characters used in Arena roleplay sessions.</p>
-      <p class="muted roleplay-slot-indicator">${roleplaySlotsUsed} / ${roleplayCharacterLimit} used</p>
-      ${roleplayCharacters.length
+      <h3>${escapeHtml(slotMeta.sectionTitle)}</h3>
+      <p class="muted">${escapeHtml(slotMeta.sectionDescription)}</p>
+      <p class="muted roleplay-slot-indicator">${slotsUsed} / ${slotMeta.slotLimit} used ${escapeHtml(slotMeta.slotCountLabel)}</p>
+      ${slotEntries.length
     ? `<ul class="list roleplay-character-list">
-            ${roleplayCharacters.map((character) => `
+            ${slotEntries.map((entry) => `
               <li>
                 <span>
-                  <strong>${escapeHtml(character.name || 'Unnamed Character')}</strong><br/>
-                  <span class="muted">${escapeHtml(character.system || 'WSG RP System')}</span>
+                  <strong>${escapeHtml(entry.name || `Unnamed ${slotMeta.sectionTitle.slice(0, -1)}`)}</strong><br/>
+                  <span class="muted">${escapeHtml(entry.system || (slotMeta.slotProfileType === 'company' ? 'Company Recruiter Seat' : 'WSG RP System'))}</span>
                 </span>
-                <span class="muted">${formatDate(character.createdAt)}</span>
+                <span class="muted">${formatDate(entry.createdAt)}</span>
               </li>
             `).join('')}
           </ul>`
-    : '<p class="muted">No roleplay characters saved yet.</p>'}
+    : `<p class="muted">${escapeHtml(slotMeta.emptyMessage)}</p>`}
       <div class="actions" style="margin-top:10px;">
-        <button class="pill-btn cta-primary" id="create-roleplay-character-btn" type="button" ${isRoleplayLimitReached ? 'disabled' : ''}>Create Character</button>
+        <button class="pill-btn cta-primary" id="${escapeAttr(slotMeta.createButtonId)}" type="button" ${isSlotLimitReached ? 'disabled' : ''}>${escapeHtml(slotMeta.createButtonLabel)}</button>
       </div>
-      ${isRoleplayLimitReached ? '<p class="muted roleplay-limit-message">Character limit reached. Upgrade to add more slots.</p>' : ''}
+      ${isSlotLimitReached ? `<p class="muted roleplay-limit-message">${escapeHtml(slotMeta.limitMessage)}</p>` : ''}
     </section>
 
     <section class="card profile-edit-section panel-surface panel-surface--transparent">
@@ -4957,13 +5035,17 @@ function isStrongPassword(password) {
 }
 
 function attachProfileEditHandler() {
-  const createRoleplayCharacterButton = document.getElementById('create-roleplay-character-btn');
-  if (createRoleplayCharacterButton) {
-    createRoleplayCharacterButton.onclick = () => {
-      const currentCharacters = Array.isArray(state.currentUser?.roleplayCharacters) ? state.currentUser.roleplayCharacters : [];
-      const characterLimit = Number.isFinite(Number(state.currentUser?.roleplayCharacterLimit))
-        ? Math.max(1, Number(state.currentUser.roleplayCharacterLimit))
-        : 5;
+  const createCharacterSlotButton = document.getElementById('create-character-slot-btn');
+  if (createCharacterSlotButton) {
+    createCharacterSlotButton.onclick = () => {
+      const currentCharacters = Array.isArray(state.currentUser?.characters)
+        ? state.currentUser.characters
+        : (Array.isArray(state.currentUser?.roleplayCharacters) ? state.currentUser.roleplayCharacters : []);
+      const characterLimit = Number.isFinite(Number(state.currentUser?.characterSlotLimit))
+        ? Math.max(1, Number(state.currentUser.characterSlotLimit))
+        : (Number.isFinite(Number(state.currentUser?.roleplayCharacterLimit))
+          ? Math.max(1, Number(state.currentUser.roleplayCharacterLimit))
+          : 5);
       if (currentCharacters.length >= characterLimit) {
         render();
         return;
@@ -4977,15 +5059,56 @@ function attachProfileEditHandler() {
       };
       state.currentUser = {
         ...state.currentUser,
+        profileType: 'person',
+        characterSlotLimit: characterLimit,
+        characters: [...currentCharacters, newCharacter],
         roleplayCharacterLimit: characterLimit,
         roleplayCharacters: [...currentCharacters, newCharacter],
       };
       saveOnboardingProfile({
         ...(readOnboardingProfile(state.currentUser.id) || {}),
-        roleplayCharacters: state.currentUser.roleplayCharacters,
-        roleplayCharacterLimit: state.currentUser.roleplayCharacterLimit,
+        profileType: 'person',
+        characters: state.currentUser.characters,
+        characterSlotLimit: state.currentUser.characterSlotLimit,
+        roleplayCharacters: state.currentUser.characters,
+        roleplayCharacterLimit: state.currentUser.characterSlotLimit,
       }, state.currentUser.id);
-      setStatusMessage('Roleplay character created.', 'success');
+      setStatusMessage('Character slot created.', 'success');
+      render();
+    };
+  }
+
+  const createRecruiterSlotButton = document.getElementById('create-recruiter-slot-btn');
+  if (createRecruiterSlotButton) {
+    createRecruiterSlotButton.onclick = () => {
+      const currentRecruiters = Array.isArray(state.currentUser?.recruiters) ? state.currentUser.recruiters : [];
+      const recruiterLimit = Number.isFinite(Number(state.currentUser?.recruiterSlotLimit))
+        ? Math.max(1, Number(state.currentUser.recruiterSlotLimit))
+        : 5;
+      if (currentRecruiters.length >= recruiterLimit) {
+        render();
+        return;
+      }
+      const nextRecruiterNumber = currentRecruiters.length + 1;
+      const newRecruiter = {
+        id: crypto.randomUUID(),
+        name: `Recruiter ${nextRecruiterNumber}`,
+        system: 'Company Recruiter Seat',
+        createdAt: new Date().toISOString(),
+      };
+      state.currentUser = {
+        ...state.currentUser,
+        profileType: 'company',
+        recruiterSlotLimit: recruiterLimit,
+        recruiters: [...currentRecruiters, newRecruiter],
+      };
+      saveOnboardingProfile({
+        ...(readOnboardingProfile(state.currentUser.id) || {}),
+        profileType: 'company',
+        recruiters: state.currentUser.recruiters,
+        recruiterSlotLimit: state.currentUser.recruiterSlotLimit,
+      }, state.currentUser.id);
+      setStatusMessage('Recruiter slot added (placeholder).', 'success');
       render();
     };
   }
@@ -5062,6 +5185,13 @@ function attachProfileEditHandler() {
         const result = await apiRequest('/profile/hub', { method: 'PATCH', body: JSON.stringify(payload) });
         const normalized = normalizeLayeredProfile(result.profile);
         state.currentUser = withPersistedOnboardingProfile(normalized.user);
+        const nextProfileType = (payload.role === 'employer' || payload.role === 'recruiter') ? 'company' : 'person';
+        const existingOnboarding = readOnboardingProfile(state.currentUser.id) || {};
+        saveOnboardingProfile({
+          ...existingOnboarding,
+          profileType: nextProfileType,
+        }, state.currentUser.id);
+        state.currentUser = withPersistedOnboardingProfile(state.currentUser);
         state.activeProfile = state.currentUser;
         state.layers = normalized.layers;
         state.availableLayers = normalized.availableLayers;
