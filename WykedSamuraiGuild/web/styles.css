@@ -3033,10 +3033,8 @@ h1, h2, h3, h4, .title, .lockup-title { font-family: var(--heading-font); }
 
 .header,
 .left-sidebar,
-.main-content,
 .right-sidebar,
 .public-header,
-.public-content,
 .card,
 .panel,
 .sidebar,
@@ -3048,6 +3046,14 @@ h1, h2, h3, h4, .title, .lockup-title { font-family: var(--heading-font); }
   backdrop-filter: blur(8px);
   border-color: var(--border);
   background-image: none;
+}
+
+.main-content,
+.public-content {
+  background: transparent;
+  backdrop-filter: none;
+  border: 0;
+  box-shadow: none;
 }
 
 .right-sidebar,
