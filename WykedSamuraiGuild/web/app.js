@@ -3180,7 +3180,7 @@ function signupPage() {
 function authLoadingPage() {
   return `
     <div class="public-shell">
-      <main class="public-container public-content panel">
+      <main class="public-container public-content">
         <section class="card form-card">
           <h3>Loading Authentication</h3>
           <p class="muted">Checking your session and preparing sign-in…</p>
@@ -3193,7 +3193,7 @@ function authLoadingPage() {
 function configRequiredPage() {
   return `
     <div class="public-shell">
-      <main class="public-container public-content panel">
+      <main class="public-container public-content">
         <section class="card form-card">
           <h3>Configuration Required</h3>
           <p class="muted">Supabase configuration is missing.</p>
@@ -3207,7 +3207,7 @@ function configRequiredPage() {
 function startupErrorPage(errorMessage) {
   return `
     <div class="public-shell">
-      <main class="public-container public-content panel">
+      <main class="public-container public-content">
         <section class="card form-card">
           <h3>Startup Error</h3>
           <p class="muted">The app could not finish authentication/bootstrap setup.</p>
@@ -5069,7 +5069,7 @@ function renderPublicLayout(path, key, pageHtml) {
         </div>
       </header>
 
-      <main class="public-container public-content panel ${isAuthRoute ? 'auth-public-content' : ''}">
+      <main class="public-container public-content ${isAuthRoute ? 'auth-public-content' : ''}">
         ${showPageHeader ? `<section class="main-header"><h2>${title}</h2><p>${subtitle}</p></section>` : ''}
         ${statusMarkup}
         <section class="${isAuthRoute ? 'auth-public-section' : ''}" style="margin-top:${showPageHeader ? '14px' : '0'};">${pageHtml}</section>
@@ -5352,7 +5352,7 @@ async function render() {
     console.error('[wsg] render failure fallback', error);
     document.getElementById('app').innerHTML = `
       <div class="public-shell">
-        <main class="public-container public-content panel">
+        <main class="public-container public-content">
           <h2>Unable to render this page</h2>
           <p class="muted">The app hit a rendering error and showed this fallback instead of a blank screen.</p>
           <p class="muted" role="alert"><strong>Details:</strong> ${escapeHtml(message)}</p>
