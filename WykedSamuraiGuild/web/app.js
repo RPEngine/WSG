@@ -2282,6 +2282,7 @@ function Header(path) {
             <button type="button" class="menu-item-btn" data-utility-action="invites">Invites</button>
             <button type="button" class="menu-item-btn" data-utility-action="roomUpdates">Room updates</button>
             <button type="button" class="menu-item-btn" data-utility-action="scenarioUpdates">Scenario updates</button>
+            <button type="button" class="menu-item-btn" data-utility-action="futureTools">More tools (soon)</button>
           </div>
         </div>
         ${state.currentUser ? `
@@ -2290,7 +2291,13 @@ function Header(path) {
             <div class="account-menu-dropdown header-dropdown-menu" id="account-menu-dropdown">
               <a href="${linkFor('/profile')}">Profile</a>
               <a href="${linkFor('/settings')}">Settings</a>
-              <a href="${linkFor('/settings')}#account">Account</a>
+              <a href="${linkFor('/resume')}">Resume</a>
+              <div class="menu-group-label">Characters</div>
+              <a href="${linkFor('/characters/character-1')}">Character 1</a>
+              <a href="${linkFor('/characters/character-2')}">Character 2</a>
+              <a href="${linkFor('/characters/character-3')}">Character 3</a>
+              <a href="${linkFor('/characters/character-4')}">Character 4</a>
+              <a href="${linkFor('/characters/character-5')}">Character 5</a>
               <button type="button" class="menu-item-btn" id="logout-btn">Log out</button>
             </div>
           </div>
@@ -5162,6 +5169,7 @@ function attachHeaderActions() {
         invites: 'Invites',
         roomUpdates: 'Room updates',
         scenarioUpdates: 'Scenario updates',
+        futureTools: 'Additional utilities',
       };
       const label = actionMap[action] || 'Utilities';
       setStatusMessage(`${label} are available in this menu.`, 'info');
