@@ -3458,6 +3458,37 @@ async function handleGoogleCredentialResponse(response, formName) {
   }
 }
 
+function initializeGoogleAuth(routeKey) {
+  const googleClientId = resolveGoogleClientId();
+  if (!googleClientId) {
+    return;
+  }
+
+  const google = window.google;
+  if (!google?.accounts?.id) {
+    return;
+  }
+
+  if (!googleInitialized) {
+    google.accounts.id.initialize({
+      client_id: googleClientId,
+      callback: (response) => {
+        const activeFormName = location.hash === '#/signup' ? 'signup' : 'login';
+        handleGoogleCredentialResponse(response, activeFormName);
+      },
+    });
+    googleInitialized = true;
+  }
+
+  if (routeKey === 'login') {
+    renderGoogleButton('google-login-button');
+    return;
+  }
+  if (routeKey === 'signup') {
+    renderGoogleButton('google-signup-button');
+  }
+}
+
 async function finalizeSignInResult(result, formName) {
   const session = result?.session || null;
   const user = result?.user || session?.user || null;
@@ -4881,7 +4912,9 @@ async function render() {
     } else {
       renderLayout(path, resolvedRoute.key, pageHtml);
     }
-    initializeGoogleAuth(resolvedRoute.key);
+    if (typeof initializeGoogleAuth === 'function') {
+      initializeGoogleAuth(resolvedRoute.key);
+    }
 
   const loginForm = document.getElementById('login-form');
   if (loginForm) {
