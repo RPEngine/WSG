@@ -34,17 +34,35 @@ const routes = {
 };
 
 const topLevelNavItems = [
-  { label: 'Home', path: '/home', icon: '🏠' },
-  { label: 'Nexus', path: '/nexus', icon: '🧭' },
-  { label: 'Hub', path: '/hub', icon: '🔎' },
-];
-
-const personalMenuItems = [
-  { label: 'Resume', path: '/resume' },
-  { label: 'Characters', path: '/characters' },
-  { label: 'Profile', path: '/profile' },
-  { label: 'Settings', path: '/settings' },
-  { label: 'Personal Inbox (Stub)', path: '/home' },
+  {
+    label: 'Home',
+    path: '/home',
+    items: [
+      { label: 'Profile', path: '/profile' },
+      { label: 'Resume', path: '/resume' },
+      { label: 'Character 1', path: '/characters/character-1' },
+      { label: 'Character 2', path: '/characters/character-2' },
+      { label: 'Character 3', path: '/characters/character-3' },
+      { label: 'Character 4', path: '/characters/character-4' },
+      { label: 'Character 5', path: '/characters/character-5' },
+      { label: 'Settings', path: '/settings' },
+    ],
+  },
+  {
+    label: 'Nexus',
+    path: '/nexus',
+    items: [
+      { label: 'Professional', path: '/nexus/professional' },
+      { label: 'Roleplay', path: '/nexus/roleplay' },
+    ],
+  },
+  {
+    label: 'Hub',
+    path: '/hub',
+    items: [
+      { label: 'Social Landing Page', path: '/hub' },
+    ],
+  },
 ];
 
 function visibleNavItems() {
@@ -54,6 +72,16 @@ function visibleNavItems() {
 function isNavItemActive(pathname, itemPath) {
   if (itemPath === '/nexus') {
     return pathname === '/nexus' || pathname.startsWith('/nexus/');
+  }
+  if (itemPath === '/home') {
+    return pathname === '/home'
+      || pathname === '/profile'
+      || pathname === '/resume'
+      || pathname === '/settings'
+      || pathname.startsWith('/characters');
+  }
+  if (itemPath === '/hub') {
+    return pathname === '/hub' || pathname === '/members';
   }
   return pathname === itemPath;
 }
@@ -513,6 +541,7 @@ const CURRENT_POLICY_VERSION = 'v1.0';
 const REQUIRED_POLICY_KEYS = Object.freeze(['codeOfConduct', 'contentPolicy', 'platformRules', 'privacyPolicy']);
 
 let googleInitialized = false;
+let headerOutsideClickHandlerBound = false;
 
 function shouldStartRoleplayToolsCollapsed() {
   return window.matchMedia('(max-width: 900px)').matches;
@@ -2084,7 +2113,6 @@ function ChatDock() {
 
 function Sidebar(path, key) {
   const isCollapsed = state.shell.leftSidebarCollapsed;
-  const items = visibleNavItems();
   return `
     <aside class="left-sidebar panel ${key === 'home' ? 'home-left-sidebar' : ''} ${isCollapsed ? 'is-collapsed' : ''}">
       <div class="left-pane-brand">
@@ -2099,16 +2127,10 @@ function Sidebar(path, key) {
           </div>
         </div>
       </div>
-      <ul class="nav-list">
-        ${items.map((item) => `
-          <li>
-            <a href="${linkFor(item.path)}" class="${isNavItemActive(path, item.path) ? 'active' : ''}" title="${escapeAttr(item.label)}">
-              <span class="nav-icon">${item.icon}</span>
-              <span class="${isCollapsed ? 'hide-collapsed' : ''}">${item.label}</span>
-            </a>
-          </li>
-        `).join('')}
-      </ul>
+      <div class="sidebar-note ${isCollapsed ? 'hide-collapsed' : ''}">
+        <p class="muted">Primary navigation now lives in the top bar.</p>
+        <p class="muted">Use this rail for quick tools and live context.</p>
+      </div>
     </aside>
   `;
 }
@@ -2138,27 +2160,40 @@ function SiteFooter() {
   `;
 }
 
-function Header() {
+function Header(path) {
   const isCollapsed = state.shell.headerCollapsed;
   const accountLabel = state.currentUser?.displayName || state.currentUser?.username || 'My account';
-  const personalLinks = personalMenuItems.map((item) => `
-    <a href="${linkFor(item.path)}">${escapeHtml(item.label)}</a>
+  const topNav = visibleNavItems().map((item) => `
+    <div class="top-nav-group">
+      <a href="${linkFor(item.path)}" class="top-nav-link ${isNavItemActive(path, item.path) ? 'active' : ''}">${escapeHtml(item.label)}</a>
+      <div class="top-nav-dropdown">
+        ${(item.items || []).map((subItem) => `<a href="${linkFor(subItem.path)}">${escapeHtml(subItem.label)}</a>`).join('')}
+      </div>
+    </div>
   `).join('');
   return `
     <header class="header panel ${isCollapsed ? 'is-collapsed' : ''}">
       <button type="button" class="header-collapse-btn" id="header-collapse-toggle" aria-label="${isCollapsed ? 'Expand header' : 'Collapse header'}" title="${isCollapsed ? 'Expand header' : 'Collapse header'}">${isCollapsed ? '▼' : '▲'}</button>
-      <div class="brand">
-        ${guildBrandMark({ className: 'header-brand-mark' })}
-        <div class="header-brand-copy">
-          <div class="title">Wyked Samurai Guild</div>
-          <div class="subtitle">Strategic Guild Network • Nebula Nexus</div>
+      <div class="header-left">
+        <div class="brand">
+          ${guildBrandMark({ className: 'header-brand-mark' })}
+          <div class="header-brand-copy">
+            <div class="title">Wyked Samurai Guild</div>
+            <div class="subtitle">Strategic Guild Network • Nebula Nexus</div>
+          </div>
         </div>
+        <nav class="top-nav ${isCollapsed ? 'hide-when-header-collapsed' : ''}" aria-label="Primary">
+          ${topNav}
+        </nav>
       </div>
       <div class="header-actions">
+        <button type="button" class="pill-btn ${isCollapsed ? 'hide-when-header-collapsed' : ''}" id="global-dm-btn">Private Chat / DMs</button>
+        <button type="button" class="pill-btn ${isCollapsed ? 'hide-when-header-collapsed' : ''}" id="global-notifications-btn">Notifications</button>
         <div class="account-menu">
           <button type="button" class="pill-btn account-menu-btn ${isCollapsed ? 'hide-when-header-collapsed' : ''}" id="account-menu-btn">${escapeHtml(accountLabel)} ▾</button>
           <div class="account-menu-dropdown" id="account-menu-dropdown">
-            ${personalLinks}
+            <a href="${linkFor('/profile')}">Profile</a>
+            <a href="${linkFor('/settings')}">Settings</a>
           </div>
         </div>
         ${state.currentUser ? `${avatarMarkup(state.currentUser, 'md')}<button class="pill-btn ${isCollapsed ? 'hide-when-header-collapsed' : ''}" id="logout-btn">Log out</button>` : '<a class="pill-btn" href="#/login">Log in</a>'}
@@ -2170,7 +2205,7 @@ function Header() {
 function AppShell(path, key, pageHtml, statusMarkup, pageSet) {
   return `
     <div class="app-shell page-set ${pageSet} ${state.shell.leftSidebarCollapsed ? 'is-left-sidebar-collapsed' : ''} ${state.shell.rightSidebarCollapsed ? 'is-right-sidebar-collapsed' : ''} ${state.shell.headerCollapsed ? 'is-header-collapsed' : ''}">
-      ${Header()}
+      ${Header(path)}
       ${Sidebar(path, key)}
       ${MainContent(key, statusMarkup, pageHtml)}
       <aside class="right-sidebar panel ${key === 'home' ? 'home-right-sidebar' : ''}">${SocialSidebar()}</aside>
@@ -4941,14 +4976,49 @@ function attachHeaderActions() {
   const accountMenuButton = document.getElementById('account-menu-btn');
   const accountMenuDropdown = document.getElementById('account-menu-dropdown');
   if (accountMenuButton && accountMenuDropdown) {
-    accountMenuButton.onclick = () => {
+    accountMenuButton.onclick = (event) => {
+      event.stopPropagation();
       accountMenuDropdown.classList.toggle('is-open');
     };
-    document.addEventListener('click', (event) => {
-      if (!accountMenuDropdown.contains(event.target) && event.target !== accountMenuButton) {
-        accountMenuDropdown.classList.remove('is-open');
+  }
+
+  const notificationsButton = document.getElementById('global-notifications-btn');
+  if (notificationsButton) {
+    notificationsButton.onclick = () => {
+      const alerts = [
+        'Messages',
+        'Invites',
+        'Room updates',
+        'Scenario updates',
+        'Social activity',
+      ];
+      setStatusMessage(`Notification center: ${alerts.join(' • ')}`, 'info');
+    };
+  }
+
+  const dmButton = document.getElementById('global-dm-btn');
+  if (dmButton) {
+    dmButton.onclick = async () => {
+      location.hash = '/profile/direct-chat';
+      if (state.network.connections.length) {
+        await loadDirectChat(state.network.connections[0].id);
       }
-    }, { once: true });
+      state.shell.activePaneTab = 'chat';
+      state.shell.chatOpen = true;
+      state.shell.chatMinimized = false;
+      render();
+    };
+  }
+
+  if (!headerOutsideClickHandlerBound) {
+    document.addEventListener('click', (event) => {
+      const button = document.getElementById('account-menu-btn');
+      const dropdown = document.getElementById('account-menu-dropdown');
+      if (dropdown && button && !dropdown.contains(event.target) && event.target !== button) {
+        dropdown.classList.remove('is-open');
+      }
+    });
+    headerOutsideClickHandlerBound = true;
   }
 
   const logoutButton = document.getElementById('logout-btn');
