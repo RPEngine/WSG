@@ -1996,90 +1996,49 @@ function selectedConnection() {
     || null;
 }
 
-function SocialSidebar() {
-  const isCollapsed = state.shell.rightSidebarCollapsed;
+function ChatDock() {
+  if (!state.currentUser) {
+    return '';
+  }
   const connections = getSafeConnections();
   const selectedConversation = state.shell.selectedConversation || state.directChat.activeConnectionId || '';
-  const friendsOnline = connections.filter((connection) => connection.status === 'online').length || Math.min(connections.length, 4);
-  const filteredConnections = connections
+  const unreadTotal = connections.reduce((count, connection) => count + Number(connection.unreadCount || 0), 0);
+  const searchedConnections = Array.isArray(state.network.results) ? state.network.results : [];
+  const sourceConnections = state.network.searchTerm && searchedConnections.length ? searchedConnections : connections;
+  const filteredConnections = sourceConnections
     .filter((connection) => getConnectionDisplayName(connection).toLowerCase().includes((state.network.searchTerm || '').toLowerCase()));
 
-  const connectionItems = filteredConnections.length
-    ? filteredConnections.map((connection) => `
-      <li>
-        <div class="rail-identity">
-          ${avatarMarkup(connection, 'md')}
-          <div>
-            <strong>${escapeHtml(getConnectionDisplayName(connection))}</strong>
-            <p class="muted">${escapeHtml(connection.role || 'Guild Member')}</p>
-          </div>
-        </div>
-        <div class="rail-actions">
-          <button class="pill-btn open-global-chat-btn" data-connection-id="${escapeAttr(connection.id)}">Message</button>
-          <a class="pill-btn" href="${linkFor(`/members/${connection.id}`)}">View Profile</a>
-        </div>
-      </li>
-    `).join('')
-    : '<li><p class="muted">No matching connections.</p></li>';
+  const launcherMarkup = `
+    <button class="chat-launcher-btn" type="button" id="chat-launcher-btn" aria-label="Open private chats">
+      <span>💬 Private Chat</span>
+      ${unreadTotal > 0 ? `<span class="chat-launcher-badge">${unreadTotal}</span>` : ''}
+    </button>
+  `;
 
-  const conversationItems = connections.length
-    ? connections.map((connection) => {
+  if (!state.shell.chatOpen) {
+    return `<div class="chat-launcher-wrap">${launcherMarkup}</div>`;
+  }
+
+  const activeConnection = selectedConnection();
+  const isMinimized = state.shell.chatMinimized;
+  const conversationItems = filteredConnections.length
+    ? filteredConnections.map((connection) => {
       const preview = connection.id === state.directChat.activeConnectionId && state.directChat.messages.length
         ? state.directChat.messages[state.directChat.messages.length - 1].content
         : 'Ready for your next briefing.';
       const unreadCount = Number(connection.unreadCount || 0);
       return `
-        <li class="global-conversation-item ${selectedConversation === connection.id ? 'is-active' : ''}" data-connection-id="${escapeAttr(connection.id)}">
+        <li class="chat-conversation-item ${selectedConversation === connection.id ? 'is-active' : ''}" data-connection-id="${escapeAttr(connection.id)}">
           <div>
             <strong>${escapeHtml(getConnectionDisplayName(connection))}</strong>
-            <p class="muted">${escapeHtml(preview.slice(0, 64))}</p>
+            <p class="muted">${escapeHtml(preview.slice(0, 52))}</p>
           </div>
           ${unreadCount ? `<span class="unread-dot">${unreadCount}</span>` : ''}
         </li>
       `;
     }).join('')
-    : '<li><p class="muted">No active conversations yet.</p></li>';
+    : '<li><p class="muted">No conversations yet.</p></li>';
 
-  return `
-    <section class="global-utility-pane">
-      <div class="utility-pane-head">
-        <h3>${isCollapsed ? '↔' : 'Comms'}</h3>
-        <button type="button" class="panel-toggle-btn" id="right-sidebar-toggle" aria-label="${isCollapsed ? 'Expand right sidebar' : 'Collapse right sidebar'}">${isCollapsed ? '⟨' : '⟩'}</button>
-      </div>
-      <div class="utility-tab-switcher ${isCollapsed ? 'is-collapsed' : ''}">
-        <button type="button" class="utility-tab-btn ${state.shell.activePaneTab === 'connections' ? 'active' : ''}" data-pane-tab="connections" title="Connections">🔌 ${isCollapsed ? '' : 'Connections'}</button>
-        <button type="button" class="utility-tab-btn ${state.shell.activePaneTab === 'chat' ? 'active' : ''}" data-pane-tab="chat" title="Chat">💬 ${isCollapsed ? '' : 'Chat'}</button>
-      </div>
-      ${isCollapsed ? '' : `
-      ${state.shell.activePaneTab === 'connections' ? `
-        <div class="social-rail-block">
-          <h3>Connections</h3>
-          <p class="muted">Friends online: <strong>${friendsOnline}</strong></p>
-          <form id="global-connections-search-form" class="rail-search">
-            <input id="global-connections-search-input" type="search" value="${escapeAttr(state.network.searchTerm || '')}" placeholder="Search connections" />
-          </form>
-          <ul class="social-list">${connectionItems}</ul>
-        </div>
-      ` : `
-        <div class="social-rail-block">
-          <h3>Conversations</h3>
-          <ul class="conversation-compact-list">${conversationItems}</ul>
-        </div>
-      `}
-      `}
-    </section>
-  `;
-}
-
-function ChatDock() {
-  if (!state.currentUser || !state.shell.chatOpen) {
-    return '';
-  }
-  const activeConnection = selectedConnection();
-  if (!activeConnection) {
-    return '';
-  }
-  const isMinimized = state.shell.chatMinimized;
   const messagesMarkup = (state.directChat.messages || [])
     .map((message) => `
       <article class="message ${message.senderId === state.currentUser?.id ? 'user' : 'system'}">
@@ -2090,48 +2049,41 @@ function ChatDock() {
 
   return `
     <section class="global-chat-dock panel ${isMinimized ? 'is-minimized' : ''}">
-      <header class="global-chat-head">
-        <div class="rail-identity">
-          ${avatarMarkup(activeConnection, 'md')}
-          <strong>${escapeHtml(getConnectionDisplayName(activeConnection))}</strong>
-        </div>
+      <header class="global-chat-head chat-popup-head">
+        <strong>Guild Private Chat</strong>
         <div class="chat-window-actions">
-          <button class="icon-btn" type="button" id="toggle-chat-pane-btn">${isMinimized ? '▢' : '—'}</button>
-          <button class="icon-btn" type="button" id="close-chat-pane-btn">×</button>
+          <button class="icon-btn" type="button" id="chat-popup-minimize-btn">${isMinimized ? '▢' : '—'}</button>
+          <button class="icon-btn" type="button" id="chat-popup-close-btn">×</button>
         </div>
       </header>
       ${isMinimized ? '' : `
-        <div class="conversation-log global-chat-log">${messagesMarkup || '<p class="muted">No messages yet.</p>'}</div>
-        <form id="global-chat-form" class="active-chat-form">
-          <input id="global-chat-input" type="text" placeholder="Send a quick reply..." />
-          <button class="pill-btn cta-primary" type="submit">Send</button>
-        </form>
+        <div class="chat-popup-layout">
+          <aside class="chat-conversation-rail">
+            <form id="global-connections-search-form" class="rail-search">
+              <input id="global-connections-search-input" type="search" value="${escapeAttr(state.network.searchTerm || '')}" placeholder="Search connections" />
+            </form>
+            <ul class="chat-conversation-list">${conversationItems}</ul>
+          </aside>
+          <section class="chat-thread-panel">
+            ${activeConnection ? `
+              <div class="chat-thread-head rail-identity">
+                ${avatarMarkup(activeConnection, 'md')}
+                <div>
+                  <strong>${escapeHtml(getConnectionDisplayName(activeConnection))}</strong>
+                  <p class="muted">${escapeHtml(activeConnection.role || 'Guild Member')}</p>
+                </div>
+              </div>
+              <div class="conversation-log global-chat-log">${messagesMarkup || '<p class="muted">No messages yet.</p>'}</div>
+              <form id="global-chat-form" class="active-chat-form">
+                <input id="global-chat-input" type="text" placeholder="Send a quick reply..." />
+                <button class="pill-btn cta-primary" type="submit">Send</button>
+              </form>
+            ` : '<p class="muted">Select a connection to start chatting.</p>'}
+          </section>
+        </div>
       `}
     </section>
-  `;
-}
-
-function Sidebar(path, key) {
-  const isCollapsed = state.shell.leftSidebarCollapsed;
-  return `
-    <aside class="left-sidebar panel ${key === 'home' ? 'home-left-sidebar' : ''} ${isCollapsed ? 'is-collapsed' : ''}">
-      <div class="left-pane-brand">
-        <div class="sidebar-toggle-row">
-          <button type="button" class="panel-toggle-btn" id="left-sidebar-toggle" aria-label="${isCollapsed ? 'Expand left sidebar' : 'Collapse left sidebar'}">${isCollapsed ? '⟩' : '⟨'}</button>
-        </div>
-        <div class="guild-lockup">
-          ${guildBrandMark({ compact: true, className: 'sidebar-brand-mark' })}
-          <div class="${isCollapsed ? 'hide-collapsed' : ''}">
-            <p class="lockup-title">Wyked Samurai</p>
-            <p class="muted">Command Menu</p>
-          </div>
-        </div>
-      </div>
-      <div class="sidebar-note ${isCollapsed ? 'hide-collapsed' : ''}">
-        <p class="muted">Primary navigation now lives in the top bar.</p>
-        <p class="muted">Use this rail for quick tools and live context.</p>
-      </div>
-    </aside>
+    <div class="chat-launcher-wrap">${launcherMarkup}</div>
   `;
 }
 
@@ -2204,11 +2156,9 @@ function Header(path) {
 
 function AppShell(path, key, pageHtml, statusMarkup, pageSet) {
   return `
-    <div class="app-shell page-set ${pageSet} ${state.shell.leftSidebarCollapsed ? 'is-left-sidebar-collapsed' : ''} ${state.shell.rightSidebarCollapsed ? 'is-right-sidebar-collapsed' : ''} ${state.shell.headerCollapsed ? 'is-header-collapsed' : ''}">
+    <div class="app-shell page-set ${pageSet} ${state.shell.headerCollapsed ? 'is-header-collapsed' : ''}">
       ${Header(path)}
-      ${Sidebar(path, key)}
       ${MainContent(key, statusMarkup, pageHtml)}
-      <aside class="right-sidebar panel ${key === 'home' ? 'home-right-sidebar' : ''}">${SocialSidebar()}</aside>
       ${ChatDock()}
     </div>
   `;
@@ -4789,34 +4739,17 @@ function attachHomeChatHandlers() {
 
 
 function attachChatPaneHandlers() {
-  const leftSidebarToggle = document.getElementById('left-sidebar-toggle');
-  if (leftSidebarToggle) {
-    leftSidebarToggle.onclick = () => {
-      state.shell.leftSidebarCollapsed = !state.shell.leftSidebarCollapsed;
-      persistArenaLayoutPrefs();
-      render();
-    };
-  }
-
-  const rightSidebarToggle = document.getElementById('right-sidebar-toggle');
-  if (rightSidebarToggle) {
-    rightSidebarToggle.onclick = () => {
-      state.shell.rightSidebarCollapsed = !state.shell.rightSidebarCollapsed;
-      persistArenaLayoutPrefs();
-      render();
-    };
-  }
-
-  document.querySelectorAll('[data-pane-tab]').forEach((button) => {
-    button.onclick = () => {
-      const nextTab = String(button.getAttribute('data-pane-tab') || 'connections');
-      if (nextTab !== 'connections' && nextTab !== 'chat') {
-        return;
+  const chatLauncherButton = document.getElementById('chat-launcher-btn');
+  if (chatLauncherButton) {
+    chatLauncherButton.onclick = async () => {
+      state.shell.chatOpen = true;
+      state.shell.chatMinimized = false;
+      if (!state.directChat.activeConnectionId && state.network.connections.length) {
+        await loadDirectChat(state.network.connections[0].id);
       }
-      state.shell.activePaneTab = nextTab;
       render();
     };
-  });
+  }
 
   const searchForm = document.getElementById('global-connections-search-form');
   if (searchForm) {
@@ -4826,7 +4759,6 @@ function attachChatPaneHandlers() {
       const query = String(searchInput?.value || '').trim();
       state.network.searchTerm = query;
       await searchConnectionCandidates(query);
-      state.network.connections = state.network.results.length ? state.network.results : [];
       render();
     };
   }
@@ -4836,11 +4768,10 @@ function attachChatPaneHandlers() {
       return;
     }
     await loadDirectChat(connectionId);
-    state.shell.activePaneTab = 'chat';
     render();
   };
 
-  document.querySelectorAll('.open-direct-chat-btn, .open-global-chat-btn, .global-conversation-item').forEach((button) => {
+  document.querySelectorAll('.open-direct-chat-btn, .open-global-chat-btn, .chat-conversation-item').forEach((button) => {
     button.onclick = async () => {
       const connectionId = button.getAttribute('data-connection-id');
       await openDirectChat(connectionId);
@@ -4891,7 +4822,7 @@ function attachChatPaneHandlers() {
     };
   }
 
-  const toggleChatPaneButton = document.getElementById('toggle-chat-pane-btn');
+  const toggleChatPaneButton = document.getElementById('chat-popup-minimize-btn');
   if (toggleChatPaneButton) {
     toggleChatPaneButton.onclick = () => {
       state.shell.chatMinimized = !state.shell.chatMinimized;
@@ -4899,7 +4830,7 @@ function attachChatPaneHandlers() {
     };
   }
 
-  const closeChatPaneButton = document.getElementById('close-chat-pane-btn');
+  const closeChatPaneButton = document.getElementById('chat-popup-close-btn');
   if (closeChatPaneButton) {
     closeChatPaneButton.onclick = () => {
       state.shell.chatOpen = false;
@@ -4999,11 +4930,9 @@ function attachHeaderActions() {
   const dmButton = document.getElementById('global-dm-btn');
   if (dmButton) {
     dmButton.onclick = async () => {
-      location.hash = '/profile/direct-chat';
       if (state.network.connections.length) {
         await loadDirectChat(state.network.connections[0].id);
       }
-      state.shell.activePaneTab = 'chat';
       state.shell.chatOpen = true;
       state.shell.chatMinimized = false;
       render();
