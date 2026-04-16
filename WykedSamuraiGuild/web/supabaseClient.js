@@ -76,11 +76,14 @@ export function toAppUser(user) {
   if (!user) return null;
   const metadata = user.user_metadata || {};
   const emailName = String(user.email || '').split('@')[0] || 'member';
+  const legalName = metadata.legalName || metadata.full_name || '';
+  const displayName = metadata.displayName || metadata.username || legalName || emailName;
   return {
     id: String(user.id || ''),
     email: user.email || '',
     username: metadata.username || emailName,
-    legalName: metadata.legalName || metadata.full_name || '',
+    displayName,
+    legalName,
     role: metadata.role || 'member',
     organizationName: metadata.organizationName || '',
     emailConfirmedAt: user.email_confirmed_at || null,

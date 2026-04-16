@@ -33,6 +33,7 @@ const routes = {
   '/scenario': { key: 'scenarioDetail', requiresAuth: true },
   '/login': { key: 'login', guestOnly: true },
   '/signup': { key: 'signup', guestOnly: true },
+  '/onboarding/profile-setup': { key: 'onboardingProfileSetup', requiresAuth: true },
   '/policy/accept': { key: 'policyAccept', requiresAuth: true, bypassPolicyGuard: true },
   '/code-of-conduct': { key: 'codeOfConduct' },
   '/content-policy': { key: 'contentPolicy' },
@@ -542,6 +543,7 @@ const HEADER_COLLAPSED_STORAGE_KEY = 'ui.headerCollapsed';
 const ROLEPLAY_TOOLS_COLLAPSED_STORAGE_KEY = 'ui.roleplayToolsCollapsed';
 const NEXUS_LAYOUT_STORAGE_KEY = 'ui.nexusRoomLayout';
 const HOME_ROUTE = '/home';
+const ONBOARDING_PROFILE_SETUP_ROUTE = '/onboarding/profile-setup';
 const POLICY_ACCEPT_ROUTE = '/policy/accept';
 const CURRENT_POLICY_VERSION = 'v1.0';
 const REQUIRED_POLICY_KEYS = Object.freeze(['codeOfConduct', 'contentPolicy', 'platformRules', 'privacyPolicy']);
@@ -897,6 +899,12 @@ function resolvePostAuthRoute(user = state.currentUser) {
   }
 
   return HOME_ROUTE;
+}
+
+function shouldSendUserToProfileSetup(user = state.currentUser) {
+  if (!user?.id) return false;
+  const profile = readOnboardingProfile(user.id) || {};
+  return !profile.profileSetupSkipped;
 }
 
 function sanitizeScenarioSessionForSave(scenarioId, session) {
@@ -1362,6 +1370,7 @@ function pageTitle(key) {
     areaChat: ['Area Chat', 'Shared location-based roleplay chat stream.'],
     login: ['Log In', 'Access your guild account.'],
     signup: ['Create Account', 'Join Wyked Samurai Guild.'],
+    onboardingProfileSetup: ['Profile Setup', 'Optional resume and skills setup for a job-board workflow.'],
     policyAccept: ['Guild Policy Acceptance', 'Accept the Guild standards to continue into WSG.'],
     codeOfConduct: ['Code of Conduct', 'Professional and Safe for Work behavior standards for all members.'],
     contentPolicy: ['Content Policy', 'Safe for Work content requirements across all platform surfaces.'],
@@ -2285,7 +2294,12 @@ function AppShell(path, key, pageHtml, statusMarkup, pageSet) {
 }
 
 function homePage() {
-  const displayName = state.currentUser?.displayName || 'Guild Member';
+  const legalName = String(state.currentUser?.legalName || '').trim();
+  const displayName = state.currentUser?.displayName || state.currentUser?.username || 'Guild Member';
+  const greetingName = (legalName.split(/\s+/).filter(Boolean)[0] || displayName || 'Guild Member').trim();
+  const welcomeCopy = isKnownReturningUser(state.currentUser?.id)
+    ? `Welcome back, ${greetingName}`
+    : `Welcome, ${greetingName}`;
   const onboardingSummary = state.currentUser?.onboarding?.findYourWhyCompleted
     ? {
       motivation: String(state.currentUser?.motivation || '').trim(),
@@ -2364,7 +2378,7 @@ function homePage() {
   return `
     <section class="home-hero tier-1">
       <p class="home-kicker">Moonlit Command</p>
-      <h1>Welcome, ${escapeHtml(displayName)}</h1>
+      <h1>${escapeHtml(welcomeCopy)}</h1>
       <p>Your watch begins under the silver moon. Track active operations, gather guild intel, and deploy where your presence shifts the story.</p>
       <div class="home-hero-actions">
         <a class="pill-btn cta-primary" href="${linkFor('/nexus')}">Open Nexus</a>
@@ -3102,7 +3116,22 @@ function hubSocialPage() {
 }
 
 function resumePage() {
-  return card('Resume', '<p class="muted">Resume builder and publishing tools are stubbed for now. Your place in the IA is ready.</p>');
+  const profile = readOnboardingProfile(state.currentUser?.id) || {};
+  const resumeFile = profile.resumeUpload?.fileName;
+  const headline = profile.resumeProfile?.headline;
+  const skills = Array.isArray(profile.skillProfile?.skills) ? profile.skillProfile.skills : [];
+  return `
+    <section class="card panel-surface panel-surface--transparent">
+      <h3>Resume Workspace</h3>
+      <p class="muted">Your onboarding data is available for future recruiter views, cards, and matching pipelines.</p>
+      <ul class="support-list">
+        <li><strong>Resume Upload</strong><p class="muted">${escapeHtml(resumeFile || 'Not uploaded')}</p></li>
+        <li><strong>Headline</strong><p class="muted">${escapeHtml(headline || 'Not set')}</p></li>
+        <li><strong>Skills Snapshot</strong><p class="muted">${escapeHtml(skills.length ? skills.join(', ') : 'No skills added yet')}</p></li>
+      </ul>
+      <a class="pill-btn cta-primary" href="${linkFor(ONBOARDING_PROFILE_SETUP_ROUTE)}">Open Profile Setup</a>
+    </section>
+  `;
 }
 
 function charactersPage() {
@@ -3364,6 +3393,12 @@ function signupPage() {
       <h3>Create Account</h3>
       <form id="signup-form" class="form-stack">
         <p id="signup-feedback" class="status-banner ${state.authForms.signup.message ? `status-${state.authForms.signup.tone}` : 'status-info'}${signupHasError ? ' auth-error-banner' : ''}" role="alert" aria-live="assertive">${escapeHtml(signupFeedbackMessage)}</p>
+        <label>Real / Legal Name
+          <input name="legalName" autocomplete="name" required maxlength="120" />
+        </label>
+        <label>Display Name / Username
+          <input name="displayName" autocomplete="nickname" maxlength="60" />
+        </label>
         <label>Email
           <input name="email" type="email" autocomplete="email" required />
         </label>
@@ -3378,6 +3413,79 @@ function signupPage() {
         <div id="google-signup-button" aria-label="Continue with Google"></div>
       </form>
       <p class="muted">Already have an account? <a href="#/login">Sign in.</a></p>
+    </section>
+  `;
+}
+
+function onboardingProfileSetupPage() {
+  const profile = readOnboardingProfile(state.currentUser?.id) || {};
+  const fullName = String(profile.resumeProfile?.fullName || state.currentUser?.legalName || '').trim();
+  const preferredName = String(profile.resumeProfile?.preferredName || state.currentUser?.displayName || '').trim();
+  const headline = String(profile.resumeProfile?.headline || '').trim();
+  const summary = String(profile.resumeProfile?.summary || '').trim();
+  const workHistory = String(profile.resumeProfile?.workHistory || '').trim();
+  const education = String(profile.resumeProfile?.education || '').trim();
+  const certifications = String(profile.resumeProfile?.certifications || '').trim();
+  const locationValue = String(profile.resumeProfile?.location || '').trim();
+  const desiredRoles = String(profile.resumeProfile?.desiredRoles || '').trim();
+  const resumeFileName = String(profile.resumeUpload?.fileName || '').trim();
+  const skillTags = Array.isArray(profile.skillProfile?.skills) ? profile.skillProfile.skills.join(', ') : '';
+  const specialties = String(profile.skillProfile?.specialties || '').trim();
+  const toolsSystems = String(profile.skillProfile?.toolsSystems || '').trim();
+  const tradeExperience = String(profile.skillProfile?.tradeExperience || '').trim();
+
+  return `
+    <section class="card panel-surface panel-surface--transparent">
+      <p class="hero-kicker">Optional Onboarding</p>
+      <h3>Build your candidate profile</h3>
+      <p class="muted">You can upload a resume, build one here, add practical/trade skills, or skip for now. Nothing on this page is required.</p>
+      <div class="actions">
+        <button class="pill-btn" type="button" data-setup-scroll="resume-upload">Upload Resume</button>
+        <button class="pill-btn" type="button" data-setup-scroll="resume-builder">Build Resume</button>
+        <button class="pill-btn" type="button" data-setup-scroll="skills-profile">Add Skills</button>
+        <button class="pill-btn cta-primary" type="button" id="onboarding-skip-btn">Skip for Now</button>
+      </div>
+    </section>
+
+    <section class="card panel-surface panel-surface--soft" id="resume-upload" style="margin-top:12px;">
+      <h3>Upload Resume (Optional)</h3>
+      <p class="muted">Use this quick option if you already have a resume. We store only the filename in this local prototype.</p>
+      <form id="onboarding-resume-upload-form" class="form-stack">
+        <label>Resume file
+          <input type="file" name="resumeFile" accept=".pdf,.doc,.docx,.txt" />
+        </label>
+        <button class="pill-btn" type="submit">Save Resume Upload</button>
+      </form>
+      <p class="muted">${resumeFileName ? `Saved file: ${resumeFileName}` : 'No resume uploaded yet.'}</p>
+    </section>
+
+    <section class="card panel-surface panel-surface--soft" id="resume-builder" style="margin-top:12px;">
+      <h3>Build Resume (Optional)</h3>
+      <form id="onboarding-resume-form" class="form-stack">
+        <label>Real Name<input name="fullName" value="${escapeAttr(fullName)}" maxlength="120" /></label>
+        <label>Preferred / Display Name<input name="preferredName" value="${escapeAttr(preferredName)}" maxlength="80" /></label>
+        <label>Headline / Professional Title<input name="headline" value="${escapeAttr(headline)}" maxlength="140" /></label>
+        <label>Summary / About Me<textarea name="summary" rows="3" maxlength="1200">${escapeHtml(summary)}</textarea></label>
+        <label>Work History<textarea name="workHistory" rows="4">${escapeHtml(workHistory)}</textarea></label>
+        <label>Education<textarea name="education" rows="3">${escapeHtml(education)}</textarea></label>
+        <label>Certifications<textarea name="certifications" rows="3">${escapeHtml(certifications)}</textarea></label>
+        <label>Skills (comma-separated)<input name="skills" value="${escapeAttr(skillTags)}" /></label>
+        <label>Location<input name="location" value="${escapeAttr(locationValue)}" maxlength="120" /></label>
+        <label>Desired Role(s)<input name="desiredRoles" value="${escapeAttr(desiredRoles)}" maxlength="200" /></label>
+        <button class="pill-btn" type="submit">Save Resume Profile</button>
+      </form>
+    </section>
+
+    <section class="card panel-surface panel-surface--soft" id="skills-profile" style="margin-top:12px;">
+      <h3>Add Skills / Trade Experience (Optional)</h3>
+      <p class="muted">Great for both office and trade candidates (mechanic, HVAC, construction, technical specialties, tools/systems experience).</p>
+      <form id="onboarding-skill-form" class="form-stack">
+        <label>Practical Skills / Specialties (comma-separated)<input name="skills" value="${escapeAttr(skillTags)}" /></label>
+        <label>Trade experience details<textarea name="tradeExperience" rows="3">${escapeHtml(tradeExperience)}</textarea></label>
+        <label>Tools / Systems experience<textarea name="toolsSystems" rows="3">${escapeHtml(toolsSystems)}</textarea></label>
+        <label>Special certifications<textarea name="specialties" rows="3">${escapeHtml(specialties)}</textarea></label>
+        <button class="pill-btn" type="submit">Save Skill Profile</button>
+      </form>
     </section>
   `;
 }
@@ -4058,6 +4166,8 @@ async function finalizeSignInResult(result, formName) {
 
   const postAuthRoute = requiresPolicyReacceptance(state.currentUser)
     ? POLICY_ACCEPT_ROUTE
+    : (formName === 'signup' && shouldSendUserToProfileSetup(state.currentUser))
+      ? ONBOARDING_PROFILE_SETUP_ROUTE
     : resolvePostAuthRoute(state.currentUser);
   setTimeout(() => {
     location.hash = postAuthRoute;
@@ -5526,6 +5636,7 @@ async function render() {
       members: membersPage,
       profile: profilePage,
       resume: resumePage,
+      onboardingProfileSetup: onboardingProfileSetupPage,
       characters: charactersPage,
       settings: settingsPage,
       characterDetail: () => characterDetailPage(path),
@@ -5602,6 +5713,8 @@ async function render() {
       if (state.authForms.signup.loading) return;
       const formData = new FormData(signupForm);
       const payload = {
+        legalName: String(formData.get('legalName') || '').trim(),
+        displayName: String(formData.get('displayName') || '').trim(),
         email: String(formData.get('email') || '').trim(),
         password: String(formData.get('password') || ''),
         confirmPassword: String(formData.get('confirmPassword') || ''),
@@ -5609,7 +5722,9 @@ async function render() {
 
       const validationError = (() => {
         if (!payload.email || !isValidEmail(payload.email)) return 'Enter a valid email address.';
+        if (!payload.legalName || payload.legalName.length < 2) return 'Real / legal name is required.';
         if (!payload.password) return 'Password is required.';
+        if (!isStrongPassword(payload.password)) return PASSWORD_POLICY_MESSAGE;
         if (payload.password !== payload.confirmPassword) return 'Password and Confirm Password must match.';
         return '';
       })();
@@ -5634,6 +5749,9 @@ async function render() {
           email: requestPayload.email,
           password: requestPayload.password,
           metadata: {
+            legalName: requestPayload.legalName,
+            displayName: requestPayload.displayName || requestPayload.legalName,
+            username: requestPayload.displayName || requestPayload.legalName,
             role: 'member',
           },
         });
@@ -5716,6 +5834,7 @@ async function render() {
   }
 
   attachProfileEditHandler();
+  attachOnboardingProfileSetupHandlers();
   attachArenaHandlers();
   attachRoleplayHandlers();
   attachNexusRoomHandlers();
@@ -5739,6 +5858,117 @@ async function render() {
   }
 }
 
+
+function attachOnboardingProfileSetupHandlers() {
+  const currentUser = state.currentUser;
+  if (!currentUser?.id) return;
+
+  document.querySelectorAll('[data-setup-scroll]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const targetId = String(button.getAttribute('data-setup-scroll') || '');
+      const target = targetId ? document.getElementById(targetId) : null;
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  });
+
+  const skipButton = document.getElementById('onboarding-skip-btn');
+  if (skipButton) {
+    skipButton.onclick = () => {
+      const currentProfile = readOnboardingProfile(currentUser.id) || {};
+      saveOnboardingProfile({ ...currentProfile, profileSetupSkipped: true }, currentUser.id);
+      setStatusMessage('Setup skipped. You can finish profile setup anytime from Resume.', 'info');
+      location.hash = HOME_ROUTE;
+    };
+  }
+
+  const uploadForm = document.getElementById('onboarding-resume-upload-form');
+  if (uploadForm) {
+    uploadForm.onsubmit = (event) => {
+      event.preventDefault();
+      const formData = new FormData(uploadForm);
+      const file = formData.get('resumeFile');
+      const currentProfile = readOnboardingProfile(currentUser.id) || {};
+      saveOnboardingProfile({
+        ...currentProfile,
+        profileSetupSkipped: false,
+        resumeUpload: {
+          uploadedAt: new Date().toISOString(),
+          fileName: file && typeof file === 'object' && 'name' in file ? String(file.name || '') : '',
+        },
+      }, currentUser.id);
+      state.currentUser = withPersistedOnboardingProfile(state.currentUser);
+      setStatusMessage('Resume upload details saved.', 'success');
+      render();
+    };
+  }
+
+  const resumeForm = document.getElementById('onboarding-resume-form');
+  if (resumeForm) {
+    resumeForm.onsubmit = (event) => {
+      event.preventDefault();
+      const formData = new FormData(resumeForm);
+      const currentProfile = readOnboardingProfile(currentUser.id) || {};
+      const parsedSkills = String(formData.get('skills') || '')
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+      const resumeProfile = {
+        fullName: String(formData.get('fullName') || '').trim(),
+        preferredName: String(formData.get('preferredName') || '').trim(),
+        headline: String(formData.get('headline') || '').trim(),
+        summary: String(formData.get('summary') || '').trim(),
+        workHistory: String(formData.get('workHistory') || '').trim(),
+        education: String(formData.get('education') || '').trim(),
+        certifications: String(formData.get('certifications') || '').trim(),
+        skills: parsedSkills,
+        location: String(formData.get('location') || '').trim(),
+        desiredRoles: String(formData.get('desiredRoles') || '').trim(),
+        updatedAt: new Date().toISOString(),
+      };
+      saveOnboardingProfile({
+        ...currentProfile,
+        profileSetupSkipped: false,
+        resumeProfile,
+        skillProfile: {
+          ...(currentProfile.skillProfile || {}),
+          skills: parsedSkills.length ? parsedSkills : (currentProfile.skillProfile?.skills || []),
+        },
+      }, currentUser.id);
+      state.currentUser = withPersistedOnboardingProfile(state.currentUser);
+      setStatusMessage('Resume profile saved.', 'success');
+      render();
+    };
+  }
+
+  const skillForm = document.getElementById('onboarding-skill-form');
+  if (skillForm) {
+    skillForm.onsubmit = (event) => {
+      event.preventDefault();
+      const formData = new FormData(skillForm);
+      const currentProfile = readOnboardingProfile(currentUser.id) || {};
+      const skills = String(formData.get('skills') || '')
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+      saveOnboardingProfile({
+        ...currentProfile,
+        profileSetupSkipped: false,
+        skillProfile: {
+          skills,
+          tradeExperience: String(formData.get('tradeExperience') || '').trim(),
+          toolsSystems: String(formData.get('toolsSystems') || '').trim(),
+          specialties: String(formData.get('specialties') || '').trim(),
+          updatedAt: new Date().toISOString(),
+        },
+      }, currentUser.id);
+      state.currentUser = withPersistedOnboardingProfile(state.currentUser);
+      setStatusMessage('Skill profile saved.', 'success');
+      render();
+    };
+  }
+}
 
 function attachNexusRoomHandlers() {
   document.querySelectorAll('[data-toggle-nexus-create-room]').forEach((button) => {
