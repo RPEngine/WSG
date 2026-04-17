@@ -19,10 +19,10 @@ const routes = {
   '/members': { key: 'hubSocial', requiresAuth: true },
   '/discussions': { key: 'discussions', requiresAuth: true },
   '/profile': { key: 'profile', requiresAuth: true },
-  '/resume': { key: 'profile', requiresAuth: true },
-  '/characters': { key: 'profile', requiresAuth: true },
-  '/recruiters': { key: 'profile', requiresAuth: true },
-  '/settings': { key: 'profile', requiresAuth: true },
+  '/resume': { key: 'resume', requiresAuth: true },
+  '/characters': { key: 'characters', requiresAuth: true },
+  '/recruiters': { key: 'recruiters', requiresAuth: true },
+  '/settings': { key: 'settings', requiresAuth: true },
   '/utilities/notifications': { key: 'utilitiesNotifications', requiresAuth: true },
   '/utilities/invites': { key: 'utilitiesInvites', requiresAuth: true },
   '/utilities/room-updates': { key: 'utilitiesRoomUpdates', requiresAuth: true },
@@ -1687,7 +1687,11 @@ function pageTitle(key) {
     arena: ['Trial Arena', 'Run starter leadership Trials and prepare for live simulation loops.'],
     guild: ['Guild World', 'Story streams, locations, and social immersion in one space.'],
     members: ['Guild Members', 'Discover member profiles and current contribution footprint.'],
-    profile: ['My Profile', 'Unified profile, account settings, connections, and activity in one section.'],
+    profile: ['Profile', 'Identity-focused profile details, activity snapshot, and quick connection actions.'],
+    resume: ['Resume', 'Your resume workspace and publication controls.'],
+    characters: ['Characters', 'Manage your roleplay and persona character roster.'],
+    recruiters: ['Recruiters', 'Manage recruiter seats and company account access.'],
+    settings: ['Settings', 'Personal account preferences and platform controls.'],
     directChat: ['Direct Chat', 'Messaging now lives in dedicated collaboration rails outside Profile.'],
     scenarioChat: ['Scenario Chat', 'Scenario messaging for active Arena sessions.'],
     areaChat: ['Area Chat', 'Shared location-based roleplay chat stream.'],
@@ -2554,7 +2558,7 @@ function SiteFooter() {
 
 function Header(path) {
   const isCollapsed = state.shell.headerCollapsed;
-  const accountLabel = state.currentUser ? 'Profile' : 'Log in';
+  const accountLabel = state.currentUser ? 'Account' : 'Log in';
   return `
     <header class="header panel ${isCollapsed ? 'is-collapsed' : ''}">
       <button type="button" class="header-collapse-btn" id="header-collapse-toggle" aria-label="${isCollapsed ? 'Expand header' : 'Collapse header'}" title="${isCollapsed ? 'Expand header' : 'Collapse header'}">${isCollapsed ? '▼' : '▲'}</button>
@@ -2569,15 +2573,30 @@ function Header(path) {
           <div class="account-menu-dropdown header-dropdown-menu" id="main-menu-dropdown">
             <a class="menu-parent-link" href="${linkFor('/home')}">Home</a>
             <a class="menu-parent-link" href="${linkFor('/nexus')}">Nexus</a>
+            <div class="menu-submenu">
+              <div class="menu-group-label">Nexus</div>
+              <a href="${linkFor('/nexus/professional')}">Professional</a>
+              <a href="${linkFor('/nexus/roleplay')}">Roleplay</a>
+            </div>
             <a class="menu-parent-link" href="${linkFor('/profile')}">Profile</a>
+            <a class="menu-parent-link" href="${linkFor('/hub')}">Hub</a>
+            <div class="menu-submenu">
+              <div class="menu-group-label">Hub</div>
+              <a href="${linkFor('/hub/social')}">Social</a>
+              <a href="${linkFor('/hub/recruiter')}">Recruiter</a>
+              <a href="${linkFor('/hub/reviews')}">Reviews</a>
+            </div>
+            <a class="menu-parent-link" href="${linkFor('/discussions')}">Discussions</a>
           </div>
         </div>
         ${state.currentUser ? `
           <div class="account-menu">
             <button type="button" class="pill-btn header-glass-btn account-menu-btn ${isCollapsed ? 'hide-when-header-collapsed' : ''}" id="account-menu-btn" aria-haspopup="true" aria-expanded="false">${escapeHtml(accountLabel)} ▾</button>
             <div class="account-menu-dropdown header-dropdown-menu" id="account-menu-dropdown">
-              <div class="menu-group-label">My Profile</div>
-              <a href="${linkFor('/profile')}">Open Profile</a>
+              <div class="menu-group-label">Account</div>
+              <a href="${linkFor('/resume')}">Resume</a>
+              <a href="${linkFor('/settings')}">Settings</a>
+              <a href="${linkFor('/characters')}">Characters</a>
               <button type="button" class="menu-item-btn" id="logout-btn">Log out</button>
             </div>
           </div>
@@ -2665,7 +2684,7 @@ function homePage() {
       </li>
     `;
 
-  const contributors = (state.network.connections.length ? state.network.connections : [{ displayName: 'Ari Vale', role: 'Strategist' }, { displayName: 'Kai Ren', role: 'Scout Lead' }, { displayName: 'Mira Sol', role: 'Mediator' }])
+  const contributors = (state.network.connections.length ? state.network.connections : [{ displayName: 'Penny Carter', role: 'Strategist' }, { displayName: 'Kai Ren', role: 'Scout Lead' }, { displayName: 'Mira Sol', role: 'Mediator' }])
     .slice(0, 4)
     .map((connection) => `
       <li>
@@ -3494,6 +3513,73 @@ function profileSectionNav() {
         <a class="pill-btn" href="#profile-account-settings">Account Settings</a>
         <a class="pill-btn" href="#profile-connections">Connections</a>
         <a class="pill-btn" href="#profile-activity">Activity</a>
+      </div>
+    </section>
+  `;
+}
+
+function resumePage() {
+  const profile = readOnboardingProfile(state.currentUser?.id) || {};
+  const resumeFile = profile.resumeUpload?.fileName;
+  const headline = profile.resumeProfile?.headline;
+  const skills = Array.isArray(profile.skillProfile?.skills) ? profile.skillProfile.skills : [];
+  return `
+    <section class="card panel-surface panel-surface--transparent">
+      <h3>Resume Workspace</h3>
+      <p class="muted">Your onboarding data is available for future recruiter views, cards, and matching pipelines.</p>
+      <ul class="support-list">
+        <li><strong>Resume Upload</strong><p class="muted">${escapeHtml(resumeFile || 'Not uploaded')}</p></li>
+        <li><strong>Headline</strong><p class="muted">${escapeHtml(headline || 'Not set')}</p></li>
+        <li><strong>Skills Snapshot</strong><p class="muted">${escapeHtml(skills.length ? skills.join(', ') : 'No skills added yet')}</p></li>
+      </ul>
+      <a class="pill-btn cta-primary" href="${linkFor(ONBOARDING_PROFILE_SETUP_ROUTE)}">Open Profile Setup</a>
+    </section>
+  `;
+}
+
+function charactersPage() {
+  const slotMeta = readProfileSlotMeta(state.currentUser || {});
+  if (slotMeta.slotProfileType === 'company') {
+    return `
+      <section class="card panel-surface panel-surface--transparent">
+        <h3>Recruiters</h3>
+        <p class="muted">Company accounts manage recruiter seats from the Recruiters page.</p>
+        <a class="pill-btn" href="${linkFor('/recruiters')}">Open Recruiters</a>
+      </section>
+    `;
+  }
+  return card('Characters', '<p class="muted">Character roster management is available in Profile today. Dedicated Characters page is stubbed for next iteration.</p>');
+}
+
+function recruitersPage() {
+  const slotMeta = readProfileSlotMeta(state.currentUser || {});
+  if (slotMeta.slotProfileType !== 'company') {
+    return `
+      <section class="card panel-surface panel-surface--transparent">
+        <h3>Characters</h3>
+        <p class="muted">Person accounts use Characters instead of Recruiters.</p>
+        <a class="pill-btn" href="${linkFor('/characters')}">Open Characters</a>
+      </section>
+    `;
+  }
+  return card('Recruiters', '<p class="muted">Recruiter seat management is available in Profile today. Dedicated Recruiters page is stubbed for next iteration.</p>');
+}
+
+function settingsPage() {
+  const visibility = state.profilePrivacy.visibility === 'private' ? 'Private' : 'Public';
+  return `
+    <section class="card panel-surface panel-surface--transparent">
+      <h3>Profile Settings</h3>
+      <p class="muted">Manage profile visibility and access controls from your Profile page settings section.</p>
+      <ul class="list compact-list">
+        <li><strong>Profile Visibility:</strong> ${escapeHtml(visibility)}</li>
+        <li><strong>Allow shareable link:</strong> ${state.profilePrivacy.allowShareableLink ? 'On' : 'Off'}</li>
+        <li><strong>Allow access requests:</strong> ${state.profilePrivacy.allowAccessRequests ? 'On' : 'Off'}</li>
+        <li><strong>Allow recruiter requests:</strong> ${state.profilePrivacy.allowRecruiterAccessRequests ? 'On' : 'Off'}</li>
+        <li><strong>Show in member search:</strong> ${state.profilePrivacy.showInMemberSearch ? 'On' : 'Off'}</li>
+      </ul>
+      <div class="actions">
+        <a class="pill-btn cta-primary" href="${linkFor('/profile')}">Open Profile Settings</a>
       </div>
     </section>
   `;
@@ -7117,7 +7203,11 @@ async function render() {
       roleplayHub: roleplayHubPage,
       members: membersPage,
       profile: profilePage,
+      resume: resumePage,
       onboardingProfileSetup: onboardingProfileSetupPage,
+      characters: charactersPage,
+      recruiters: recruitersPage,
+      settings: settingsPage,
       characterDetail: () => characterDetailPage(path),
       directChat: directChatPage,
       scenarioChat: scenarioChatPage,
@@ -7366,7 +7456,7 @@ function attachOnboardingProfileSetupHandlers() {
     skipButton.onclick = () => {
       const currentProfile = readOnboardingProfile(currentUser.id) || {};
       saveOnboardingProfile({ ...currentProfile, profileSetupSkipped: true }, currentUser.id);
-      setStatusMessage('Setup skipped. You can finish profile setup anytime from My Profile.', 'info');
+      setStatusMessage('Setup skipped. You can finish profile setup anytime from Resume.', 'info');
       location.hash = HOME_ROUTE;
     };
   }
