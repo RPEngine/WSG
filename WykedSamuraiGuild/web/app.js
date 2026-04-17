@@ -472,6 +472,12 @@ const state = {
     message: '',
     tone: 'info',
   },
+  profileSync: {
+    status: 'idle',
+    message: '',
+    source: '',
+    canRetry: false,
+  },
   profileInlineEdit: {
     overview: false,
     resume: false,
@@ -785,6 +791,30 @@ function setFormMessage(formName, message, tone = 'info') {
 function setProfileHubMessage(message, tone = 'info') {
   state.profileHub.message = message;
   state.profileHub.tone = tone;
+}
+
+function setProfileSyncState({ status = 'idle', message = '', source = '', canRetry = false } = {}) {
+  state.profileSync = {
+    status,
+    message,
+    source,
+    canRetry,
+  };
+}
+
+function toUserSafeProfileErrorMessage(error, fallback = 'We couldn’t save that right now. Please try again.') {
+  const code = String(error?.code || error?.status || '').toLowerCase();
+  const rawMessage = String(error?.message || '').toLowerCase();
+  if (code === '401' || code === '403' || code === '42501' || rawMessage.includes('permission')) {
+    return 'Your account does not have permission to sync this change yet.';
+  }
+  if (rawMessage.includes('network') || rawMessage.includes('fetch')) {
+    return 'Your changes were saved locally, but we could not sync them yet.';
+  }
+  if (rawMessage.includes('timeout')) {
+    return 'Your changes were saved locally, but syncing is taking longer than expected.';
+  }
+  return fallback;
 }
 
 function setProfileInlineEdit(sectionKey, isEditing) {
@@ -3835,9 +3865,18 @@ function profilePage() {
   const resumeWorkHistory = resumeProfile.workHistory || profileSource.onboardingProfile?.resumeUpload?.fileName || '';
   const resumeEducation = resumeProfile.education || '';
   const resumeCertifications = resumeProfile.certifications || '';
+  const profileSyncStatus = state.profileSync?.status || 'idle';
+  const profileSyncTone = profileSyncStatus === 'synced' ? 'success' : (profileSyncStatus === 'sync_failed' ? 'warning' : 'info');
+  const profileSyncMessage = state.profileSync?.message || '';
 
   const profileContent = `
     ${isOwnProfileRoute ? profileSectionNav() : ''}
+    ${isOwnProfileRoute && profileSyncMessage ? `
+      <section class="status-banner status-${escapeAttr(profileSyncTone)}" role="status" aria-live="polite">
+        <strong>${escapeHtml(profileSyncMessage)}</strong>
+        ${state.profileSync?.canRetry ? `<div class="actions" style="margin-top:8px;"><button class="pill-btn" id="profile-sync-retry-btn" type="button">Retry Sync</button></div>` : ''}
+      </section>
+    ` : ''}
 
     <section id="profile-overview" class="feature profile-display-hero guild-identity-hero panel-surface panel-surface--transparent">
       <div class="profile-summary-row">
@@ -3858,10 +3897,10 @@ function profilePage() {
 
     <section class="card panel-surface panel-surface--transparent profile-framework-section">
       <div class="actions" style="justify-content:space-between; align-items:center;">
-        <h3 style="margin:0;">About</h3>
+        <h3 style="margin:0;">Profile Identity</h3>
         ${isOwnProfileRoute ? `<button class="pill-btn" data-profile-inline-edit="overview" type="button">${state.profileInlineEdit.overview ? 'Close' : 'Edit'}</button>` : ''}
       </div>
-      <p class="muted">Identity and profile summary.</p>
+      <p class="muted">Core identity details shown on your profile.</p>
       <div class="profile-framework-grid">
         ${renderFrameworkField('Display Name', displayName)}
         ${renderFrameworkField('Username', profile.username)}
@@ -3896,10 +3935,10 @@ function profilePage() {
 
     <section class="card panel-surface panel-surface--transparent profile-framework-section">
       <div class="actions" style="justify-content:space-between; align-items:center;">
-        <h3 style="margin:0;">Experience / Resume</h3>
+        <h3 style="margin:0;">Resume & Candidate Setup</h3>
         ${isOwnProfileRoute ? `<button class="pill-btn" data-profile-inline-edit="resume" type="button">${state.profileInlineEdit.resume ? 'Close' : 'Edit'}</button>` : ''}
       </div>
-      <p class="muted">Career and contribution signal.</p>
+      <p class="muted">Resume metadata and candidate setup details.</p>
       <div class="profile-framework-grid">
         ${renderFrameworkField('Work History', resumeWorkHistory, 'Resume details pending')}
         ${renderFrameworkField('Education', resumeEducation, 'Education not added yet')}
@@ -3919,8 +3958,8 @@ function profilePage() {
     </section>
 
     ${renderProfileFrameworkSection(
-      'Skills / Strengths',
-      'Capabilities and strengths shared on WSG. Edit from the About section for the active profile layer.',
+      'Skill Management',
+      'Skills and strengths used across your onboarding profile and active profile layer.',
       [
         { label: 'Skills', value: uniqueSkills.length ? uniqueSkills : profileSource.skillProfile?.specialties, fallback: 'No skills listed yet' },
         { label: 'Specialties', value: profileSource.skillProfile?.specialties, fallback: 'Specialties not listed yet' },
@@ -4029,8 +4068,8 @@ function profilePage() {
     </section>
 
     <section id="profile-connections" class="card profile-edit-section panel-surface panel-surface--transparent" style="margin-top:12px;">
-      <h3>Connections</h3>
-      <p class="muted">Connections and networking tools live here. This panel is ready for expanded social graph, intro workflows, and recruiter visibility toggles.</p>
+      <h3>Optional Onboarding Actions</h3>
+      <p class="muted">Continue onboarding tasks without leaving your profile editor.</p>
       ${Array.isArray(state.network.connections) && state.network.connections.length
     ? `<ul class="list compact-list">
           ${state.network.connections.slice(0, 6).map((entry) => `<li><strong>${escapeHtml(entry.displayName || entry.username || 'Guild Member')}</strong> <span class="muted">· ${escapeHtml(entry.role || 'Member')}</span></li>`).join('')}
@@ -5557,6 +5596,15 @@ async function upsertOwnSupabaseProfileFromOnboarding({ resumeProfile = {}, skil
   return data;
 }
 
+async function retryProfileCloudSyncFromLocal() {
+  const userId = state.currentUser?.id;
+  if (!userId) return;
+  const localProfile = readOnboardingProfile(userId) || {};
+  const resumeProfile = localProfile.resumeProfile || {};
+  const skillProfile = localProfile.skillProfile || {};
+  await upsertOwnSupabaseProfileFromOnboarding({ resumeProfile, skillProfile });
+}
+
 function clearClientSecurityState() {
   const prefixesToClear = [
     ONBOARDING_PROFILE_PREFIX,
@@ -5866,7 +5914,7 @@ async function loadProfileForRoute(path) {
         status: notFound ? 'empty' : (fallbackProfile ? 'ready' : 'error'),
         message: notFound
           ? 'Your profile has not been created yet.'
-          : (fallbackProfile ? 'Loaded your local profile fallback while profile sync is temporarily unavailable.' : (rawMessage || 'Unable to load your profile right now.')),
+          : (fallbackProfile ? 'Loaded your local profile fallback while profile sync is temporarily unavailable.' : 'Unable to load your profile right now.'),
         isOwnRoute: true,
       };
       console.error('[profile:frontend] profile route load failure', {
@@ -5926,16 +5974,15 @@ async function loadProfileForRoute(path) {
     console.log('[profile:frontend] member profile fetch success', { memberId });
   } catch (error) {
     const failedMemberId = match?.[1] || usernameMatch?.[1] || null;
-    const message = error instanceof Error ? error.message : String(error);
     console.error('[profile:frontend] member profile fetch failure', {
       memberId: failedMemberId,
-      message,
+      message: error?.message || String(error),
       error,
     });
     state.activeProfile = null;
     state.profileLoad = {
       status: 'error',
-      message: message || 'Unable to load this profile right now.',
+      message: 'Unable to load this profile right now.',
       isOwnRoute: false,
     };
   }
@@ -6466,6 +6513,7 @@ function attachProfileEditHandler() {
 
       state.profileHub.saving = true;
       setProfileHubMessage('Saving profile layer...', 'info');
+      setProfileSyncState({ status: 'saving', message: 'Saving profile changes…', source: 'profile_layer', canRetry: false });
       render();
       try {
         const result = await apiRequest(`/profile/layers/${layerKey}`, { method: 'PATCH', body: JSON.stringify(payload) });
@@ -6477,9 +6525,17 @@ function attachProfileEditHandler() {
         state.availableLayers = normalized.availableLayers;
         state.lockedLayers = normalized.lockedLayers;
         setProfileHubMessage('Profile layer saved successfully.', 'success');
+        setProfileSyncState({ status: 'synced', message: 'Profile changes saved and synced.', source: 'profile_layer', canRetry: false });
         setProfileInlineEdit('overview', false);
       } catch (error) {
-        setProfileHubMessage(error instanceof Error ? error.message : 'Unable to save profile layer right now.', 'error');
+        console.error('[profile:frontend] profile layer save failed', {
+          message: error?.message || String(error),
+          code: error?.code || null,
+          details: error?.details || null,
+        });
+        const safeMessage = toUserSafeProfileErrorMessage(error);
+        setProfileHubMessage(safeMessage, 'error');
+        setProfileSyncState({ status: 'sync_failed', message: safeMessage, source: 'profile_layer', canRetry: true });
       } finally {
         state.profileHub.saving = false;
         render();
@@ -6504,6 +6560,7 @@ function attachProfileEditHandler() {
       const samuraiStatus = String(formData.get('samuraiStatus') || 'samurai').trim().toLowerCase() === 'ronin' ? 'ronin' : 'samurai';
       state.profileHub.saving = true;
       setProfileHubMessage('Saving account settings...', 'info');
+      setProfileSyncState({ status: 'saving', message: 'Saving account settings…', source: 'account', canRetry: false });
       render();
       try {
         const result = await apiRequest('/profile/hub', { method: 'PATCH', body: JSON.stringify(payload) });
@@ -6530,11 +6587,18 @@ function attachProfileEditHandler() {
         state.lockedLayers = normalized.lockedLayers;
         setProfileHubMessage('Account settings saved successfully.', 'success');
         setStatusMessage('Account settings saved successfully.', 'success');
+        setProfileSyncState({ status: 'synced', message: 'Account settings saved and synced.', source: 'account', canRetry: false });
         setProfileInlineEdit('account', false);
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unable to save account settings right now.';
-        setProfileHubMessage(message, 'error');
-        setStatusMessage(message, 'error');
+        console.error('[profile:frontend] account settings save failed', {
+          message: error?.message || String(error),
+          code: error?.code || null,
+          details: error?.details || null,
+        });
+        const safeMessage = toUserSafeProfileErrorMessage(error);
+        setProfileHubMessage(safeMessage, 'error');
+        setStatusMessage('We couldn’t save that right now. Please try again.', 'error');
+        setProfileSyncState({ status: 'sync_failed', message: safeMessage, source: 'account', canRetry: true });
       } finally {
         state.profileHub.saving = false;
         render();
@@ -6558,6 +6622,7 @@ function attachProfileEditHandler() {
 
       state.profileHub.saving = true;
       setProfileHubMessage('Saving privacy settings...', 'info');
+      setProfileSyncState({ status: 'saving', message: 'Saving privacy settings…', source: 'privacy', canRetry: false });
       render();
       try {
         const result = await apiRequest('/profile/privacy', { method: 'PATCH', body: JSON.stringify(payload) });
@@ -6567,12 +6632,19 @@ function attachProfileEditHandler() {
         state.activeProfile = state.currentUser;
         setProfileHubMessage('Privacy settings saved successfully.', 'success');
         setStatusMessage('Privacy settings saved.', 'success');
+        setProfileSyncState({ status: 'synced', message: 'Privacy settings saved and synced.', source: 'privacy', canRetry: false });
         state.membersLoaded = false;
         setProfileInlineEdit('privacy', false);
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unable to save privacy settings right now.';
-        setProfileHubMessage(message, 'error');
-        setStatusMessage(message, 'error');
+        console.error('[profile:frontend] privacy settings save failed', {
+          message: error?.message || String(error),
+          code: error?.code || null,
+          details: error?.details || null,
+        });
+        const safeMessage = toUserSafeProfileErrorMessage(error);
+        setProfileHubMessage(safeMessage, 'error');
+        setStatusMessage('We couldn’t save that right now. Please try again.', 'error');
+        setProfileSyncState({ status: 'sync_failed', message: safeMessage, source: 'privacy', canRetry: true });
       } finally {
         state.profileHub.saving = false;
         render();
@@ -6582,7 +6654,7 @@ function attachProfileEditHandler() {
 
   const profileResumeForm = document.getElementById('profile-resume-form');
   if (profileResumeForm) {
-    profileResumeForm.onsubmit = (event) => {
+    profileResumeForm.onsubmit = async (event) => {
       event.preventDefault();
       const formData = new FormData(profileResumeForm);
       const existingOnboarding = readOnboardingProfile(state.currentUser?.id) || {};
@@ -6601,8 +6673,65 @@ function attachProfileEditHandler() {
         resumeProfile,
       });
       state.activeProfile = state.currentUser;
+      setProfileSyncState({
+        status: 'local_only',
+        message: 'Resume details saved locally. Syncing now…',
+        source: 'resume_metadata',
+        canRetry: false,
+      });
+      try {
+        await upsertOwnSupabaseProfileFromOnboarding({
+          resumeProfile,
+          skillProfile: existingOnboarding.skillProfile || {},
+        });
+        setProfileSyncState({
+          status: 'synced',
+          message: 'Resume details saved and synced.',
+          source: 'resume_metadata',
+          canRetry: false,
+        });
+      } catch (error) {
+        console.error('[profile:frontend] resume metadata sync failed', {
+          message: error?.message || String(error),
+          code: error?.code || null,
+          details: error?.details || null,
+        });
+        setProfileSyncState({
+          status: 'sync_failed',
+          message: 'Your changes were saved locally, but we could not sync them yet.',
+          source: 'resume_metadata',
+          canRetry: true,
+        });
+      }
       setProfileInlineEdit('resume', false);
       setStatusMessage('Resume details saved.', 'success');
+      render();
+    };
+  }
+
+  const profileSyncRetryButton = document.getElementById('profile-sync-retry-btn');
+  if (profileSyncRetryButton) {
+    profileSyncRetryButton.onclick = async () => {
+      setProfileSyncState({ status: 'saving', message: 'Retrying profile sync…', source: 'retry', canRetry: false });
+      render();
+      try {
+        await retryProfileCloudSyncFromLocal();
+        setProfileSyncState({ status: 'synced', message: 'Profile changes are now synced.', source: 'retry', canRetry: false });
+        setStatusMessage('Profile sync completed.', 'success');
+      } catch (error) {
+        console.error('[profile:frontend] manual profile sync retry failed', {
+          message: error?.message || String(error),
+          code: error?.code || null,
+          details: error?.details || null,
+        });
+        setProfileSyncState({
+          status: 'sync_failed',
+          message: 'Your changes are still saved locally, but sync is unavailable right now.',
+          source: 'retry',
+          canRetry: true,
+        });
+        setStatusMessage('Sync is still unavailable. Please try again shortly.', 'error');
+      }
       render();
     };
   }
@@ -6615,8 +6744,11 @@ function attachProfileEditHandler() {
         await apiRequest(`/members/${encodeURIComponent(state.activeProfile.id)}/access-requests`, { method: 'POST' });
         setStatusMessage('Access request submitted.', 'success');
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unable to submit access request.';
-        setStatusMessage(message, 'error');
+        console.error('[profile:frontend] profile access request submit failed', {
+          message: error?.message || String(error),
+          code: error?.code || null,
+        });
+        setStatusMessage('Unable to submit access request right now. Please try again.', 'error');
       }
       await loadProfileForRoute(location.hash.replace('#', '') || '/profile');
       render();
@@ -6636,8 +6768,11 @@ function attachProfileEditHandler() {
         await loadProfileAccessRequests();
         setStatusMessage(`Access request ${decision === 'approve' ? 'approved' : 'denied'}.`, 'success');
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unable to update access request.';
-        setStatusMessage(message, 'error');
+        console.error('[profile:frontend] profile access request decision failed', {
+          message: error?.message || String(error),
+          code: error?.code || null,
+        });
+        setStatusMessage('Unable to update that request right now. Please try again.', 'error');
       }
       render();
     };
@@ -7739,6 +7874,7 @@ function attachOnboardingProfileSetupHandlers() {
         },
       }, currentUser.id);
       try {
+        setProfileSyncState({ status: 'saving', message: 'Saving resume upload…', source: 'onboarding_resume_upload', canRetry: false });
         await upsertOwnSupabaseProfileFromOnboarding({
           resumeProfile: {
             ...(finalResumeProfile || {}),
@@ -7755,10 +7891,17 @@ function attachOnboardingProfileSetupHandlers() {
           details: error?.details || null,
           hint: error?.hint || null,
         });
-        setStatusMessage(`Resume uploaded locally, but profile sync failed: ${error instanceof Error ? error.message : String(error)}`, 'error');
+        setProfileSyncState({
+          status: 'sync_failed',
+          message: 'Your changes were saved locally, but we could not sync them yet.',
+          source: 'onboarding_resume_upload',
+          canRetry: true,
+        });
+        setStatusMessage('Your changes were saved locally, but we could not sync them yet.', 'error');
         render();
         return;
       }
+      setProfileSyncState({ status: 'synced', message: 'Resume upload saved and synced.', source: 'onboarding_resume_upload', canRetry: false });
       if (parseFailed) {
         setStatusMessage('Resume uploaded. We could not parse profile suggestions, so you can fill fields manually below.', 'info');
       } else if (finalChangedFields.length) {
@@ -7806,6 +7949,7 @@ function attachOnboardingProfileSetupHandlers() {
         },
       }, currentUser.id);
       try {
+        setProfileSyncState({ status: 'saving', message: 'Saving resume profile…', source: 'onboarding_resume_form', canRetry: false });
         await upsertOwnSupabaseProfileFromOnboarding({
           resumeProfile,
           skillProfile: {
@@ -7814,11 +7958,24 @@ function attachOnboardingProfileSetupHandlers() {
           },
         });
         state.currentUser = withPersistedOnboardingProfile(state.currentUser);
-        setStatusMessage('Resume profile saved and synced to Supabase profile record.', 'success');
+        setProfileSyncState({ status: 'synced', message: 'Resume profile saved and synced.', source: 'onboarding_resume_form', canRetry: false });
+        setStatusMessage('Resume profile saved and synced.', 'success');
         location.hash = '/profile';
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        setStatusMessage(`Resume saved locally, but profile sync failed: ${message}`, 'error');
+        console.error('[profile:frontend] onboarding resume save sync failed', {
+          authUserId: currentUser.id,
+          code: error?.code || null,
+          message: error?.message || String(error),
+          details: error?.details || null,
+          hint: error?.hint || null,
+        });
+        setProfileSyncState({
+          status: 'sync_failed',
+          message: 'Your changes were saved locally, but we could not sync them yet.',
+          source: 'onboarding_resume_form',
+          canRetry: true,
+        });
+        setStatusMessage('Your changes were saved locally, but we could not sync them yet.', 'error');
       }
       render();
     };
@@ -7847,16 +8004,30 @@ function attachOnboardingProfileSetupHandlers() {
         skillProfile,
       }, currentUser.id);
       try {
+        setProfileSyncState({ status: 'saving', message: 'Saving skills…', source: 'onboarding_skill_form', canRetry: false });
         await upsertOwnSupabaseProfileFromOnboarding({
           resumeProfile: currentProfile.resumeProfile || {},
           skillProfile,
         });
         state.currentUser = withPersistedOnboardingProfile(state.currentUser);
-        setStatusMessage('Skill profile saved and synced to Supabase profile record.', 'success');
+        setProfileSyncState({ status: 'synced', message: 'Skills saved and synced.', source: 'onboarding_skill_form', canRetry: false });
+        setStatusMessage('Skill profile saved and synced.', 'success');
         location.hash = '/profile';
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        setStatusMessage(`Skills saved locally, but profile sync failed: ${message}`, 'error');
+        console.error('[profile:frontend] onboarding skills save sync failed', {
+          authUserId: currentUser.id,
+          code: error?.code || null,
+          message: error?.message || String(error),
+          details: error?.details || null,
+          hint: error?.hint || null,
+        });
+        setProfileSyncState({
+          status: 'sync_failed',
+          message: 'Your changes were saved locally, but we could not sync them yet.',
+          source: 'onboarding_skill_form',
+          canRetry: true,
+        });
+        setStatusMessage('Your changes were saved locally, but we could not sync them yet.', 'error');
       }
       render();
     };
