@@ -1,12 +1,24 @@
 import { Pool } from "pg";
+import { DATABASE_CONNECTION_URL, DATABASE_SSL_MODE } from "./env.js";
 
-const connectionString = process.env.DATABASE_URL;
+const connectionString = DATABASE_CONNECTION_URL;
 
 if (!connectionString) {
-  throw new Error("DATABASE_URL is required.");
+  throw new Error("A database URL is required. Set DATABASE_URL or RENDER_INTERNAL_DATABASE_URL.");
 }
 
-const pool = new Pool({ connectionString });
+function getSslConfig() {
+  if (DATABASE_SSL_MODE === "disable") {
+    return false;
+  }
+
+  return { rejectUnauthorized: false };
+}
+
+const pool = new Pool({
+  connectionString,
+  ssl: getSslConfig(),
+});
 
 export async function connectDatabase() {
   const client = await pool.connect();
