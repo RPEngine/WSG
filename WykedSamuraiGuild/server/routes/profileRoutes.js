@@ -35,7 +35,6 @@ router.post("/profile/me", requireAuth, requireObjectBody, ensureMyProfile);
 router.patch(
   "/profile/me",
   requireAuth,
-  requireRecentReauth,
   requireObjectBody,
   sanitizeBody({ displayName: { required: true, maxLength: 60 }, avatarUrl: { maxLength: 500 }, bio: { maxLength: 280 } }),
   contentSafetyGate({ fields: ["displayName", "bio"], category: "profile" }),
