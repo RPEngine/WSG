@@ -414,6 +414,14 @@ const state = {
     message: '',
     tone: 'info',
   },
+  profilePrivacy: {
+    visibility: 'public',
+    allowShareableLink: true,
+    allowAccessRequests: true,
+    allowRecruiterAccessRequests: true,
+    showInMemberSearch: true,
+  },
+  profileAccessRequests: [],
   authForms: {
     login: { message: '', tone: 'info', loading: false },
     signup: { message: '', tone: 'info', loading: false },
@@ -762,6 +770,16 @@ function normalizeLayeredProfile(profilePayload) {
     : (user?.layers || {});
 
   return { user, availableLayers, lockedLayers, layers };
+}
+
+function syncProfilePrivacyFromUser(profile = state.currentUser) {
+  state.profilePrivacy = {
+    visibility: profile?.profileVisibility === 'private' ? 'private' : 'public',
+    allowShareableLink: profile?.allowShareableLink !== false,
+    allowAccessRequests: profile?.allowAccessRequests !== false,
+    allowRecruiterAccessRequests: profile?.allowRecruiterAccessRequests !== false,
+    showInMemberSearch: profile?.showInMemberSearch !== false,
+  };
 }
 
 function escapeAttr(value) {
@@ -3322,6 +3340,21 @@ function profilePage() {
   if (!profile) {
     return card('Profile', '<p class="muted">Profile is unavailable right now.</p>');
   }
+  const isLockedProfile = !isOwnProfileRoute && profile.locked === true;
+  if (isLockedProfile) {
+    const canRequestAccess = profile?.access?.canRequestAccess === true;
+    const requestStatus = String(profile?.access?.requestStatus || '').toLowerCase();
+    const requestLabel = requestStatus ? `Request status: ${requestStatus}.` : 'You do not currently have permission to view this private profile.';
+    return `
+      <section class="card profile-edit-section panel-surface panel-surface--transparent">
+        <p class="hero-kicker">Private Profile</p>
+        <h3>${escapeHtml(profile.displayName || profile.username || 'Private Member')}</h3>
+        <p class="muted">${escapeHtml(requestLabel)}</p>
+        <p class="muted">This profile is private and full details are hidden until the owner grants access.</p>
+        ${canRequestAccess ? `<button class="pill-btn cta-primary" id="request-profile-access-btn" type="button">${requestStatus === 'pending' ? 'Request Pending' : 'Request Access'}</button>` : '<p class="muted">Access requests are disabled for this profile.</p>'}
+      </section>
+    `;
+  }
 
   const activeLayer = isOwnProfileRoute ? (state.activeLayer || 'free') : 'free';
   const activeData = isOwnProfileRoute ? (state.layers?.[activeLayer] || {}) : (profile.layers?.free || {});
@@ -3523,6 +3556,45 @@ function profilePage() {
         <label>Organization<input name="organizationName" value="${escapeAttr(profile.organizationName || '')}" /></label>
         <button class="pill-btn" id="save-profile-hub-btn" type="submit" ${state.profileHub.saving ? 'disabled' : ''}>${state.profileHub.saving ? 'Saving Account...' : 'Save Account Settings'}</button>
       </form>
+    </section>
+
+    <section class="card profile-edit-section panel-surface panel-surface--transparent" style="margin-top:12px;">
+      <h3>Profile Privacy & Visibility</h3>
+      <p class="muted">Control profile browsing, share link behavior, and recruiter access requests.</p>
+      <form id="profile-privacy-form" class="form-stack">
+        <label>Profile Visibility
+          <select name="profileVisibility">
+            <option value="public" ${state.profilePrivacy.visibility === 'public' ? 'selected' : ''}>Public</option>
+            <option value="private" ${state.profilePrivacy.visibility === 'private' ? 'selected' : ''}>Private</option>
+          </select>
+        </label>
+        <label><input type="checkbox" name="allowShareableLink" ${state.profilePrivacy.allowShareableLink ? 'checked' : ''} /> Allow shareable link</label>
+        <label><input type="checkbox" name="allowAccessRequests" ${state.profilePrivacy.allowAccessRequests ? 'checked' : ''} /> Allow access requests</label>
+        <label><input type="checkbox" name="allowRecruiterAccessRequests" ${state.profilePrivacy.allowRecruiterAccessRequests ? 'checked' : ''} /> Allow recruiter access requests</label>
+        <label><input type="checkbox" name="showInMemberSearch" ${state.profilePrivacy.showInMemberSearch ? 'checked' : ''} /> Show in member search</label>
+        <button class="pill-btn" id="save-profile-privacy-btn" type="submit" ${state.profileHub.saving ? 'disabled' : ''}>${state.profileHub.saving ? 'Saving Privacy...' : 'Save Privacy Settings'}</button>
+      </form>
+    </section>
+
+    <section class="card profile-edit-section panel-surface panel-surface--transparent" style="margin-top:12px;">
+      <h3>Profile Access Requests</h3>
+      <p class="muted">Review private profile access requests from members and recruiters.</p>
+      ${Array.isArray(state.profileAccessRequests) && state.profileAccessRequests.length
+    ? `<ul class="list">
+          ${state.profileAccessRequests.map((entry) => `
+            <li>
+              <strong>${escapeHtml(entry.requester?.displayName || entry.requester?.username || 'Unknown requester')}</strong>
+              <span class="muted"> · ${escapeHtml(entry.requester?.role || 'member')} · ${escapeHtml(entry.status || 'pending')}</span>
+              ${entry.status === 'pending' ? `
+                <div class="actions" style="margin-top:8px;">
+                  <button class="pill-btn" data-access-decision="${escapeAttr(entry.id)}:approve" type="button">Approve</button>
+                  <button class="pill-btn" data-access-decision="${escapeAttr(entry.id)}:deny" type="button">Deny</button>
+                </div>
+              ` : ''}
+            </li>
+          `).join('')}
+        </ul>`
+    : '<p class="muted">No access requests right now.</p>'}
     </section>
     `}
   `;
@@ -4621,12 +4693,25 @@ async function loadAreaChat() {
   state.areaChat.messages = data.thread?.messages || [];
 }
 
+async function loadProfileAccessRequests() {
+  if (!state.currentUser) return;
+  try {
+    const data = await apiRequest('/profile/access-requests');
+    state.profileAccessRequests = Array.isArray(data?.items) ? data.items : [];
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn('[profile:frontend] loadProfileAccessRequests failed', { message });
+    state.profileAccessRequests = [];
+  }
+}
+
 async function loadProfileForRoute(path) {
   if (path === '/profile') {
     const result = await apiRequest('/profile/me');
     const normalized = normalizeLayeredProfile(result.profile);
     state.activeProfile = normalized.user;
     state.currentUser = withPersistedOnboardingProfile(normalized.user);
+    syncProfilePrivacyFromUser(state.currentUser);
     state.layers = normalized.layers;
     state.availableLayers = normalized.availableLayers;
     state.lockedLayers = normalized.lockedLayers;
@@ -4642,15 +4727,16 @@ async function loadProfileForRoute(path) {
     return;
   }
 
-  const match = path.match(/^\/(?:members|profile)\/([a-fA-F0-9-]+)$/);
+  const match = path.match(/^\/(?:members|profile)\/([^/]+)$/);
   if (!match) {
     return;
   }
 
   try {
-    const data = await apiRequest(`/members/${match[1]}`);
+    const memberId = decodeURIComponent(match[1]);
+    const data = await apiRequest(`/members/${encodeURIComponent(memberId)}`);
     state.activeProfile = data.profile;
-    console.log('[profile:frontend] member profile fetch success', { memberId: match[1] });
+    console.log('[profile:frontend] member profile fetch success', { memberId });
   } catch {
     console.warn('[profile:frontend] member profile fetch failure', { memberId: match[1] });
     state.activeProfile = null;
@@ -5167,6 +5253,7 @@ function attachProfileEditHandler() {
         const result = await apiRequest(`/profile/layers/${layerKey}`, { method: 'PATCH', body: JSON.stringify(payload) });
         const normalized = normalizeLayeredProfile(result.profile);
         state.currentUser = withPersistedOnboardingProfile(normalized.user);
+        syncProfilePrivacyFromUser(state.currentUser);
         state.activeProfile = state.currentUser;
         state.layers = normalized.layers;
         state.availableLayers = normalized.availableLayers;
@@ -5201,6 +5288,7 @@ function attachProfileEditHandler() {
         const result = await apiRequest('/profile/hub', { method: 'PATCH', body: JSON.stringify(payload) });
         const normalized = normalizeLayeredProfile(result.profile);
         state.currentUser = withPersistedOnboardingProfile(normalized.user);
+        syncProfilePrivacyFromUser(state.currentUser);
         const nextProfileType = (payload.role === 'employer' || payload.role === 'recruiter') ? 'company' : 'person';
         const existingOnboarding = readOnboardingProfile(state.currentUser.id) || {};
         saveOnboardingProfile({
@@ -5224,6 +5312,79 @@ function attachProfileEditHandler() {
       }
     };
   }
+
+  const profilePrivacyForm = document.getElementById('profile-privacy-form');
+  if (profilePrivacyForm) {
+    profilePrivacyForm.onsubmit = async (event) => {
+      event.preventDefault();
+      if (state.profileHub.saving) return;
+      const formData = new FormData(profilePrivacyForm);
+      const payload = {
+        profileVisibility: String(formData.get('profileVisibility') || 'public').toLowerCase() === 'private' ? 'private' : 'public',
+        allowShareableLink: formData.get('allowShareableLink') === 'on',
+        allowAccessRequests: formData.get('allowAccessRequests') === 'on',
+        allowRecruiterAccessRequests: formData.get('allowRecruiterAccessRequests') === 'on',
+        showInMemberSearch: formData.get('showInMemberSearch') === 'on',
+      };
+
+      state.profileHub.saving = true;
+      setProfileHubMessage('Saving privacy settings...', 'info');
+      render();
+      try {
+        const result = await apiRequest('/profile/privacy', { method: 'PATCH', body: JSON.stringify(payload) });
+        const normalized = normalizeLayeredProfile(result.profile);
+        state.currentUser = withPersistedOnboardingProfile(normalized.user);
+        syncProfilePrivacyFromUser(state.currentUser);
+        state.activeProfile = state.currentUser;
+        setProfileHubMessage('Privacy settings saved successfully.', 'success');
+        setStatusMessage('Privacy settings saved.', 'success');
+        state.membersLoaded = false;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unable to save privacy settings right now.';
+        setProfileHubMessage(message, 'error');
+        setStatusMessage(message, 'error');
+      } finally {
+        state.profileHub.saving = false;
+        render();
+      }
+    };
+  }
+
+  const requestProfileAccessButton = document.getElementById('request-profile-access-btn');
+  if (requestProfileAccessButton) {
+    requestProfileAccessButton.onclick = async () => {
+      if (!state.activeProfile?.id) return;
+      try {
+        await apiRequest(`/members/${encodeURIComponent(state.activeProfile.id)}/access-requests`, { method: 'POST' });
+        setStatusMessage('Access request submitted.', 'success');
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unable to submit access request.';
+        setStatusMessage(message, 'error');
+      }
+      await loadProfileForRoute(location.hash.replace('#', '') || '/profile');
+      render();
+    };
+  }
+
+  document.querySelectorAll('[data-access-decision]').forEach((button) => {
+    button.onclick = async () => {
+      const token = String(button.getAttribute('data-access-decision') || '');
+      const [requestId, decision] = token.split(':');
+      if (!requestId || !decision) return;
+      try {
+        await apiRequest(`/profile/access-requests/${encodeURIComponent(requestId)}/decision`, {
+          method: 'POST',
+          body: JSON.stringify({ decision }),
+        });
+        await loadProfileAccessRequests();
+        setStatusMessage(`Access request ${decision === 'approve' ? 'approved' : 'denied'}.`, 'success');
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unable to update access request.';
+        setStatusMessage(message, 'error');
+      }
+      render();
+    };
+  });
 
   const searchForm = document.getElementById('connection-search-form');
   if (searchForm) {
@@ -5856,6 +6017,9 @@ async function render() {
     }
     if (path === '/profile' || /^\/(?:members|profile)\/[^/]+$/.test(path)) {
       await loadProfileForRoute(path);
+    }
+    if (path === '/profile') {
+      await loadProfileAccessRequests();
     }
     const isPolicyAcceptRoute = path === POLICY_ACCEPT_ROUTE;
     const isPublicRoute = ['/', '/login', '/signup', '/code-of-conduct', '/content-policy', '/platform-rules', '/privacy'].includes(path);
