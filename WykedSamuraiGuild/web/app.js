@@ -915,6 +915,117 @@ function saveOnboardingProfile(profilePayload, userId = state.currentUser?.id) {
   localStorage.setItem(getOnboardingProfileStorageKey(userId), JSON.stringify(profilePayload));
 }
 
+function parseResumeSection(text, headingPattern) {
+  const normalized = String(text || '').replace(/\r/g, '');
+  const sectionRegex = new RegExp(`${headingPattern.source}\\s*:?\\s*\\n+([\\s\\S]{0,1500}?)(?=\\n\\s*[A-Z][A-Z\\s/&-]{2,}\\s*:?\\s*\\n|\\n\\s*(?:experience|work history|employment|education|skills|certifications|licenses)\\s*:?\\s*\\n|$)`, 'i');
+  const match = normalized.match(sectionRegex);
+  if (!match) return '';
+  return String(match[1] || '')
+    .split('\n')
+    .map((line) => line.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .join('\n')
+    .trim();
+}
+
+function parseResumeSkills(text) {
+  const section = parseResumeSection(text, /skills?/i);
+  if (!section) return [];
+  return section
+    .split(/[\n,•|]/g)
+    .map((token) => token.trim())
+    .filter((token) => token && token.length <= 60)
+    .slice(0, 24);
+}
+
+async function extractResumeSuggestions(file) {
+  if (!(file instanceof File) || !file.size) {
+    return { suggestions: {}, parseFailed: true };
+  }
+  try {
+    const rawText = await file.text();
+    const text = String(rawText || '')
+      .replace(/\u0000/g, ' ')
+      .replace(/[^\S\r\n]+/g, ' ')
+      .trim();
+    if (!text || text.length < 40) {
+      return { suggestions: {}, parseFailed: true };
+    }
+
+    const lines = text
+      .split(/\r?\n/)
+      .map((line) => line.replace(/\s+/g, ' ').trim())
+      .filter(Boolean);
+    const emailMatch = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+    const phoneMatch = text.match(/(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}/);
+    const locationLine = lines.find((line) => /(?:location|address|city|state)\b/i.test(line))
+      || lines.find((line) => /^[A-Za-z .'-]+,\s*[A-Za-z]{2,}(?:\s+\d{5})?$/.test(line))
+      || '';
+    const headlineLine = lines.find((line, index) => index > 0 && index < 6 && !/@/.test(line) && line.length <= 120 && /(engineer|developer|manager|analyst|specialist|technician|consultant|designer|architect|director|lead|coordinator|recruiter|sales|marketing)/i.test(line))
+      || '';
+    const nameLine = lines.find((line, index) => index < 6
+      && line.length >= 4
+      && line.length <= 80
+      && !/@/.test(line)
+      && !/\d{3}/.test(line)
+      && /^[A-Za-z ,.'-]+$/.test(line)
+      && line.split(' ').length <= 5)
+      || '';
+
+    const suggestions = {
+      fullName: nameLine,
+      location: locationLine.replace(/^location\s*:?\s*/i, ''),
+      email: emailMatch ? String(emailMatch[0]).trim() : '',
+      phone: phoneMatch ? String(phoneMatch[0]).trim() : '',
+      headline: headlineLine,
+      workHistory: parseResumeSection(text, /(?:work\s+history|professional\s+experience|experience|employment)/i),
+      education: parseResumeSection(text, /education/i),
+      certifications: parseResumeSection(text, /(?:certifications?|licenses?)/i),
+      skills: parseResumeSkills(text),
+    };
+    const hasSuggestion = Object.values(suggestions).some((value) => (Array.isArray(value) ? value.length : String(value || '').trim().length));
+    return { suggestions, parseFailed: !hasSuggestion };
+  } catch {
+    return { suggestions: {}, parseFailed: true };
+  }
+}
+
+function mergeResumeSuggestions(existingProfile = {}, suggestions = {}) {
+  const merged = { ...(existingProfile || {}) };
+  const changedFields = [];
+  const conflictedFields = [];
+  const fieldKeys = ['fullName', 'location', 'email', 'phone', 'headline', 'workHistory', 'education', 'certifications'];
+  fieldKeys.forEach((field) => {
+    const incoming = String(suggestions[field] || '').trim();
+    if (!incoming) return;
+    const existing = String(merged[field] || '').trim();
+    if (!existing) {
+      merged[field] = incoming;
+      changedFields.push(field);
+      return;
+    }
+    if (existing.toLowerCase() !== incoming.toLowerCase()) {
+      conflictedFields.push(field);
+    }
+  });
+
+  if (Array.isArray(suggestions.skills) && suggestions.skills.length) {
+    const existingSkills = Array.isArray(merged.skills) ? merged.skills : [];
+    if (!existingSkills.length) {
+      merged.skills = suggestions.skills;
+      changedFields.push('skills');
+    } else {
+      const existingSet = new Set(existingSkills.map((skill) => String(skill || '').trim().toLowerCase()).filter(Boolean));
+      const incomingUnique = suggestions.skills.filter((skill) => !existingSet.has(String(skill || '').trim().toLowerCase()));
+      if (incomingUnique.length) {
+        conflictedFields.push('skills');
+      }
+    }
+  }
+
+  return { mergedProfile: merged, changedFields, conflictedFields };
+}
+
 function withPersistedOnboardingProfile(user) {
   if (!user?.id) {
     return user;
@@ -4116,6 +4227,8 @@ function onboardingProfileSetupPage() {
   const profile = readOnboardingProfile(state.currentUser?.id) || {};
   const fullName = String(profile.resumeProfile?.fullName || state.currentUser?.legalName || '').trim();
   const preferredName = String(profile.resumeProfile?.preferredName || state.currentUser?.displayName || '').trim();
+  const email = String(profile.resumeProfile?.email || state.currentUser?.email || '').trim();
+  const phone = String(profile.resumeProfile?.phone || '').trim();
   const headline = String(profile.resumeProfile?.headline || '').trim();
   const summary = String(profile.resumeProfile?.summary || '').trim();
   const workHistory = String(profile.resumeProfile?.workHistory || '').trim();
@@ -4128,6 +4241,10 @@ function onboardingProfileSetupPage() {
   const specialties = String(profile.skillProfile?.specialties || '').trim();
   const toolsSystems = String(profile.skillProfile?.toolsSystems || '').trim();
   const tradeExperience = String(profile.skillProfile?.tradeExperience || '').trim();
+  const autoFillNotice = profile.resumeAutoFillNotice && typeof profile.resumeAutoFillNotice === 'object'
+    ? profile.resumeAutoFillNotice
+    : null;
+  const autoFillFields = Array.isArray(autoFillNotice?.fields) ? autoFillNotice.fields : [];
 
   return `
     <section class="card panel-surface panel-surface--transparent">
@@ -4156,9 +4273,16 @@ function onboardingProfileSetupPage() {
 
     <section class="card panel-surface panel-surface--soft" id="resume-builder" style="margin-top:12px;">
       <h3>Build Resume (Optional)</h3>
+      ${autoFillNotice ? `
+        <p class="status-banner status-info" role="status">
+          Resume fields were auto-filled as suggestions${autoFillFields.length ? ` (${escapeHtml(autoFillFields.join(', '))})` : ''}. Review and edit anything before saving.
+        </p>
+      ` : ''}
       <form id="onboarding-resume-form" class="form-stack">
         <label>Real Name<input name="fullName" value="${escapeAttr(fullName)}" maxlength="120" /></label>
         <label>Preferred / Display Name<input name="preferredName" value="${escapeAttr(preferredName)}" maxlength="80" /></label>
+        <label>Email<input name="email" type="email" value="${escapeAttr(email)}" maxlength="150" /></label>
+        <label>Phone<input name="phone" value="${escapeAttr(phone)}" maxlength="40" /></label>
         <label>Headline / Professional Title<input name="headline" value="${escapeAttr(headline)}" maxlength="140" /></label>
         <label>Summary / About Me<textarea name="summary" rows="3" maxlength="1200">${escapeHtml(summary)}</textarea></label>
         <label>Work History<textarea name="workHistory" rows="4">${escapeHtml(workHistory)}</textarea></label>
@@ -7192,22 +7316,68 @@ function attachOnboardingProfileSetupHandlers() {
 
   const uploadForm = document.getElementById('onboarding-resume-upload-form');
   if (uploadForm) {
-    uploadForm.onsubmit = (event) => {
+    uploadForm.onsubmit = async (event) => {
       event.preventDefault();
       const formData = new FormData(uploadForm);
       const file = formData.get('resumeFile');
       const currentProfile = readOnboardingProfile(currentUser.id) || {};
+      const fileName = file && typeof file === 'object' && 'name' in file ? String(file.name || '') : '';
+      const { suggestions, parseFailed } = await extractResumeSuggestions(file);
+      const { mergedProfile, changedFields, conflictedFields } = mergeResumeSuggestions(currentProfile.resumeProfile || {}, suggestions);
+      let finalResumeProfile = mergedProfile;
+      let finalChangedFields = [...changedFields];
+      if (conflictedFields.length) {
+        const shouldOverwrite = window.confirm(`We found possible updates for existing fields (${conflictedFields.join(', ')}). Replace current values with resume suggestions?`);
+        if (shouldOverwrite) {
+          finalResumeProfile = {
+            ...(currentProfile.resumeProfile || {}),
+            ...mergedProfile,
+          };
+          conflictedFields.forEach((field) => {
+            if (field === 'skills') {
+              finalResumeProfile.skills = Array.isArray(suggestions.skills) ? suggestions.skills : (finalResumeProfile.skills || []);
+            } else if (suggestions[field]) {
+              finalResumeProfile[field] = suggestions[field];
+            }
+          });
+          finalChangedFields = [...new Set([...finalChangedFields, ...conflictedFields])];
+        }
+      }
+      const nextSkillProfile = {
+        ...(currentProfile.skillProfile || {}),
+        skills: Array.isArray(finalResumeProfile.skills) && finalResumeProfile.skills.length
+          ? finalResumeProfile.skills
+          : (currentProfile.skillProfile?.skills || []),
+      };
       saveOnboardingProfile({
         ...currentProfile,
         profileSetupSkipped: false,
+        resumeProfile: finalResumeProfile,
+        skillProfile: nextSkillProfile,
+        resumeAutoFillNotice: {
+          parsedAt: new Date().toISOString(),
+          parseFailed,
+          fields: finalChangedFields,
+        },
         resumeUpload: {
           uploadedAt: new Date().toISOString(),
-          fileName: file && typeof file === 'object' && 'name' in file ? String(file.name || '') : '',
+          fileName,
+          parseStatus: parseFailed ? 'failed' : 'success',
         },
       }, currentUser.id);
       state.currentUser = withPersistedOnboardingProfile(state.currentUser);
-      setStatusMessage('Resume upload details saved.', 'success');
+      if (parseFailed) {
+        setStatusMessage('Resume uploaded. We could not parse profile suggestions, so you can fill fields manually below.', 'info');
+      } else if (finalChangedFields.length) {
+        setStatusMessage('Resume uploaded. Profile fields were auto-filled as suggestions—please review before saving.', 'success');
+      } else {
+        setStatusMessage('Resume uploaded. Existing profile data was kept unchanged.', 'info');
+      }
       render();
+      const resumeBuilder = document.getElementById('resume-builder');
+      if (resumeBuilder) {
+        resumeBuilder.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
     };
   }
 
@@ -7224,6 +7394,8 @@ function attachOnboardingProfileSetupHandlers() {
       const resumeProfile = {
         fullName: String(formData.get('fullName') || '').trim(),
         preferredName: String(formData.get('preferredName') || '').trim(),
+        email: String(formData.get('email') || '').trim(),
+        phone: String(formData.get('phone') || '').trim(),
         headline: String(formData.get('headline') || '').trim(),
         summary: String(formData.get('summary') || '').trim(),
         workHistory: String(formData.get('workHistory') || '').trim(),
