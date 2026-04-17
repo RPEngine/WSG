@@ -5286,7 +5286,7 @@ async function finalizeSignInResult(result, formName) {
     return;
   }
 
-  await ensureSupabaseProfileForAuthenticatedUser(formName);
+  await ensureBackendProfileForAuthenticatedUser(formName);
 
   setFormMessage(formName, 'Login successful.', 'success');
   setStatusMessage('Login successful.', 'success');
@@ -5312,7 +5312,7 @@ function syncAuthStateFromSupabase(session) {
     : null;
   state.auth.loading = false;
   if (user?.id) {
-    ensureSupabaseProfileForAuthenticatedUser('session_sync').catch((error) => {
+    ensureBackendProfileForAuthenticatedUser('session_sync').catch((error) => {
       console.error('[profile:frontend] automatic profile ensure failed during auth sync', {
         userId: user.id,
         code: error?.code || null,
@@ -5322,366 +5322,78 @@ function syncAuthStateFromSupabase(session) {
   }
 }
 
-function normalizeSupabaseProfileRecord(record = {}, fallbackUser = null) {
-  const authUser = fallbackUser || state.auth.user;
-  const authEmail = String(authUser?.email || '').trim();
-  const emailName = authEmail.split('@')[0] || 'member';
-  const username = String(
-    record.username
-    || fallbackUser?.username
-    || authUser?.user_metadata?.username
-    || emailName,
-  ).trim();
-  const displayName = String(
-    record.display_name
-    || record.displayName
-    || fallbackUser?.displayName
-    || authUser?.user_metadata?.displayName
-    || authUser?.user_metadata?.full_name
-    || username
-    || authEmail
-    || 'WSG Member',
-  ).trim();
-  const legalName = String(
-    record.legal_name
-    || fallbackUser?.legalName
-    || authUser?.user_metadata?.legalName
-    || authUser?.user_metadata?.full_name
-    || displayName,
-  ).trim();
-  const linkedUserId = String(record.user_id || authUser?.id || fallbackUser?.id || record.id || '');
-  return {
-    ...fallbackUser,
-    id: linkedUserId,
-    userId: linkedUserId,
-    profileRecordId: String(record.id || linkedUserId || ''),
-    username,
-    displayName,
-    legalName,
-    email: String(record.email || fallbackUser?.email || authEmail || '').trim(),
-    role: String(record.role || fallbackUser?.role || 'member').trim(),
-    profileVisibility: String(record.visibility || record.profile_visibility || fallbackUser?.profileVisibility || 'public').toLowerCase() === 'private'
-      ? 'private'
-      : 'public',
-    createdAt: record.created_at || fallbackUser?.createdAt || null,
-    updatedAt: record.updated_at || fallbackUser?.updatedAt || null,
-    supabaseProfile: record,
-  };
-}
-
-function isMissingColumnError(error) {
-  const code = String(error?.code || '').toLowerCase();
-  const message = String(error?.message || '').toLowerCase();
-  return code === '42703' || (message.includes('column') && message.includes('does not exist'));
-}
-
-function readMissingColumnName(error) {
-  const message = String(error?.message || '');
-  const match = message.match(/column\s+["']?([a-zA-Z0-9_]+)["']?\s+does not exist/i);
-  return match ? String(match[1] || '').trim() : '';
-}
-
-async function fetchSupabaseProfileByColumn(authUser, lookupColumn) {
-  if (!lookupColumn) return { data: null, error: null };
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq(lookupColumn, authUser.id)
-    .limit(1)
-    .maybeSingle();
-  return { data, error };
-}
-
-function classifyProfileQueryFailure(error) {
-  const rawMessage = error instanceof Error ? error.message : String(error || '');
-  const message = rawMessage.toLowerCase();
-  const code = String(error?.code || error?.status || '').toLowerCase();
-  if (code === 'pgrst116' || message.includes('0 rows')) {
-    return 'no_row_found';
-  }
-  if (code === '401' || code === '403' || code === '42501' || message.includes('row-level security') || message.includes('permission denied')) {
-    return 'permission_or_rls';
-  }
-  if (message.includes('jwt') || message.includes('not authenticated') || message.includes('auth')) {
-    return 'auth_user_missing';
-  }
-  return 'query_failure';
-}
-
-async function fetchSupabaseProfileRecord(authUser) {
-  if (!supabase) {
-    throw new Error('Supabase client is not available.');
-  }
-  if (!authUser?.id) {
-    throw new Error('Authenticated Supabase user is missing.');
-  }
-  const lookupColumns = ['id', 'user_id'];
-  let lastError = null;
-  for (const lookupColumn of lookupColumns) {
-    const { data, error } = await fetchSupabaseProfileByColumn(authUser, lookupColumn);
-    if (error) {
-      if (isMissingColumnError(error)) {
-        console.warn('[profile:frontend] profile lookup skipped missing column', {
-          key: lookupColumn,
-          authUserId: authUser.id,
-          code: error?.code || null,
-          message: error?.message || String(error),
-        });
-        continue;
-      }
-      const reason = classifyProfileQueryFailure(error);
-      if (reason === 'no_row_found') {
-        console.info('[profile:frontend] profile lookup returned no row', { key: lookupColumn, value: authUser.id });
-        continue;
-      }
-      console.error('[profile:frontend] profile lookup query failed', {
-        key: lookupColumn,
-        value: authUser.id,
-        reason,
-        code: error?.code || null,
-        message: error?.message || String(error),
-        details: error?.details || null,
-        hint: error?.hint || null,
-      });
-      throw error;
-    }
-    if (data) {
-      console.log('[profile:frontend] profile row loaded', { lookupKey: lookupColumn, authUserId: authUser.id, rowId: data.id || null });
-      return data;
-    }
-    lastError = error || lastError;
-  }
-  if (lastError) throw lastError;
-  return null;
-}
-
-async function upsertSupabaseProfileRecord(authUser, payloadFields = {}, context = 'generic_upsert') {
-  if (!supabase) throw new Error('Supabase client is not available.');
-  if (!authUser?.id) throw new Error('Authenticated Supabase user is missing.');
-  const upsertAttempts = [
-    { key: 'id', payload: { id: authUser.id, ...payloadFields } },
-    { key: 'user_id', payload: { user_id: authUser.id, ...payloadFields } },
-  ];
-  let lastError = null;
-  for (const attempt of upsertAttempts) {
-    const attemptPayload = { ...attempt.payload };
-    for (let retry = 0; retry < 3; retry += 1) {
-      const { data, error } = await supabase
-        .from('profiles')
-        .upsert(attemptPayload, { onConflict: attempt.key })
-        .select('*')
-        .single();
-      if (!error) {
-        console.log('[profile:frontend] profile upsert success', {
-          context,
-          lookupKey: attempt.key,
-          authUserId: authUser.id,
-          rowId: data?.id || null,
-        });
-        return data;
-      }
-      if (isMissingColumnError(error)) {
-        const missingColumn = readMissingColumnName(error);
-        if (missingColumn && Object.prototype.hasOwnProperty.call(attemptPayload, missingColumn)) {
-          delete attemptPayload[missingColumn];
-          console.warn('[profile:frontend] profile upsert retrying without missing payload column', {
-            context,
-            lookupKey: attempt.key,
-            authUserId: authUser.id,
-            missingColumn,
-          });
-          lastError = error;
-          continue;
-        }
-        console.warn('[profile:frontend] profile upsert skipped missing column', {
-          context,
-          lookupKey: attempt.key,
-          authUserId: authUser.id,
-          code: error?.code || null,
-          message: error?.message || String(error),
-        });
-        lastError = error;
-        break;
-      }
-      if (attempt.key === 'id') {
-        console.warn('[profile:frontend] profile upsert failed on primary attempt, trying user_id fallback', {
-          context,
-          authUserId: authUser.id,
-          code: error?.code || null,
-          message: error?.message || String(error),
-        });
-        lastError = error;
-        break;
-      }
-      lastError = error;
-      break;
-    }
-  }
-  console.error('[profile:frontend] profile upsert failed', {
-    context,
-    authUserId: authUser.id,
-    code: lastError?.code || null,
-    message: lastError?.message || String(lastError || ''),
-    details: lastError?.details || null,
-    hint: lastError?.hint || null,
-    reason: classifyProfileQueryFailure(lastError),
-  });
-  throw lastError || new Error('Profile upsert failed.');
-}
-
-async function createSupabaseProfileRecord(authUser, seeded = {}) {
-  if (!supabase) throw new Error('Supabase client is not available.');
-  if (!authUser?.id) throw new Error('Authenticated Supabase user is missing.');
-  const email = String(authUser?.email || '').trim().toLowerCase();
-  const emailName = email.split('@')[0] || 'member';
-  const username = String(seeded.username || authUser?.user_metadata?.username || emailName || `member-${String(authUser.id).slice(0, 8)}`).trim();
-  const displayName = String(
-    seeded.displayName
-    || seeded.display_name
-    || authUser?.user_metadata?.displayName
-    || authUser?.user_metadata?.full_name
-    || username
-    || email,
-  ).trim();
-  const profilePayload = {
-    email,
-    username,
-    display_name: displayName,
-    created_at: seeded.created_at || new Date().toISOString(),
-    visibility: String(seeded.visibility || 'public').toLowerCase() === 'private' ? 'private' : 'public',
-    updated_at: new Date().toISOString(),
-  };
-  return upsertSupabaseProfileRecord(authUser, profilePayload, 'create_profile_record');
-}
-
-async function resolveOwnSupabaseProfile({ createIfMissing = true } = {}) {
-  const authUser = state.auth.user;
-  if (!authUser?.id) {
-    console.warn('[profile:frontend] profile load skipped: authenticated user is missing');
-    return { status: 'auth_user_missing', profile: null, error: new Error('Authenticated user session is missing.') };
-  }
+async function ensureBackendProfileForAuthenticatedUser(context = 'auth_flow') {
+  if (!state.auth.user?.id) return null;
   try {
-    const existing = await fetchSupabaseProfileRecord(authUser);
-    if (existing) {
-      return { status: 'ready', profile: existing, error: null };
+    const profile = await loadOwnProfileFromApi();
+    if (profile && location.hash.slice(1) === '/profile') {
+      state.activeProfile = profile;
     }
-    if (!createIfMissing) {
-      console.info('[profile:frontend] no profile row found; setup/create flow required', { authUserId: authUser.id });
-      return { status: 'no_row_found', profile: null, error: null };
-    }
-    const created = await createSupabaseProfileRecord(authUser, {});
-    return { status: 'created', profile: created, error: null };
+    return profile;
   } catch (error) {
-    return { status: classifyProfileQueryFailure(error), profile: null, error };
-  }
-}
-
-async function ensureSupabaseProfileForAuthenticatedUser(context = 'auth_flow') {
-  if (!state.auth.user?.id) return;
-  const resolved = await resolveOwnSupabaseProfile({ createIfMissing: true });
-  if (resolved.profile) {
-    const normalized = normalizeSupabaseProfileRecord(resolved.profile, state.currentUser);
-    state.currentUser = withPersistedOnboardingProfile(normalized);
-    if (location.hash.slice(1) === '/profile') {
-      state.activeProfile = normalized;
-    }
-    syncProfilePrivacyFromUser(state.currentUser);
-  }
-  if (resolved.status === 'query_failure' || resolved.status === 'permission_or_rls') {
-    console.error('[profile:frontend] profile ensure failed after authentication', {
+    console.error('[profile:frontend] backend profile ensure failed', {
       context,
-      status: resolved.status,
       userId: state.auth.user?.id || null,
-      code: resolved.error?.code || null,
-      message: resolved.error?.message || String(resolved.error || ''),
-      details: resolved.error?.details || null,
-      hint: resolved.error?.hint || null,
+      status: error?.status || null,
+      message: error?.message || String(error),
     });
+    throw error;
   }
 }
 
-async function upsertOwnSupabaseProfileFromOnboarding({ resumeProfile = {}, skillProfile = {} } = {}) {
-  const authUser = state.auth.user;
-  if (!supabase || !authUser?.id) {
-    return null;
-  }
-  const currentResolved = await resolveOwnSupabaseProfile({ createIfMissing: true });
-  const existingProfile = currentResolved.profile || {};
-  const fallbackEmail = String(authUser?.email || '').trim().toLowerCase();
-  const fallbackUsername = String(authUser?.user_metadata?.username || fallbackEmail.split('@')[0] || `member-${String(authUser.id).slice(0, 8)}`).trim();
-  const parsedSkills = Array.isArray(skillProfile.skills)
-    ? skillProfile.skills
-    : (Array.isArray(resumeProfile.skills) ? resumeProfile.skills : []);
+function buildBackendProfilePatchFromOnboarding(resumeProfile = {}) {
+  const authUser = state.auth.user || {};
+  const current = state.currentUser || {};
+  const fallbackEmail = String(authUser?.email || current?.email || '').trim().toLowerCase();
+  const fallbackUsername = String(current?.username || authUser?.user_metadata?.username || fallbackEmail.split('@')[0] || 'member').trim();
   const displayName = String(
     resumeProfile.preferredName
     || resumeProfile.fullName
-    || existingProfile.display_name
+    || current?.displayName
     || authUser?.user_metadata?.displayName
-    || fallbackUsername,
+    || authUser?.user_metadata?.full_name
+    || fallbackUsername
+    || 'WSG Member',
   ).trim();
-  const payload = {
-    email: String(existingProfile.email || fallbackEmail),
-    username: String(existingProfile.username || fallbackUsername),
-    display_name: displayName,
-    headline: String(resumeProfile.headline || existingProfile.headline || '').trim(),
-    bio: String(resumeProfile.summary || existingProfile.bio || '').trim(),
-    skills: parsedSkills,
-    location: String(resumeProfile.location || existingProfile.location || '').trim(),
-    visibility: String(existingProfile.visibility || 'public').toLowerCase() === 'private' ? 'private' : 'public',
-    resume_filename: String(resumeProfile.resumeFileName || existingProfile.resume_filename || '').trim(),
-    updated_at: new Date().toISOString(),
-  };
 
-  const data = await upsertSupabaseProfileRecord(authUser, payload, 'onboarding_profile_sync');
-
-  const normalized = normalizeSupabaseProfileRecord(data, state.currentUser);
-  state.currentUser = withPersistedOnboardingProfile(normalized);
-  state.activeProfile = normalized;
-  state.profileLoad = {
-    status: 'ready',
-    message: '',
-    isOwnRoute: true,
+  return {
+    displayName,
+    username: String(current?.username || fallbackUsername).trim(),
+    tagline: String(resumeProfile.headline || current?.tagline || '').trim(),
+    about: String(resumeProfile.summary || current?.about || '').trim(),
+    organizationName: String(resumeProfile.organizationName || current?.organizationName || '').trim(),
+    profileVisibility: String(current?.profileVisibility || 'public').toLowerCase() === 'private' ? 'private' : 'public',
   };
-  syncProfilePrivacyFromUser(state.currentUser);
-  return data;
 }
 
-async function ensureProfileRecordForSave(context = 'profile_save') {
+async function syncOnboardingProfileToBackend({ resumeProfile = {}, skillProfile = {} } = {}) {
   const authUser = state.auth.user;
-  if (!authUser?.id) {
-    const error = new Error('Authenticated user session is missing.');
-    error.status = 401;
-    throw error;
-  }
+  if (!authUser?.id) return null;
+  const parsedSkills = Array.isArray(skillProfile.skills)
+    ? skillProfile.skills
+    : (Array.isArray(resumeProfile.skills) ? resumeProfile.skills : []);
 
-  const resolved = await resolveOwnSupabaseProfile({ createIfMissing: true });
-  if (resolved.profile) {
-    return resolved.profile;
-  }
-
-  if (resolved.status === 'auth_user_missing') {
-    const error = new Error('Authenticated user session is missing.');
-    error.status = 401;
-    throw error;
-  }
-
-  if (resolved.status === 'permission_or_rls') {
-    const error = new Error('Profile record permission denied.');
-    error.status = 403;
-    throw error;
-  }
-
-  const error = resolved.error || new Error('Unable to create or load profile record.');
-  console.error('[profile:frontend] ensure profile record for save failed', {
-    context,
-    authUserId: authUser.id,
-    status: resolved.status,
-    code: error?.code || null,
-    message: error?.message || String(error),
-    details: error?.details || null,
-    hint: error?.hint || null,
+  await apiRequest('/profile/me', {
+    method: 'PATCH',
+    body: JSON.stringify(buildBackendProfilePatchFromOnboarding(resumeProfile)),
   });
-  throw error;
+
+  await apiRequest('/profile/professional', {
+    method: 'PUT',
+    body: JSON.stringify({
+      headline: String(resumeProfile.headline || '').trim(),
+      summary: String(resumeProfile.summary || '').trim(),
+      skills: parsedSkills,
+      resumeFilename: String(resumeProfile.resumeFileName || '').trim(),
+      openToWork: Boolean(resumeProfile.openToWork),
+      recruiterVisible: Boolean(resumeProfile.recruiterVisible),
+    }),
+  });
+
+  const normalizedUser = await loadOwnProfileFromApi();
+  state.currentUser = withPersistedOnboardingProfile(normalizedUser);
+  state.activeProfile = state.currentUser;
+  return state.currentUser;
 }
 
 async function retryProfileCloudSyncFromLocal() {
@@ -5699,7 +5411,7 @@ async function retryProfileCloudSyncFromLocal() {
       message: error?.message || String(error),
     });
   }
-  await upsertOwnSupabaseProfileFromOnboarding({ resumeProfile, skillProfile });
+  await syncOnboardingProfileToBackend({ resumeProfile, skillProfile });
 }
 
 function clearClientSecurityState() {
@@ -6790,8 +6502,8 @@ function attachProfileEditHandler() {
       });
       state.activeProfile = state.currentUser;
       setProfileSyncState({
-        status: 'local_only',
-        message: 'Resume details saved locally. Syncing now…',
+        status: 'saving',
+        message: 'Saving resume details…',
         source: 'resume_metadata',
         canRetry: false,
       });
@@ -6821,7 +6533,7 @@ function attachProfileEditHandler() {
         });
         setProfileSyncState({
           status: 'sync_failed',
-          message: 'Your changes were saved locally, but we could not sync them yet.',
+          message: 'We could not sync your resume details yet. Please try again.',
           source: 'resume_metadata',
           canRetry: true,
         });
@@ -7986,7 +7698,7 @@ function attachOnboardingProfileSetupHandlers() {
       }, currentUser.id);
       try {
         setProfileSyncState({ status: 'saving', message: 'Saving resume upload…', source: 'onboarding_resume_upload', canRetry: false });
-        await upsertOwnSupabaseProfileFromOnboarding({
+        await syncOnboardingProfileToBackend({
           resumeProfile: {
             ...(finalResumeProfile || {}),
             resumeFileName: fileName,
@@ -8004,11 +7716,11 @@ function attachOnboardingProfileSetupHandlers() {
         });
         setProfileSyncState({
           status: 'sync_failed',
-          message: 'Your changes were saved locally, but we could not sync them yet.',
+          message: 'We could not sync your onboarding resume upload yet. Please try again.',
           source: 'onboarding_resume_upload',
           canRetry: true,
         });
-        setStatusMessage('Your changes were saved locally, but we could not sync them yet.', 'error');
+        setStatusMessage('We could not sync your onboarding resume upload yet. Please try again.', 'error');
         render();
         return;
       }
@@ -8061,7 +7773,7 @@ function attachOnboardingProfileSetupHandlers() {
       }, currentUser.id);
       try {
         setProfileSyncState({ status: 'saving', message: 'Saving resume profile…', source: 'onboarding_resume_form', canRetry: false });
-        await upsertOwnSupabaseProfileFromOnboarding({
+        await syncOnboardingProfileToBackend({
           resumeProfile,
           skillProfile: {
             ...(currentProfile.skillProfile || {}),
@@ -8082,11 +7794,11 @@ function attachOnboardingProfileSetupHandlers() {
         });
         setProfileSyncState({
           status: 'sync_failed',
-          message: 'Your changes were saved locally, but we could not sync them yet.',
+          message: 'We could not sync your onboarding resume profile yet. Please try again.',
           source: 'onboarding_resume_form',
           canRetry: true,
         });
-        setStatusMessage('Your changes were saved locally, but we could not sync them yet.', 'error');
+        setStatusMessage('We could not sync your onboarding resume profile yet. Please try again.', 'error');
       }
       render();
     };
@@ -8116,7 +7828,7 @@ function attachOnboardingProfileSetupHandlers() {
       }, currentUser.id);
       try {
         setProfileSyncState({ status: 'saving', message: 'Saving skills…', source: 'onboarding_skill_form', canRetry: false });
-        await upsertOwnSupabaseProfileFromOnboarding({
+        await syncOnboardingProfileToBackend({
           resumeProfile: currentProfile.resumeProfile || {},
           skillProfile,
         });
@@ -8134,11 +7846,11 @@ function attachOnboardingProfileSetupHandlers() {
         });
         setProfileSyncState({
           status: 'sync_failed',
-          message: 'Your changes were saved locally, but we could not sync them yet.',
+          message: 'We could not sync your onboarding skills yet. Please try again.',
           source: 'onboarding_skill_form',
           canRetry: true,
         });
-        setStatusMessage('Your changes were saved locally, but we could not sync them yet.', 'error');
+        setStatusMessage('We could not sync your onboarding skills yet. Please try again.', 'error');
       }
       render();
     };
