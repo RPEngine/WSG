@@ -441,6 +441,7 @@ const PROFILE_LAYER_META = {
   roleplay: { label: 'Roleplay', hint: 'In-world RP persona layer' },
 };
 const PROFILE_LAYER_ORDER = ['free', 'professional', 'roleplay'];
+const RESERVED_PROFILE_CHAT_ROUTES = new Set(['/profile/direct-chat', '/profile/scenario-chat', '/profile/area-chat']);
 const arenaLayoutPrefs = loadArenaLayoutPrefs();
 const nexusLayoutPrefs = loadNexusPanelPrefs();
 
@@ -1424,6 +1425,11 @@ function list(items) {
   return `<ul class="list">${items.map((i) => `<li>${i}</li>`).join('')}</ul>`;
 }
 
+function isDynamicProfileRoute(path = '') {
+  if (!path || RESERVED_PROFILE_CHAT_ROUTES.has(path)) return false;
+  return /^\/(?:members|profile)\/[^/]+$/.test(path) || /^\/u\/[^/]+$/.test(path);
+}
+
 function avatarMarkup(profile, size = 'md') {
   const initials = (profile.displayName || profile.username || '?')
     .split(' ')
@@ -2193,7 +2199,7 @@ function messagingRail({ title = 'Messaging Rail', description = '', includeArea
     ? (directChatMessages || '<p class="muted">No messages yet.</p>')
     : '<p class="muted">Select a connection to start messaging.</p>'}
     </div>
-    <form id="direct-chat-form" class="arena-input" style="margin-top:10px;">
+    <form id="direct-chat-form" class="arena-input chat-input-form" style="margin-top:10px;">
       <input id="direct-chat-input" placeholder="Type a direct message..." ${state.directChat.activeConnectionId ? '' : 'disabled'} />
       <button class="pill-btn" type="submit" ${state.directChat.activeConnectionId ? '' : 'disabled'}>Send</button>
     </form>
@@ -2396,7 +2402,7 @@ function ChatDock() {
                 </div>
               </div>
               <div class="conversation-log global-chat-log">${messagesMarkup || '<p class="muted">No messages yet.</p>'}</div>
-              <form id="global-chat-form" class="active-chat-form">
+              <form id="global-chat-form" class="active-chat-form chat-input-form">
                 <input id="global-chat-input" type="text" placeholder="Send a quick reply..." />
                 <button class="pill-btn cta-primary" type="submit">Send</button>
               </form>
@@ -2818,7 +2824,7 @@ function arenaPage() {
 }
             </div>
             <div class="arena-chat-input-row">
-              <form id="arena-input-form" class="arena-input">
+              <form id="arena-input-form" class="arena-input chat-input-form">
                 <input id="arena-input" name="message" placeholder="${hasActiveTrial ? `Type your ${isRoleplayMode ? 'roleplay' : 'response'} message...` : `Start a ${isRoleplayMode ? 'room' : 'trial'} to enable chat`}" ${hasActiveTrial ? '' : 'disabled'} />
                 <button id="arena-send-btn" class="pill-btn" type="submit" ${(hasActiveTrial && !state.arena.pending) ? '' : 'disabled'}>${state.arena.pending ? 'Sending...' : 'Send'}</button>
               </form>
@@ -2965,7 +2971,7 @@ function scenarioDetailPage(path) {
       <div id="scenario-conversation-log" class="conversation-log roleplay-chat-log scenario-chat-log">
         ${messageMarkup || '<p class="muted">Scenario awaits your first move.</p>'}
       </div>
-      <form id="scenario-input-form" class="arena-input roleplay-input-form">
+      <form id="scenario-input-form" class="arena-input roleplay-input-form chat-input-form">
         <select id="scenario-sender-select" class="scenario-sender-select" ${state.scenarioDetail.pending ? 'disabled' : ''}>
           ${participantOptions}
         </select>
@@ -3177,7 +3183,7 @@ function renderNexusModePage(mode) {
         </header>
         ${activeRoom?.roomKind === 'scenario' ? `<div class="status-banner status-info">Only tagged participants can answer scenario prompts directly. Observers can still chat with everyone.</div>` : ''}
         <div class="conversation-log roleplay-chat-log">${messageMarkup}</div>
-        <form class="arena-input roleplay-input-form" data-nexus-chat-form="${escapeAttr(mode)}:${escapeAttr(activeRoom?.id || '')}">
+        <form class="arena-input roleplay-input-form chat-input-form" data-nexus-chat-form="${escapeAttr(mode)}:${escapeAttr(activeRoom?.id || '')}">
           <input name="message" placeholder="${escapeAttr(activeRoom?.roomKind === 'scenario' ? 'Speak in room chat (everyone can chat)...' : 'Send a room message...')}" ${!activeRoom ? 'disabled' : ''}/>
           <button class="pill-btn cta-primary" type="submit" ${!activeRoom ? 'disabled' : ''}>Send Chat</button>
           ${activeRoom?.roomKind === 'scenario' ? `<button class="pill-btn" type="button" id="scenario-direct-answer-btn" ${userIsScenarioParticipant ? '' : 'disabled title="Only tagged participants can answer prompts directly."'}>Answer Prompt</button>` : ''}
@@ -3692,7 +3698,7 @@ function roleplayChannelPage(type) {
       <h3>${routeLabel}</h3>
       <p class="muted">${isScenario ? 'Guided roleplay scenario stream.' : 'Shared roleplay area room stream.'}</p>
       <div class="conversation-log home-chat-log">${messagesMarkup || '<p class="muted">No messages yet.</p>'}</div>
-      <form id="${formId}" class="arena-input" style="margin-top:10px;">
+      <form id="${formId}" class="arena-input chat-input-form" style="margin-top:10px;">
         <input id="${inputId}" placeholder="Type a message..." />
         <button class="pill-btn" type="submit">Send</button>
       </form>
@@ -4991,6 +4997,9 @@ async function loadProfileAccessRequests() {
 }
 
 async function loadProfileForRoute(path) {
+  if (RESERVED_PROFILE_CHAT_ROUTES.has(path)) {
+    return;
+  }
   if (path === '/profile') {
     const result = await apiRequest('/profile/me');
     const normalized = normalizeLayeredProfile(result.profile);
@@ -5040,7 +5049,8 @@ async function loadProfileForRoute(path) {
     state.activeProfile = data.profile;
     console.log('[profile:frontend] member profile fetch success', { memberId });
   } catch {
-    console.warn('[profile:frontend] member profile fetch failure', { memberId: match[1] });
+    const failedMemberId = match?.[1] || usernameMatch?.[1] || null;
+    console.warn('[profile:frontend] member profile fetch failure', { memberId: failedMemberId });
     state.activeProfile = null;
   }
 }
@@ -6429,7 +6439,7 @@ async function render() {
     if (path.startsWith('/hub') || path === '/members') {
       await ensureMembersLoaded();
     }
-    if (path === '/profile' || /^\/(?:members|profile|u)\/[^/]+$/.test(path)) {
+    if (path === '/profile' || isDynamicProfileRoute(path)) {
       await loadProfileForRoute(path);
     }
     if (path === '/profile') {
@@ -6454,7 +6464,7 @@ async function render() {
 
     const route = routes[path]
       || ((path === '/discussions' || path.startsWith('/discussions/board/') || path.startsWith('/discussions/thread/')) ? { key: 'discussions', requiresAuth: true } : null)
-      || (/^\/(?:members|profile|u)\/[^/]+$/.test(path) ? { key: 'profile', requiresAuth: true } : null)
+      || (isDynamicProfileRoute(path) ? { key: 'profile', requiresAuth: true } : null)
       || (/^\/characters\/[^/]+$/.test(path) ? { key: 'characterDetail', requiresAuth: true } : null)
       || { key: 'fallback' };
     const isScenarioRoute = path === '/scenario' || path.startsWith('/scenario/');
