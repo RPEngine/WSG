@@ -229,3 +229,18 @@
 - A user can register/login, edit their profile, start one of 5 trials, chat with AI in a run, complete the run, and see saved results on their profile.
 - Authenticated users can browse a members page with other profiles.
 - App works end-to-end in the documented local and deployment topology.
+
+## 8) Identity architecture addendum (Account / Profile / Characters)
+
+A dedicated blueprint now defines the target identity model and UX boundaries:
+
+- `PROFILE_ACCOUNTS_CHARACTERS_BLUEPRINT.md`
+
+Use that document as the source of truth for:
+- account/profile/character separation
+- profile section taxonomy + inline editing expectations
+- character MVP requirements (create/edit/list/archive)
+- navigation boundaries between main site menu and account menu
+
+When implementation sequencing conflicts arise, prioritize the blueprint's recommended order:
+1) account reliability, 2) profile foundation, 3) characters, 4) resume/professional, 5) connections/activity.
