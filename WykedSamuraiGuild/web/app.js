@@ -4980,6 +4980,8 @@ async function finalizeSignInResult(result, formName) {
     return;
   }
 
+  await ensureSupabaseProfileForAuthenticatedUser(formName);
+
   setFormMessage(formName, 'Login successful.', 'success');
   setStatusMessage('Login successful.', 'success');
 
@@ -5003,6 +5005,15 @@ function syncAuthStateFromSupabase(session) {
     ? { ...appUser, policyAcceptance: readLocalPolicyAcceptance(appUser.id) || appUser.policyAcceptance || {} }
     : null;
   state.auth.loading = false;
+  if (user?.id) {
+    ensureSupabaseProfileForAuthenticatedUser('session_sync').catch((error) => {
+      console.error('[profile:frontend] automatic profile ensure failed during auth sync', {
+        userId: user.id,
+        code: error?.code || null,
+        message: error?.message || String(error),
+      });
+    });
+  }
 }
 
 function normalizeSupabaseProfileRecord(record = {}, fallbackUser = null) {
@@ -5034,8 +5045,8 @@ function normalizeSupabaseProfileRecord(record = {}, fallbackUser = null) {
   ).trim();
   return {
     ...fallbackUser,
-    id: String(record.user_id || fallbackUser?.id || authUser?.id || ''),
-    userId: String(record.user_id || fallbackUser?.id || authUser?.id || ''),
+    id: String(record.id || record.user_id || fallbackUser?.id || authUser?.id || ''),
+    userId: String(record.id || record.user_id || fallbackUser?.id || authUser?.id || ''),
     username,
     displayName,
     legalName,
@@ -5073,57 +5084,32 @@ async function fetchSupabaseProfileRecord(authUser) {
   if (!authUser?.id) {
     throw new Error('Authenticated Supabase user is missing.');
   }
-  const username = String(authUser?.user_metadata?.username || '').trim();
-  const email = String(authUser?.email || '').trim().toLowerCase();
-  const lookupAttempts = [
-    { key: 'user_id', value: authUser.id },
-    { key: 'id', value: authUser.id },
-    ...(email ? [{ key: 'email', value: email }] : []),
-    ...(username ? [{ key: 'username', value: username }] : []),
-  ];
-  for (const attempt of lookupAttempts) {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq(attempt.key, attempt.value)
-      .limit(1)
-      .maybeSingle();
-    if (error) {
-      const reason = classifyProfileQueryFailure(error);
-      if (reason === 'no_row_found') {
-        console.info('[profile:frontend] profile lookup returned no row', { key: attempt.key, value: attempt.value });
-        continue;
-      }
-      console.error('[profile:frontend] profile lookup query failed', {
-        key: attempt.key,
-        value: attempt.value,
-        reason,
-        code: error?.code || null,
-        message: error?.message || String(error),
-        details: error?.details || null,
-        hint: error?.hint || null,
-      });
-      throw error;
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', authUser.id)
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    const reason = classifyProfileQueryFailure(error);
+    if (reason === 'no_row_found') {
+      console.info('[profile:frontend] profile lookup returned no row', { key: 'id', value: authUser.id });
+      return null;
     }
-    if (data) {
-      if (attempt.key !== 'user_id' && data.user_id !== authUser.id) {
-        const { error: remapError } = await supabase
-          .from('profiles')
-          .update({ user_id: authUser.id, updated_at: new Date().toISOString() })
-          .eq('id', data.id);
-        if (remapError) {
-          console.warn('[profile:frontend] profile row found using fallback key but failed to remap user_id', {
-            lookupKey: attempt.key,
-            authUserId: authUser.id,
-            rowId: data.id,
-            code: remapError?.code || null,
-            message: remapError?.message || String(remapError),
-          });
-        }
-      }
-      console.log('[profile:frontend] profile row loaded', { lookupKey: attempt.key, authUserId: authUser.id, rowId: data.id || null });
-      return data;
-    }
+    console.error('[profile:frontend] profile lookup query failed', {
+      key: 'id',
+      value: authUser.id,
+      reason,
+      code: error?.code || null,
+      message: error?.message || String(error),
+      details: error?.details || null,
+      hint: error?.hint || null,
+    });
+    throw error;
+  }
+  if (data) {
+    console.log('[profile:frontend] profile row loaded', { lookupKey: 'id', authUserId: authUser.id, rowId: data.id || null });
+    return data;
   }
   return null;
 }
@@ -5143,16 +5129,17 @@ async function createSupabaseProfileRecord(authUser, seeded = {}) {
     || email,
   ).trim();
   const profilePayload = {
-    user_id: authUser.id,
+    id: authUser.id,
     email,
     username,
     display_name: displayName,
+    created_at: seeded.created_at || new Date().toISOString(),
     visibility: String(seeded.visibility || 'public').toLowerCase() === 'private' ? 'private' : 'public',
     updated_at: new Date().toISOString(),
   };
   const { data, error } = await supabase
     .from('profiles')
-    .upsert(profilePayload, { onConflict: 'user_id' })
+    .upsert(profilePayload, { onConflict: 'id' })
     .select('*')
     .single();
   if (error) {
@@ -5192,6 +5179,30 @@ async function resolveOwnSupabaseProfile({ createIfMissing = true } = {}) {
   }
 }
 
+async function ensureSupabaseProfileForAuthenticatedUser(context = 'auth_flow') {
+  if (!state.auth.user?.id) return;
+  const resolved = await resolveOwnSupabaseProfile({ createIfMissing: true });
+  if (resolved.profile) {
+    const normalized = normalizeSupabaseProfileRecord(resolved.profile, state.currentUser);
+    state.currentUser = withPersistedOnboardingProfile(normalized);
+    if (location.hash.slice(1) === '/profile') {
+      state.activeProfile = normalized;
+    }
+    syncProfilePrivacyFromUser(state.currentUser);
+  }
+  if (resolved.status === 'query_failure' || resolved.status === 'permission_or_rls') {
+    console.error('[profile:frontend] profile ensure failed after authentication', {
+      context,
+      status: resolved.status,
+      userId: state.auth.user?.id || null,
+      code: resolved.error?.code || null,
+      message: resolved.error?.message || String(resolved.error || ''),
+      details: resolved.error?.details || null,
+      hint: resolved.error?.hint || null,
+    });
+  }
+}
+
 async function upsertOwnSupabaseProfileFromOnboarding({ resumeProfile = {}, skillProfile = {} } = {}) {
   const authUser = state.auth.user;
   if (!supabase || !authUser?.id) {
@@ -5212,7 +5223,7 @@ async function upsertOwnSupabaseProfileFromOnboarding({ resumeProfile = {}, skil
     || fallbackUsername,
   ).trim();
   const payload = {
-    user_id: authUser.id,
+    id: authUser.id,
     email: String(existingProfile.email || fallbackEmail),
     username: String(existingProfile.username || fallbackUsername),
     display_name: displayName,
@@ -5226,7 +5237,7 @@ async function upsertOwnSupabaseProfileFromOnboarding({ resumeProfile = {}, skil
 
   const { data, error } = await supabase
     .from('profiles')
-    .upsert(payload, { onConflict: 'user_id' })
+    .upsert(payload, { onConflict: 'id' })
     .select('*')
     .single();
   if (error) {
