@@ -475,6 +475,11 @@ const state = {
     showInMemberSearch: true,
   },
   profileAccessRequests: [],
+  profileLoad: {
+    status: 'idle',
+    message: '',
+    isOwnRoute: false,
+  },
   authForms: {
     login: { message: '', tone: 'info', loading: false },
     signup: { message: '', tone: 'info', loading: false },
@@ -3428,8 +3433,38 @@ function profilePage() {
   const path = location.hash.replace('#', '') || '/profile';
   const isOwnProfileRoute = path === '/profile';
   const profile = isOwnProfileRoute ? state.currentUser : state.activeProfile;
+  const profileLoadStatus = state.profileLoad?.status || 'idle';
+  const profileLoadMessage = state.profileLoad?.message || '';
+  if (isOwnProfileRoute && profileLoadStatus === 'error') {
+    return `
+      <section class="card panel-surface panel-surface--transparent">
+        <p class="hero-kicker">Profile</p>
+        <h3>Unable to load your profile</h3>
+        <p class="muted">${escapeHtml(profileLoadMessage || 'Something went wrong while loading your profile.')}</p>
+        <p class="muted">Please retry. If this persists, complete profile setup to create your first profile record.</p>
+        <div class="actions">
+          <button class="pill-btn cta-primary" id="profile-retry-load-btn" type="button">Retry Profile Load</button>
+          <a class="pill-btn" href="${linkFor(ONBOARDING_PROFILE_SETUP_ROUTE)}">Complete Profile</a>
+        </div>
+      </section>
+    `;
+  }
+  if (isOwnProfileRoute && (profileLoadStatus === 'empty' || !profile?.id)) {
+    return `
+      <section class="card panel-surface panel-surface--transparent">
+        <p class="hero-kicker">Profile</p>
+        <h3>Your profile has not been created yet.</h3>
+        <p class="muted">${escapeHtml(profileLoadMessage || 'Create your profile to unlock profile details and visibility controls.')}</p>
+        <div class="actions">
+          <a class="pill-btn cta-primary" href="${linkFor(ONBOARDING_PROFILE_SETUP_ROUTE)}">Create Profile</a>
+          <button class="pill-btn" id="profile-retry-load-btn" type="button">Retry Profile Load</button>
+        </div>
+      </section>
+    `;
+  }
   if (!profile) {
-    return card('Profile', '<p class="muted">Profile is unavailable right now.</p>');
+    const fallbackMessage = profileLoadMessage || 'Profile is unavailable right now.';
+    return card('Profile', `<p class="muted">${escapeHtml(fallbackMessage)}</p>`);
   }
   const visibility = profile?.profileVisibility === 'private' ? 'private' : 'public';
   const isRecruiterViewer = String(state.currentUser?.role || '').trim().toLowerCase() === 'recruiter';
@@ -5000,24 +5035,68 @@ async function loadProfileForRoute(path) {
   if (RESERVED_PROFILE_CHAT_ROUTES.has(path)) {
     return;
   }
+  state.profileLoad = {
+    status: 'loading',
+    message: '',
+    isOwnRoute: path === '/profile',
+  };
   if (path === '/profile') {
-    const result = await apiRequest('/profile/me');
-    const normalized = normalizeLayeredProfile(result.profile);
-    state.activeProfile = normalized.user;
-    state.currentUser = withPersistedOnboardingProfile(normalized.user);
-    syncProfilePrivacyFromUser(state.currentUser);
-    state.layers = normalized.layers;
-    state.availableLayers = normalized.availableLayers;
-    state.lockedLayers = normalized.lockedLayers;
-    if (!state.availableLayers.includes(state.activeLayer)) {
-      state.activeLayer = state.availableLayers[0] || 'free';
+    try {
+      const result = await apiRequest('/profile/me');
+      const normalized = normalizeLayeredProfile(result.profile);
+      if (!normalized.user?.id) {
+        state.activeProfile = state.currentUser || null;
+        state.profileLoad = {
+          status: 'empty',
+          message: 'Your profile has not been created yet.',
+          isOwnRoute: true,
+        };
+        console.warn('[profile:frontend] profile route load returned empty user payload', {
+          path,
+          hasCurrentUser: Boolean(state.currentUser?.id),
+        });
+        return;
+      }
+      state.activeProfile = normalized.user;
+      state.currentUser = withPersistedOnboardingProfile(normalized.user);
+      syncProfilePrivacyFromUser(state.currentUser);
+      state.layers = normalized.layers;
+      state.availableLayers = normalized.availableLayers;
+      state.lockedLayers = normalized.lockedLayers;
+      if (!state.availableLayers.includes(state.activeLayer)) {
+        state.activeLayer = state.availableLayers[0] || 'free';
+      }
+      state.profileLoad = {
+        status: 'ready',
+        message: '',
+        isOwnRoute: true,
+      };
+      console.log('[profile:frontend] profile route load success', {
+        path,
+        hasCurrentUser: Boolean(state.currentUser),
+        userId: state.currentUser?.id || null,
+        activeLayer: state.activeLayer,
+      });
+    } catch (error) {
+      const rawMessage = error instanceof Error ? error.message : String(error);
+      const lowerMessage = rawMessage.toLowerCase();
+      const notFound = lowerMessage.includes('not found') || lowerMessage.includes('404');
+      state.activeProfile = state.currentUser || null;
+      state.profileLoad = {
+        status: notFound ? 'empty' : 'error',
+        message: notFound
+          ? 'Your profile has not been created yet.'
+          : (rawMessage || 'Unable to load your profile right now.'),
+        isOwnRoute: true,
+      };
+      console.error('[profile:frontend] profile route load failure', {
+        path,
+        message: rawMessage,
+        hasCurrentUser: Boolean(state.currentUser?.id),
+        userId: state.currentUser?.id || null,
+        error,
+      });
     }
-    console.log('[profile:frontend] profile route load success', {
-      path,
-      hasCurrentUser: Boolean(state.currentUser),
-      userId: state.currentUser?.id || null,
-      activeLayer: state.activeLayer,
-    });
     return;
   }
 
@@ -5039,19 +5118,44 @@ async function loadProfileForRoute(path) {
     }
     if (!memberId) {
       state.activeProfile = null;
+      state.profileLoad = {
+        status: 'empty',
+        message: 'That profile could not be found.',
+        isOwnRoute: false,
+      };
       return;
     }
     if (memberId === state.currentUser?.id) {
       state.activeProfile = state.currentUser;
+      state.profileLoad = {
+        status: 'ready',
+        message: '',
+        isOwnRoute: false,
+      };
       return;
     }
     const data = await apiRequest(`/members/${encodeURIComponent(memberId)}`);
     state.activeProfile = data.profile;
+    state.profileLoad = {
+      status: data?.profile ? 'ready' : 'empty',
+      message: data?.profile ? '' : 'That profile could not be found.',
+      isOwnRoute: false,
+    };
     console.log('[profile:frontend] member profile fetch success', { memberId });
-  } catch {
+  } catch (error) {
     const failedMemberId = match?.[1] || usernameMatch?.[1] || null;
-    console.warn('[profile:frontend] member profile fetch failure', { memberId: failedMemberId });
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[profile:frontend] member profile fetch failure', {
+      memberId: failedMemberId,
+      message,
+      error,
+    });
     state.activeProfile = null;
+    state.profileLoad = {
+      status: 'error',
+      message: message || 'Unable to load this profile right now.',
+      isOwnRoute: false,
+    };
   }
 }
 
@@ -6700,6 +6804,13 @@ async function render() {
   attachScenarioDetailHandlers();
   attachHomeChatHandlers();
   attachChatPaneHandlers();
+  const profileRetryLoadButton = document.getElementById('profile-retry-load-btn');
+  if (profileRetryLoadButton) {
+    profileRetryLoadButton.onclick = async () => {
+      await loadProfileForRoute('/profile');
+      render();
+    };
+  }
     console.log('[wsg] render complete');
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown render failure.';
