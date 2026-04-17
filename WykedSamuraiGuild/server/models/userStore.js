@@ -104,6 +104,11 @@ function publicUser(row, layers = [], connections = [], scenarioHistory = []) {
     derivedArchetypeProfile: row.derived_archetype_profile && typeof row.derived_archetype_profile === "object" ? row.derived_archetype_profile : {},
     policyAcceptance: row.policy_acceptance && typeof row.policy_acceptance === "object" ? row.policy_acceptance : {},
     verification: row.verification && typeof row.verification === "object" ? row.verification : createVerificationPlaceholder(),
+    profileVisibility: row.profile_visibility === "private" ? "private" : "public",
+    allowShareableLink: row.allow_shareable_link !== false,
+    allowAccessRequests: row.allow_access_requests !== false,
+    allowRecruiterAccessRequests: row.allow_recruiter_access_requests !== false,
+    showInMemberSearch: row.show_in_member_search !== false,
     availableLayers,
     lockedLayers,
     layers: layerMap,
@@ -244,6 +249,16 @@ export async function listUsers() {
   return users;
 }
 
+export async function listUsersVisibleTo(viewerUserId) {
+  const users = await listUsers();
+  return users.filter((user) => {
+    if (!user) return false;
+    if (user.id === viewerUserId) return true;
+    if (user.profileVisibility === "public") return user.showInMemberSearch !== false;
+    return false;
+  });
+}
+
 export async function updateUserProfile(userId, { displayName, bio }) {
   const { rows } = await pool.query(
     `UPDATE profile_layers
@@ -273,6 +288,35 @@ export async function updateUserHubProfile(userId, { legalName, email, role, org
          updated_at = NOW()
      WHERE id = $1`,
     [userId, legalName.trim(), email.trim(), role.trim(), organizationName.trim()],
+  );
+
+  const user = await findUserById(userId);
+  if (!user) return null;
+  const [connections, layers, scenarioHistory] = await Promise.all([
+    getConnectionIds(userId),
+    getProfileLayersByUserId(userId),
+    getScenarioHistoryByUserId(userId),
+  ]);
+  return publicUser(user, layers, connections, scenarioHistory);
+}
+
+export async function updateUserPrivacySettings(userId, settings = {}) {
+  const profileVisibility = settings.profileVisibility === "private" ? "private" : "public";
+  const allowShareableLink = settings.allowShareableLink !== false;
+  const allowAccessRequests = settings.allowAccessRequests !== false;
+  const allowRecruiterAccessRequests = settings.allowRecruiterAccessRequests !== false;
+  const showInMemberSearch = settings.showInMemberSearch !== false;
+
+  await pool.query(
+    `UPDATE users
+     SET profile_visibility = $2,
+         allow_shareable_link = $3,
+         allow_access_requests = $4,
+         allow_recruiter_access_requests = $5,
+         show_in_member_search = $6,
+         updated_at = NOW()
+     WHERE id = $1`,
+    [userId, profileVisibility, allowShareableLink, allowAccessRequests, allowRecruiterAccessRequests, showInMemberSearch],
   );
 
   const user = await findUserById(userId);
@@ -352,6 +396,66 @@ export async function removeConnection(userId, connectionUserId) {
     getScenarioHistoryByUserId(userId),
   ]);
   return publicUser(user, layers, connections, scenarioHistory);
+}
+
+function mapProfileAccessRequestRow(row) {
+  return {
+    id: row.id,
+    ownerUserId: row.owner_user_id,
+    requesterUserId: row.requester_user_id,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    respondedAt: row.responded_at,
+  };
+}
+
+export async function createOrUpdateProfileAccessRequest(ownerUserId, requesterUserId) {
+  const { rows } = await pool.query(
+    `INSERT INTO profile_access_requests (id, owner_user_id, requester_user_id, status, created_at, updated_at, responded_at)
+     VALUES ($1, $2, $3, 'pending', NOW(), NOW(), NULL)
+     ON CONFLICT (owner_user_id, requester_user_id)
+     DO UPDATE SET status = 'pending', updated_at = NOW(), responded_at = NULL
+     RETURNING *`,
+    [crypto.randomUUID(), ownerUserId, requesterUserId],
+  );
+  return rows[0] ? mapProfileAccessRequestRow(rows[0]) : null;
+}
+
+export async function getProfileAccessRequest(ownerUserId, requesterUserId) {
+  const { rows } = await pool.query(
+    `SELECT *
+     FROM profile_access_requests
+     WHERE owner_user_id = $1 AND requester_user_id = $2
+     LIMIT 1`,
+    [ownerUserId, requesterUserId],
+  );
+  return rows[0] ? mapProfileAccessRequestRow(rows[0]) : null;
+}
+
+export async function listProfileAccessRequestsForOwner(ownerUserId) {
+  const { rows } = await pool.query(
+    `SELECT *
+     FROM profile_access_requests
+     WHERE owner_user_id = $1
+     ORDER BY
+      CASE status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 WHEN 'denied' THEN 2 ELSE 3 END,
+      updated_at DESC`,
+    [ownerUserId],
+  );
+  return rows.map(mapProfileAccessRequestRow);
+}
+
+export async function resolveProfileAccessRequest(ownerUserId, requestId, decision) {
+  const status = decision === "approve" ? "approved" : "denied";
+  const { rows } = await pool.query(
+    `UPDATE profile_access_requests
+     SET status = $3, updated_at = NOW(), responded_at = NOW()
+     WHERE id = $1 AND owner_user_id = $2
+     RETURNING *`,
+    [requestId, ownerUserId, status],
+  );
+  return rows[0] ? mapProfileAccessRequestRow(rows[0]) : null;
 }
 
 export async function touchLastActiveAt(userId) {

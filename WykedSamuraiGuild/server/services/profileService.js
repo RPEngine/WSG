@@ -2,10 +2,16 @@ import {
   addConnection,
   findUserById,
   getProfileLayer,
+  getProfileAccessRequest,
+  listProfileAccessRequestsForOwner,
+  listUsersVisibleTo,
   listUsers,
   removeConnection,
+  resolveProfileAccessRequest,
   toPublicUser,
+  createOrUpdateProfileAccessRequest,
   updateUserHubProfile,
+  updateUserPrivacySettings,
   updateUserProfile,
   upsertProfileLayer,
 } from "../models/userStore.js";
@@ -172,9 +178,69 @@ export async function getMembers() {
   return listUsers();
 }
 
-export async function getMemberProfile(memberId) {
+function canRequestProfileAccess(ownerProfile, requesterProfile) {
+  if (!ownerProfile || !requesterProfile) return false;
+  const isRecruiter = requesterProfile.role === "recruiter";
+  if (isRecruiter) {
+    return ownerProfile.allowRecruiterAccessRequests === true;
+  }
+  return ownerProfile.allowAccessRequests === true;
+}
+
+function canViewerSeeProfile(ownerProfile, viewerProfile, existingRequest = null) {
+  if (!ownerProfile || !viewerProfile) return false;
+  if (ownerProfile.id === viewerProfile.id) return true;
+  if (ownerProfile.profileVisibility !== "private") return true;
+  return existingRequest?.status === "approved";
+}
+
+function toLockedProfile(ownerProfile, viewerProfile, existingRequest = null) {
+  const canRequest = canRequestProfileAccess(ownerProfile, viewerProfile);
+  return {
+    id: ownerProfile.id,
+    username: ownerProfile.username,
+    displayName: ownerProfile.displayName,
+    avatarUrl: ownerProfile.avatarUrl,
+    role: ownerProfile.role,
+    organizationName: ownerProfile.organizationName,
+    profileVisibility: ownerProfile.profileVisibility,
+    locked: true,
+    access: {
+      canViewFull: false,
+      canRequestAccess: canRequest,
+      requestStatus: existingRequest?.status || null,
+    },
+  };
+}
+
+export async function getMemberProfile(memberId, viewerId) {
   const user = await findUserById(memberId);
-  return toPublicUser(user);
+  const memberProfile = await toPublicUser(user);
+  if (!memberProfile) return null;
+
+  const viewer = viewerId ? await toPublicUser(await findUserById(viewerId)) : null;
+  if (!viewer) {
+    return memberProfile.profileVisibility === "public" ? { ...memberProfile, access: { canViewFull: true } } : null;
+  }
+
+  const existingRequest = viewer.id === memberProfile.id ? null : await getProfileAccessRequest(memberProfile.id, viewer.id);
+  const canView = canViewerSeeProfile(memberProfile, viewer, existingRequest);
+  if (canView) {
+    return {
+      ...memberProfile,
+      locked: false,
+      access: {
+        canViewFull: true,
+        requestStatus: existingRequest?.status || null,
+      },
+    };
+  }
+
+  if (memberProfile.allowShareableLink !== true) {
+    return null;
+  }
+
+  return toLockedProfile(memberProfile, viewer, existingRequest);
 }
 
 export async function listConnectionProfiles(userId) {
@@ -191,7 +257,7 @@ export async function searchMembersForConnections(userId, query = "") {
   const currentUser = await toPublicUser(await findUserById(userId));
   const connected = new Set(currentUser?.connections || []);
 
-  return (await listUsers())
+  return (await listUsersVisibleTo(userId))
     .filter((member) => member.id !== userId)
     .filter((member) => (q
       ? [member.displayName, member.legalName, member.username, member.organizationName, member.role]
@@ -201,6 +267,52 @@ export async function searchMembersForConnections(userId, query = "") {
       : true))
     .map((member) => ({ ...member, isConnected: connected.has(member.id) }))
     .slice(0, 50);
+}
+
+export async function getVisibleMembersForUser(userId) {
+  return listUsersVisibleTo(userId);
+}
+
+export async function updateOwnProfilePrivacy(userId, payload = {}) {
+  return updateUserPrivacySettings(userId, payload);
+}
+
+export async function requestMemberProfileAccess(ownerId, requesterId) {
+  if (!ownerId || !requesterId) throw new Error("Invalid profile access request.");
+  if (ownerId === requesterId) throw new Error("You already have access to your own profile.");
+
+  const ownerProfile = await toPublicUser(await findUserById(ownerId));
+  const requesterProfile = await toPublicUser(await findUserById(requesterId));
+  if (!ownerProfile || !requesterProfile) throw new Error("Profile access request target not found.");
+  if (ownerProfile.profileVisibility !== "private") throw new Error("This profile is already public.");
+
+  const existing = await getProfileAccessRequest(ownerId, requesterId);
+  if (existing?.status === "approved") throw new Error("You already have approved access to this private profile.");
+  if (!canRequestProfileAccess(ownerProfile, requesterProfile)) {
+    throw new Error("This profile is not accepting access requests for your account type.");
+  }
+
+  return createOrUpdateProfileAccessRequest(ownerId, requesterId);
+}
+
+export async function listOwnProfileAccessRequests(ownerId) {
+  const requests = await listProfileAccessRequestsForOwner(ownerId);
+  return Promise.all(requests.map(async (entry) => {
+    const requester = await toPublicUser(await findUserById(entry.requesterUserId));
+    return {
+      ...entry,
+      requester: requester
+        ? { id: requester.id, displayName: requester.displayName, username: requester.username, role: requester.role }
+        : null,
+    };
+  }));
+}
+
+export async function decideOwnProfileAccessRequest(ownerId, requestId, decision) {
+  if (!["approve", "deny"].includes(decision)) throw new Error("Decision must be approve or deny.");
+  const result = await resolveProfileAccessRequest(ownerId, requestId, decision);
+  if (!result) throw new Error("Access request was not found.");
+  return result;
 }
 
 export async function addOwnConnection(userId, connectionUserId) {

@@ -5,6 +5,7 @@ import {
   getDirectConversation,
   getMemberProfile,
   getMembers,
+  getVisibleMembersForUser,
   getOwnProfileMe,
   getOwnProfileLayer,
   getScenarioChatStream,
@@ -16,6 +17,10 @@ import {
   removeOwnConnection,
   saveOwnProfile,
   saveOwnHubProfile,
+  updateOwnProfilePrivacy,
+  requestMemberProfileAccess,
+  listOwnProfileAccessRequests,
+  decideOwnProfileAccessRequest,
   searchMembersForConnections,
   updateOwnProfileLayer,
 } from "../services/profileService.js";
@@ -75,12 +80,13 @@ export async function updateMyProfile(req, res) {
 }
 
 export async function listMembers(req, res) {
-  const members = await getMembers();
+  const viewerId = req.user?.id;
+  const members = viewerId ? await getVisibleMembersForUser(viewerId) : await getMembers();
   return res.json({ items: members, count: members.length });
 }
 
 export async function getMember(req, res) {
-  const member = await getMemberProfile(req.params.id);
+  const member = await getMemberProfile(req.params.id, req.user?.id);
 
   if (!member) {
     console.warn("[profile] profile fetch failure", { memberId: req.params.id, error: "Member not found." });
@@ -88,6 +94,39 @@ export async function getMember(req, res) {
   }
 
   return res.json({ profile: member });
+}
+
+export async function patchMyProfilePrivacy(req, res) {
+  try {
+    const profile = await updateOwnProfilePrivacy(req.user.id, req.body || {});
+    return res.json({ profile });
+  } catch (error) {
+    return res.status(400).json({ error: error.message || "Unable to update profile privacy settings." });
+  }
+}
+
+export async function postProfileAccessRequest(req, res) {
+  try {
+    const request = await requestMemberProfileAccess(req.params.id, req.user.id);
+    return res.status(201).json({ request });
+  } catch (error) {
+    return res.status(400).json({ error: error.message || "Unable to request profile access." });
+  }
+}
+
+export async function getMyProfileAccessRequests(req, res) {
+  const items = await listOwnProfileAccessRequests(req.user.id);
+  return res.json({ items, count: items.length });
+}
+
+export async function postMyProfileAccessDecision(req, res) {
+  try {
+    const decision = String(req.body?.decision || "").trim().toLowerCase();
+    const request = await decideOwnProfileAccessRequest(req.user.id, req.params.requestId, decision);
+    return res.json({ request });
+  } catch (error) {
+    return res.status(400).json({ error: error.message || "Unable to update access request status." });
+  }
 }
 
 export async function updateMyHubProfile(req, res) {

@@ -4,11 +4,15 @@ import {
   createConnection,
   deleteConnection,
   getMember,
+  getMyProfileAccessRequests,
   getMyProfile,
   getMyProfileLayer,
   getMyProfileLayers,
   listMembers,
+  patchMyProfilePrivacy,
   patchMyProfileLayer,
+  postMyProfileAccessDecision,
+  postProfileAccessRequest,
   updateMyProfile,
   updateMyHubProfile,
 } from "../controllers/profileController.js";
@@ -38,6 +42,13 @@ router.patch(
   contentSafetyGate({ fields: ["legalName", "organizationName"], category: "profile" }),
   updateMyHubProfile,
 );
+router.patch(
+  "/profile/privacy",
+  requireAuth,
+  requireRecentReauth,
+  requireObjectBody,
+  patchMyProfilePrivacy,
+);
 router.get("/profile/layers", requireAuth, getMyProfileLayers);
 router.get("/profile/layers/:layerKey", requireAuth, getMyProfileLayer);
 router.patch(
@@ -50,8 +61,11 @@ router.patch(
   patchMyProfileLayer,
 );
 router.post("/profile/layers/:layerKey/activate", requireAuth, activateMyProfileLayer);
-router.get("/members", listMembers);
-router.get("/members/:id", getMember);
+router.get("/members", requireAuth, listMembers);
+router.get("/members/:id", requireAuth, getMember);
+router.post("/members/:id/access-requests", requireAuth, postProfileAccessRequest);
+router.get("/profile/access-requests", requireAuth, getMyProfileAccessRequests);
+router.post("/profile/access-requests/:requestId/decision", requireAuth, requireObjectBody, postMyProfileAccessDecision);
 router.post("/connections/:connectionUserId", requireAuth, connectionLimiter, createConnection);
 router.delete("/connections/:connectionUserId", requireAuth, requireRecentReauth, connectionLimiter, deleteConnection);
 
