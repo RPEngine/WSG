@@ -805,14 +805,17 @@ function setProfileSyncState({ status = 'idle', message = '', source = '', canRe
 function toUserSafeProfileErrorMessage(error, fallback = 'We couldn’t save that right now. Please try again.') {
   const code = String(error?.code || error?.status || '').toLowerCase();
   const rawMessage = String(error?.message || '').toLowerCase();
-  if (code === '401' || code === '403' || code === '42501' || rawMessage.includes('permission')) {
-    return 'Your account does not have permission to sync this change yet.';
+  if (code === '401' || rawMessage.includes('jwt') || rawMessage.includes('not authenticated') || rawMessage.includes('session')) {
+    return 'Your session may have expired. Please log in again.';
+  }
+  if (code === '403' || code === '42501' || rawMessage.includes('permission') || rawMessage.includes('row-level security')) {
+    return 'We could not create your profile record.';
   }
   if (rawMessage.includes('network') || rawMessage.includes('fetch')) {
-    return 'Your changes were saved locally, but we could not sync them yet.';
+    return 'We couldn’t save your profile yet. Please try again.';
   }
   if (rawMessage.includes('timeout')) {
-    return 'Your changes were saved locally, but syncing is taking longer than expected.';
+    return 'We couldn’t save your profile yet. Please try again.';
   }
   return fallback;
 }
@@ -5596,6 +5599,44 @@ async function upsertOwnSupabaseProfileFromOnboarding({ resumeProfile = {}, skil
   return data;
 }
 
+async function ensureProfileRecordForSave(context = 'profile_save') {
+  const authUser = state.auth.user;
+  if (!authUser?.id) {
+    const error = new Error('Authenticated user session is missing.');
+    error.status = 401;
+    throw error;
+  }
+
+  const resolved = await resolveOwnSupabaseProfile({ createIfMissing: true });
+  if (resolved.profile) {
+    return resolved.profile;
+  }
+
+  if (resolved.status === 'auth_user_missing') {
+    const error = new Error('Authenticated user session is missing.');
+    error.status = 401;
+    throw error;
+  }
+
+  if (resolved.status === 'permission_or_rls') {
+    const error = new Error('Profile record permission denied.');
+    error.status = 403;
+    throw error;
+  }
+
+  const error = resolved.error || new Error('Unable to create or load profile record.');
+  console.error('[profile:frontend] ensure profile record for save failed', {
+    context,
+    authUserId: authUser.id,
+    status: resolved.status,
+    code: error?.code || null,
+    message: error?.message || String(error),
+    details: error?.details || null,
+    hint: error?.hint || null,
+  });
+  throw error;
+}
+
 async function retryProfileCloudSyncFromLocal() {
   const userId = state.currentUser?.id;
   if (!userId) return;
@@ -6516,14 +6557,47 @@ function attachProfileEditHandler() {
       setProfileSyncState({ status: 'saving', message: 'Saving profile changes…', source: 'profile_layer', canRetry: false });
       render();
       try {
-        const result = await apiRequest(`/profile/layers/${layerKey}`, { method: 'PATCH', body: JSON.stringify(payload) });
-        const normalized = normalizeLayeredProfile(result?.profile || result || null);
-        state.currentUser = withPersistedOnboardingProfile(normalized.user);
+        const existingProfile = await ensureProfileRecordForSave('profile_layer_save');
+        const authUser = state.auth.user;
+        const parsedSkills = String(payload.skills || '')
+          .split(',')
+          .map((entry) => entry.trim())
+          .filter(Boolean);
+
+        const savedProfile = await upsertSupabaseProfileRecord(authUser, {
+          email: String(existingProfile.email || state.currentUser?.email || authUser?.email || '').trim(),
+          username: String(existingProfile.username || state.currentUser?.username || authUser?.user_metadata?.username || '').trim(),
+          display_name: String(payload.displayName || existingProfile.display_name || state.currentUser?.displayName || '').trim(),
+          headline: String(payload.headline || '').trim(),
+          bio: String(payload.bio || '').trim(),
+          skills: parsedSkills,
+          updated_at: new Date().toISOString(),
+        }, 'profile_layer_save');
+
+        const normalizedUser = normalizeSupabaseProfileRecord(savedProfile, state.currentUser);
+        const nextLayers = {
+          ...(state.layers || {}),
+          [layerKey]: {
+            ...(state.layers?.[layerKey] || {}),
+            layerKey,
+            displayName: String(payload.displayName || normalizedUser.displayName || '').trim(),
+            headline: String(payload.headline || '').trim(),
+            bio: String(payload.bio || '').trim(),
+            skills: parsedSkills,
+          },
+        };
+
+        state.currentUser = withPersistedOnboardingProfile({
+          ...normalizedUser,
+          layers: nextLayers,
+          bio: String(payload.bio || normalizedUser.bio || '').trim(),
+          skillsInterests: parsedSkills,
+        });
         syncProfilePrivacyFromUser(state.currentUser);
         state.activeProfile = state.currentUser;
-        state.layers = normalized.layers;
-        state.availableLayers = normalized.availableLayers;
-        state.lockedLayers = normalized.lockedLayers;
+        state.layers = nextLayers;
+        state.availableLayers = Array.isArray(state.availableLayers) && state.availableLayers.length ? state.availableLayers : ['free'];
+        state.lockedLayers = Array.isArray(state.lockedLayers) && state.lockedLayers.length ? state.lockedLayers : ['professional', 'roleplay'];
         setProfileHubMessage('Profile layer saved successfully.', 'success');
         setProfileSyncState({ status: 'synced', message: 'Profile changes saved and synced.', source: 'profile_layer', canRetry: false });
         setProfileInlineEdit('overview', false);
@@ -6533,7 +6607,7 @@ function attachProfileEditHandler() {
           code: error?.code || null,
           details: error?.details || null,
         });
-        const safeMessage = toUserSafeProfileErrorMessage(error);
+        const safeMessage = toUserSafeProfileErrorMessage(error, 'We couldn’t save your profile yet. Please try again.');
         setProfileHubMessage(safeMessage, 'error');
         setProfileSyncState({ status: 'sync_failed', message: safeMessage, source: 'profile_layer', canRetry: true });
       } finally {
@@ -6563,9 +6637,19 @@ function attachProfileEditHandler() {
       setProfileSyncState({ status: 'saving', message: 'Saving account settings…', source: 'account', canRetry: false });
       render();
       try {
-        const result = await apiRequest('/profile/hub', { method: 'PATCH', body: JSON.stringify(payload) });
-        const normalized = normalizeLayeredProfile(result?.profile || result || null);
-        state.currentUser = withPersistedOnboardingProfile(normalized.user);
+        const existingProfile = await ensureProfileRecordForSave('profile_hub_save');
+        const authUser = state.auth.user;
+        const savedProfile = await upsertSupabaseProfileRecord(authUser, {
+          email: String(payload.email || existingProfile.email || authUser?.email || '').trim(),
+          username: String(existingProfile.username || state.currentUser?.username || authUser?.user_metadata?.username || '').trim(),
+          display_name: String(existingProfile.display_name || state.currentUser?.displayName || '').trim(),
+          legal_name: String(payload.legalName || '').trim(),
+          role: String(payload.role || '').trim(),
+          organization_name: String(payload.organizationName || '').trim(),
+          updated_at: new Date().toISOString(),
+        }, 'profile_hub_save');
+        const normalizedUser = normalizeSupabaseProfileRecord(savedProfile, state.currentUser);
+        state.currentUser = withPersistedOnboardingProfile(normalizedUser);
         syncProfilePrivacyFromUser(state.currentUser);
         const nextProfileType = (payload.role === 'employer' || payload.role === 'recruiter') ? 'company' : 'person';
         const existingOnboarding = readOnboardingProfile(state.currentUser.id) || {};
@@ -6582,9 +6666,6 @@ function attachProfileEditHandler() {
           primaryArchetype: samuraiStatus === 'ronin' ? 'Ronin' : 'Samurai',
         };
         state.activeProfile = state.currentUser;
-        state.layers = normalized.layers;
-        state.availableLayers = normalized.availableLayers;
-        state.lockedLayers = normalized.lockedLayers;
         setProfileHubMessage('Account settings saved successfully.', 'success');
         setStatusMessage('Account settings saved successfully.', 'success');
         setProfileSyncState({ status: 'synced', message: 'Account settings saved and synced.', source: 'account', canRetry: false });
@@ -6595,9 +6676,9 @@ function attachProfileEditHandler() {
           code: error?.code || null,
           details: error?.details || null,
         });
-        const safeMessage = toUserSafeProfileErrorMessage(error);
+        const safeMessage = toUserSafeProfileErrorMessage(error, 'We couldn’t save your profile yet. Please try again.');
         setProfileHubMessage(safeMessage, 'error');
-        setStatusMessage('We couldn’t save that right now. Please try again.', 'error');
+        setStatusMessage(safeMessage, 'error');
         setProfileSyncState({ status: 'sync_failed', message: safeMessage, source: 'account', canRetry: true });
       } finally {
         state.profileHub.saving = false;
@@ -6625,9 +6706,20 @@ function attachProfileEditHandler() {
       setProfileSyncState({ status: 'saving', message: 'Saving privacy settings…', source: 'privacy', canRetry: false });
       render();
       try {
-        const result = await apiRequest('/profile/privacy', { method: 'PATCH', body: JSON.stringify(payload) });
-        const normalized = normalizeLayeredProfile(result?.profile || result || null);
-        state.currentUser = withPersistedOnboardingProfile(normalized.user);
+        const existingProfile = await ensureProfileRecordForSave('profile_privacy_save');
+        const authUser = state.auth.user;
+        const savedProfile = await upsertSupabaseProfileRecord(authUser, {
+          email: String(existingProfile.email || state.currentUser?.email || authUser?.email || '').trim(),
+          username: String(existingProfile.username || state.currentUser?.username || authUser?.user_metadata?.username || '').trim(),
+          display_name: String(existingProfile.display_name || state.currentUser?.displayName || '').trim(),
+          visibility: payload.profileVisibility,
+          allow_shareable_link: payload.allowShareableLink === true,
+          allow_access_requests: payload.allowAccessRequests === true,
+          allow_recruiter_access_requests: payload.allowRecruiterAccessRequests === true,
+          show_in_member_search: payload.showInMemberSearch === true,
+          updated_at: new Date().toISOString(),
+        }, 'profile_privacy_save');
+        state.currentUser = withPersistedOnboardingProfile(normalizeSupabaseProfileRecord(savedProfile, state.currentUser));
         syncProfilePrivacyFromUser(state.currentUser);
         state.activeProfile = state.currentUser;
         setProfileHubMessage('Privacy settings saved successfully.', 'success');
@@ -6641,9 +6733,9 @@ function attachProfileEditHandler() {
           code: error?.code || null,
           details: error?.details || null,
         });
-        const safeMessage = toUserSafeProfileErrorMessage(error);
+        const safeMessage = toUserSafeProfileErrorMessage(error, 'We couldn’t save your profile yet. Please try again.');
         setProfileHubMessage(safeMessage, 'error');
-        setStatusMessage('We couldn’t save that right now. Please try again.', 'error');
+        setStatusMessage(safeMessage, 'error');
         setProfileSyncState({ status: 'sync_failed', message: safeMessage, source: 'privacy', canRetry: true });
       } finally {
         state.profileHub.saving = false;
