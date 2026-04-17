@@ -3119,10 +3119,10 @@ select:focus-visible {
   --body-font: Inter, "Source Sans 3", system-ui, sans-serif;
 
   --bg-base: #090d12;
-  --page-scene-image: url("/assets/backgrounds/bg-home-nexus.webp");
+  --page-scene-image: url("/assets/backgrounds/bg-home-nexus.svg");
   --page-scene-overlay:
     radial-gradient(circle at center, rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.85));
-  --page-scene-texture: url("/assets/overlays/bg-stars-overlay.webp");
+  --page-scene-texture: url("/assets/overlays/bg-stars-overlay.svg");
   --page-scene-opacity: 1;
   --page-scene-position: center;
   --page-scene-size: cover;
@@ -3222,7 +3222,7 @@ h1, h2, h3, h4, .title, .lockup-title { font-family: var(--heading-font); }
 }
 
 .page-set--home {
-  --page-scene-image: url("/assets/backgrounds/bg-home-nexus.webp");
+  --page-scene-image: url("/assets/backgrounds/bg-home-nexus.svg");
   --page-scene-overlay: linear-gradient(160deg, rgba(6, 10, 16, 0.64), rgba(4, 8, 14, 0.84));
 }
 
@@ -3242,7 +3242,7 @@ h1, h2, h3, h4, .title, .lockup-title { font-family: var(--heading-font); }
 }
 
 .page-set--profile {
-  --page-scene-image: url("/assets/backgrounds/bg-home-nexus.webp");
+  --page-scene-image: url("/assets/backgrounds/bg-home-nexus.svg");
   --page-scene-overlay: linear-gradient(165deg, rgba(11, 14, 20, 0.58), rgba(5, 9, 15, 0.86));
 }
 
@@ -3548,7 +3548,7 @@ h1, h2, h3, h4, .title, .lockup-title { font-family: var(--heading-font); }
 .auth-shell {
   background:
     linear-gradient(180deg, rgba(4, 8, 14, 0.5), rgba(4, 8, 14, 0.78)),
-    url("/assets/backgrounds/bg-home-nexus.webp");
+    url("/assets/backgrounds/bg-home-nexus.svg");
   background-size: cover;
   background-position: center 18%;
   background-repeat: no-repeat;
