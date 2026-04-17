@@ -2630,9 +2630,37 @@ select:focus-visible {
   gap: 8px;
 }
 
+.chat-input-form {
+  align-items: center;
+}
+
+.chat-input-form input,
+.chat-input-form textarea {
+  min-width: 0;
+  width: 100%;
+}
+
+.chat-input-form button {
+  width: auto;
+  min-width: 88px;
+  padding-inline: 12px;
+  white-space: nowrap;
+}
+
+.chat-input-form .scenario-sender-select {
+  width: auto;
+  min-width: 140px;
+}
+
 @media (max-width: 960px) {
   .chat-popup-layout {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .chat-input-form {
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 }
 
