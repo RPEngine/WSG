@@ -1,33 +1,41 @@
 import {
   activateOwnProfileLayer,
   addOwnConnection,
+  createOwnCharacter,
+  deleteOwnCharacter,
   getAreaChatStream,
   getDirectConversation,
   getMemberProfile,
   getMembers,
+  getOwnProfessionalProfile,
+  getOwnUnifiedProfile,
   getVisibleMembersForUser,
   getOwnProfileMe,
   getOwnProfileLayer,
   getScenarioChatStream,
   listConnectionProfiles,
+  listOwnCharacters,
   listOwnProfileLayers,
   postAreaChatMessage,
   postDirectConversationMessage,
   postScenarioChatMessage,
   removeOwnConnection,
+  saveOwnProfessionalProfile,
   saveOwnProfile,
+  saveOwnUnifiedProfile,
   saveOwnHubProfile,
   updateOwnProfilePrivacy,
   requestMemberProfileAccess,
   listOwnProfileAccessRequests,
   decideOwnProfileAccessRequest,
   searchMembersForConnections,
+  updateOwnCharacter,
   updateOwnProfileLayer,
 } from "../services/profileService.js";
 
 export async function getMyProfile(req, res) {
   console.log("[profile] profile fetch request received", { userId: req.user.id, email: req.user.email });
-  const profile = await getOwnProfileMe(req.user.id);
+  const profile = await getOwnUnifiedProfile(req.user);
   console.log("[profile] profile fetch success", { userId: profile?.user?.id, email: profile?.user?.email });
   return res.json({ profile });
 }
@@ -71,11 +79,57 @@ export async function updateMyProfile(req, res) {
     fields: Object.keys(req.body || {}),
   });
   try {
-    const profile = await saveOwnProfile(req.user.id, req.body || {});
+    const profile = await saveOwnUnifiedProfile(req.user, req.body || {});
     console.log("[profile] profile save success", { userId: profile?.id, email: profile?.email });
     return res.json({ profile });
   } catch (error) {
     return res.status(400).json({ error: error.message || "Unable to update profile." });
+  }
+}
+
+export async function getMyProfessionalProfile(req, res) {
+  const profile = await getOwnProfessionalProfile(req.user.id);
+  return res.json({ profile: profile || { userId: req.user.id, headline: "", summary: "", skills: [], resumeFilename: "", openToWork: false, recruiterVisible: false } });
+}
+
+export async function putMyProfessionalProfile(req, res) {
+  try {
+    const profile = await saveOwnProfessionalProfile(req.user.id, req.body || {});
+    return res.json({ profile });
+  } catch (error) {
+    return res.status(400).json({ error: error.message || "Unable to update professional profile." });
+  }
+}
+
+export async function listMyCharacters(req, res) {
+  const items = await listOwnCharacters(req.user.id);
+  return res.json({ items, count: items.length });
+}
+
+export async function postMyCharacter(req, res) {
+  try {
+    const character = await createOwnCharacter(req.user.id, req.body || {});
+    return res.status(201).json({ character });
+  } catch (error) {
+    return res.status(400).json({ error: error.message || "Unable to create character." });
+  }
+}
+
+export async function patchMyCharacter(req, res) {
+  try {
+    const character = await updateOwnCharacter(req.user.id, req.params.characterId, req.body || {});
+    return res.json({ character });
+  } catch (error) {
+    return res.status(400).json({ error: error.message || "Unable to update character." });
+  }
+}
+
+export async function removeMyCharacter(req, res) {
+  try {
+    const result = await deleteOwnCharacter(req.user.id, req.params.characterId);
+    return res.json(result);
+  } catch (error) {
+    return res.status(404).json({ error: error.message || "Unable to delete character." });
   }
 }
 
