@@ -195,7 +195,7 @@ body {
   top: calc(100% + 8px);
   min-width: 200px;
   border: 1px solid var(--border);
-  background: var(--panel-strong);
+  background: var(--panel-bg);
   border-radius: 12px;
   padding: 8px;
   display: none;
