@@ -17,7 +17,7 @@ const routes = {
   '/world': { key: 'nexusRoleplay', requiresAuth: true },
   '/guild-world': { key: 'nexusRoleplay', requiresAuth: true },
   '/members': { key: 'hubSocial', requiresAuth: true },
-  '/discussions': { key: 'scenarioChat', requiresAuth: true },
+  '/discussions': { key: 'discussions', requiresAuth: true },
   '/profile': { key: 'profile', requiresAuth: true },
   '/resume': { key: 'resume', requiresAuth: true },
   '/characters': { key: 'characters', requiresAuth: true },
@@ -42,6 +42,58 @@ const routes = {
   '/privacy': { key: 'privacy' },
   '/recruiter-console': { key: 'hubRecruiter', requiresAuth: true },
 };
+
+const DISCUSSION_BOARD_DEFINITIONS = Object.freeze([
+  {
+    id: 'announcements',
+    title: 'Announcements',
+    description: 'Official platform news, updates, launches, and policy changes.',
+    topLevelPermission: 'staff-only',
+    replies: 'allowed',
+  },
+  {
+    id: 'maintenance-status',
+    title: 'Maintenance & Status',
+    description: 'Server maintenance, downtime notices, bug alerts, and restoration updates.',
+    topLevelPermission: 'staff-only',
+    replies: 'disabled',
+  },
+  {
+    id: 'faq',
+    title: 'FAQ',
+    description: 'Common questions, how-to topics, and rule clarifications.',
+    topLevelPermission: 'staff-only',
+    replies: 'allowed',
+  },
+  {
+    id: 'community-discussions',
+    title: 'Community Discussions',
+    description: 'Open platform conversations within WSG rules.',
+    topLevelPermission: 'all',
+    replies: 'allowed',
+  },
+  {
+    id: 'suggestions-feedback',
+    title: 'Suggestions & Feedback',
+    description: 'Feature requests, platform feedback, and improvement ideas.',
+    topLevelPermission: 'all',
+    replies: 'allowed',
+  },
+]);
+
+const DISCUSSION_THREAD_SEED = Object.freeze([
+  { id: 'thread-welcome-wsg', boardId: 'announcements', title: 'Welcome to WSG', content: 'Welcome to Wyked Samurai Guild. This board shares official platform updates and launch announcements.', pinned: true, locked: false, authorName: 'WSG Admin', authorRole: 'admin', createdAt: '2026-04-03T14:00:00.000Z', replies: [{ id: 'reply-welcome-1', authorName: 'Community Team', authorRole: 'moderator', content: 'Thanks for joining us. Keep an eye on this board for key notices.', createdAt: '2026-04-03T15:30:00.000Z' }] },
+  { id: 'thread-platform-roadmap', boardId: 'announcements', title: 'Platform Roadmap', content: 'Roadmap highlights: profile layers expansion, recruiter workflow polish, and discussion moderation improvements.', pinned: false, locked: false, authorName: 'WSG Admin', authorRole: 'admin', createdAt: '2026-04-08T13:20:00.000Z', replies: [] },
+  { id: 'thread-maintenance-status', boardId: 'maintenance-status', title: 'Platform Status and Scheduled Maintenance', content: 'Scheduled maintenance windows and incident updates are posted here. Replies are currently disabled for clean status updates.', pinned: true, locked: true, authorName: 'WSG Ops', authorRole: 'moderator', createdAt: '2026-04-10T02:00:00.000Z', replies: [] },
+  { id: 'thread-faq-what-is-wsg', boardId: 'faq', title: 'What is WSG?', content: 'WSG is a professional-first platform blending networking, scenario practice, and roleplay collaboration with safe community standards.', pinned: true, locked: false, authorName: 'WSG Admin', authorRole: 'admin', createdAt: '2026-04-01T08:00:00.000Z', replies: [] },
+  { id: 'thread-faq-profiles', boardId: 'faq', title: 'How do profiles work?', content: 'Profiles support layered identity views so members can present professional and roleplay contexts without redesigning core account settings.', pinned: true, locked: false, authorName: 'WSG Admin', authorRole: 'admin', createdAt: '2026-04-04T10:10:00.000Z', replies: [] },
+  { id: 'thread-faq-public-private', boardId: 'faq', title: 'Public vs Private Profiles', content: 'Public profiles are discoverable in member search. Private profiles require access approval and are better for selective networking.', pinned: false, locked: false, authorName: 'WSG Admin', authorRole: 'admin', createdAt: '2026-04-05T11:45:00.000Z', replies: [] },
+  { id: 'thread-faq-ronin-samurai', boardId: 'faq', title: 'Ronin vs Samurai', content: 'Ronin and Samurai represent identity themes in WSG progression. They can shape vibe and narrative style, not account permissions.', pinned: false, locked: false, authorName: 'WSG Admin', authorRole: 'admin', createdAt: '2026-04-06T17:25:00.000Z', replies: [] },
+  { id: 'thread-introduce-yourself', boardId: 'community-discussions', title: 'Introduce Yourself', content: 'Tell the community who you are, what you do, and what you want to build on WSG.', pinned: true, locked: false, authorName: 'WSG Moderator', authorRole: 'moderator', createdAt: '2026-04-07T09:15:00.000Z', replies: [{ id: 'reply-intro-1', authorName: 'Guild Member', authorRole: 'member', content: 'Hi everyone! I am here for collaboration and scenario practice.', createdAt: '2026-04-07T11:02:00.000Z' }] },
+  { id: 'thread-what-brought-you', boardId: 'community-discussions', title: 'What brought you to WSG?', content: 'Share what pulled you in: networking, roleplay, hiring prep, or community.', pinned: false, locked: false, authorName: 'WSG Moderator', authorRole: 'moderator', createdAt: '2026-04-09T18:40:00.000Z', replies: [] },
+  { id: 'thread-feature-requests', boardId: 'suggestions-feedback', title: 'Feature Requests', content: 'Drop your feature requests in this thread. Describe workflow, impact, and rough priority.', pinned: true, locked: false, authorName: 'WSG Product', authorRole: 'moderator', createdAt: '2026-04-02T12:00:00.000Z', replies: [] },
+  { id: 'thread-site-feedback', boardId: 'suggestions-feedback', title: 'Site Feedback Thread', content: 'General feedback on usability, clarity, and polish goes here.', pinned: false, locked: false, authorName: 'WSG Product', authorRole: 'moderator', createdAt: '2026-04-11T16:10:00.000Z', replies: [] },
+]);
 
 const STARTER_TRIALS = [
   {
@@ -367,7 +419,7 @@ function pageSetClass(path, key) {
   if (path === '/nexus/professional' || ['nexusProfessional', 'scenarioDetail', 'scenarioChat', 'areaChat'].includes(key) || path === '/scenario' || path.startsWith('/scenario/')) return 'page-set--scenario';
   if (path === '/guild') return 'page-set--guild';
   if (path === '/nexus/roleplay' || path === '/world' || path === '/roleplay' || key === 'nexusRoleplay' || key === 'roleplayHub') return 'page-set--world-rp';
-  if (path.startsWith('/hub') || path === '/members' || path === '/recruiter-console' || key === 'hubSocial' || key === 'hubRecruiter' || key === 'hubReviews') return 'page-set--recruiter';
+  if (path.startsWith('/hub') || path.startsWith('/discussions') || path === '/members' || path === '/recruiter-console' || ['hubSocial', 'hubRecruiter', 'hubReviews', 'discussions'].includes(key)) return 'page-set--recruiter';
   if (path === '/profile' || key === 'profile' || ['directChat'].includes(key)) {
     return 'page-set--profile';
   }
@@ -452,6 +504,16 @@ const state = {
     messages: [],
     loading: false,
     pending: false,
+  },
+  discussions: {
+    searchTerm: '',
+    boardSearchTerm: '',
+    draftByBoard: {},
+    replyDraftByThread: {},
+    threads: DISCUSSION_THREAD_SEED.map((thread) => ({
+      ...thread,
+      replies: Array.isArray(thread.replies) ? thread.replies.map((reply) => ({ ...reply })) : [],
+    })),
   },
   membersLoaded: false,
   loading: false,
@@ -1484,6 +1546,7 @@ function pageTitle(key) {
     nexusProfessional: ['Nexus • Professional', 'Scenarios, interviewing, workplace practice, and career development.'],
     nexusRoleplay: ['Nexus • Roleplay', 'Roleplay rooms, social play, and platform reputation building.'],
     hubSocial: ['Hub • Social', 'Manage contacts, search people, and jump into community discussions.'],
+    discussions: ['Discussions', 'Forum hub for announcements, status, FAQ, and community conversation.'],
     hubRecruiter: ['Hub • Recruiter', 'Recruiter dashboard for candidate tracking, scenario progress, and scoring.'],
     hubReviews: ['Hub • Reviews', 'Planned workplace and company review insights are coming soon.'],
     utilitiesNotifications: ['Utilities • Notifications', 'Notification preferences and recent alerts in one stable destination.'],
@@ -3157,13 +3220,11 @@ function hubSocialPage() {
     ? (searchQuery ? (state.network.results || []) : HUB_PLACEHOLDER_COMPANIES)
     : (searchQuery ? (state.network.results || []) : ((state.members && state.members.length) ? state.members : HUB_PLACEHOLDER_PEOPLE));
   const profileSnapshots = Array.isArray(sourceProfiles) ? sourceProfiles.slice(0, 6) : [];
-  const boardCategories = [
-    { name: 'FAQs', detail: 'Quick answers about people search, networking, and account visibility.' },
-    { name: 'Announcements', detail: 'Official platform notices and community change logs.' },
-    { name: 'Updates', detail: 'Platform and community updates with release summaries and highlights.' },
-    { name: 'Feedback', detail: 'Suggestions and improvement requests from the community.' },
-    { name: 'Support', detail: 'Fast troubleshooting threads and guidance from the platform team.' },
-  ];
+  const boardCategories = DISCUSSION_BOARD_DEFINITIONS.map((board) => ({
+    id: board.id,
+    name: board.title,
+    detail: board.description,
+  }));
   const quickGlanceStats = [
     { label: 'Contacts in Network', value: String((state.network.connections || []).length || 0) },
     { label: searchType === 'companies' ? 'Company Results' : 'People Results', value: String(profileSnapshots.length || 0) },
@@ -3197,7 +3258,7 @@ function hubSocialPage() {
     <article class="card panel-surface panel-surface--soft hub-board-card">
       <h4>${escapeHtml(category.name)}</h4>
       <p class="muted">${escapeHtml(category.detail)}</p>
-      <a class="pill-btn" href="${linkFor('/nexus/professional')}">Open category</a>
+      <a class="pill-btn" href="${linkFor(`/discussions/board/${category.id}`)}">Open board</a>
     </article>
   `).join('');
 
@@ -3626,6 +3687,218 @@ function roleplayChannelPage(type) {
       <div class="actions" style="margin-top:10px;">
         <a class="pill-btn" href="#/nexus/professional">Back to Professional Workspace</a>
       </div>
+    </section>
+  `;
+}
+
+function parseDiscussionRoute(path) {
+  if (path === '/discussions') return { type: 'hub' };
+  const boardMatch = path.match(/^\/discussions\/board\/([^/]+)$/);
+  if (boardMatch) return { type: 'board', boardId: decodeURIComponent(boardMatch[1]) };
+  const threadMatch = path.match(/^\/discussions\/thread\/([^/]+)$/);
+  if (threadMatch) return { type: 'thread', threadId: decodeURIComponent(threadMatch[1]) };
+  return null;
+}
+
+function canModerateDiscussions() {
+  const role = String(state.currentUser?.role || '').toLowerCase();
+  return ['admin', 'moderator', 'mod'].includes(role) || Boolean(state.currentUser?.isAdmin || state.currentUser?.isModerator);
+}
+
+function canCreateTopLevelThread(board) {
+  if (!board) return false;
+  if (board.topLevelPermission === 'all') return true;
+  return canModerateDiscussions();
+}
+
+function canReplyInBoard(board, thread) {
+  if (!board || !thread || thread.locked) return false;
+  return board.replies === 'allowed';
+}
+
+function getDiscussionBoard(boardId) {
+  return DISCUSSION_BOARD_DEFINITIONS.find((board) => board.id === boardId) || null;
+}
+
+function getDiscussionThreadsForBoard(boardId) {
+  return (state.discussions.threads || [])
+    .filter((thread) => thread.boardId === boardId)
+    .sort((a, b) => {
+      const aLatest = a.replies?.length ? a.replies[a.replies.length - 1].createdAt : a.createdAt;
+      const bLatest = b.replies?.length ? b.replies[b.replies.length - 1].createdAt : b.createdAt;
+      return new Date(bLatest).getTime() - new Date(aLatest).getTime();
+    });
+}
+
+function formatForumTime(isoString) {
+  if (!isoString) return 'Just now';
+  try {
+    return new Date(isoString).toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  } catch {
+    return isoString;
+  }
+}
+
+function discussionsPage(path) {
+  const route = parseDiscussionRoute(path) || { type: 'hub' };
+  const searchTerm = String(state.discussions.searchTerm || '').trim().toLowerCase();
+  const boardSearchTerm = String(state.discussions.boardSearchTerm || '').trim().toLowerCase();
+
+  if (route.type === 'thread') {
+    const thread = (state.discussions.threads || []).find((item) => item.id === route.threadId);
+    if (!thread) {
+      return card('Discussion Not Found', '<p class="muted">This discussion thread does not exist or was removed.</p>');
+    }
+    const board = getDiscussionBoard(thread.boardId);
+    const canReply = canReplyInBoard(board, thread);
+    const repliesMarkup = (thread.replies || []).map((reply) => `
+      <article class="discussion-reply card panel-surface panel-surface--soft">
+        <div class="discussion-post-head">
+          <strong>${escapeHtml(reply.authorName || 'Member')}</strong>
+          <span class="discussion-pill">${escapeHtml(reply.authorRole || 'member')}</span>
+          <span class="muted">${escapeHtml(formatForumTime(reply.createdAt))}</span>
+        </div>
+        <p>${escapeHtml(reply.content || '')}</p>
+      </article>
+    `).join('');
+    return `
+      <section class="card panel-surface panel-surface--transparent">
+        <p class="hero-kicker">${escapeHtml(board?.title || 'Discussion')}</p>
+        <h3>${escapeHtml(thread.title)}</h3>
+        <div class="discussion-post-head">
+          <strong>${escapeHtml(thread.authorName || 'Member')}</strong>
+          <span class="discussion-pill">${escapeHtml(thread.authorRole || 'member')}</span>
+          <span class="muted">${escapeHtml(formatForumTime(thread.createdAt))}</span>
+          ${thread.pinned ? '<span class="discussion-pill discussion-pill--pinned">Pinned</span>' : ''}
+        </div>
+        <p>${escapeHtml(thread.content || '')}</p>
+        <div class="actions">
+          <a class="pill-btn" href="${linkFor(`/discussions/board/${thread.boardId}`)}">Back to Board</a>
+          <a class="pill-btn" href="${linkFor('/discussions')}">All Boards</a>
+        </div>
+      </section>
+      <section class="card panel-surface panel-surface--transparent" style="margin-top:12px;">
+        <h4>Replies (${thread.replies?.length || 0})</h4>
+        ${repliesMarkup || '<p class="muted">No replies yet.</p>'}
+        <form id="discussion-reply-form" data-thread-id="${escapeAttr(thread.id)}" class="form-stack" style="margin-top:12px;">
+          <label>Add Reply
+            <textarea name="replyContent" rows="4" maxlength="1200" placeholder="${canReply ? 'Write a respectful reply...' : 'Replies are disabled in this board.'}" ${canReply ? '' : 'disabled'}>${escapeHtml(state.discussions.replyDraftByThread?.[thread.id] || '')}</textarea>
+          </label>
+          <button class="pill-btn cta-primary" type="submit" ${canReply ? '' : 'disabled'}>Post Reply</button>
+        </form>
+      </section>
+    `;
+  }
+
+  if (route.type === 'board') {
+    const board = getDiscussionBoard(route.boardId);
+    if (!board) {
+      return card('Discussion Board Not Found', '<p class="muted">The selected board does not exist.</p>');
+    }
+    const canCreate = canCreateTopLevelThread(board);
+    const allBoardThreads = getDiscussionThreadsForBoard(board.id);
+    const filteredThreads = boardSearchTerm
+      ? allBoardThreads.filter((thread) => `${thread.title} ${thread.content}`.toLowerCase().includes(boardSearchTerm))
+      : allBoardThreads;
+    const pinnedThreads = filteredThreads.filter((thread) => thread.pinned);
+    const regularThreads = filteredThreads.filter((thread) => !thread.pinned);
+    const threadListMarkup = (threads) => threads.map((thread) => {
+      const lastReply = thread.replies?.length ? thread.replies[thread.replies.length - 1] : null;
+      const latestAt = lastReply?.createdAt || thread.createdAt;
+      return `
+        <article class="card panel-surface panel-surface--soft discussion-thread-row">
+          <div>
+            <h4><a href="${linkFor(`/discussions/thread/${thread.id}`)}">${escapeHtml(thread.title)}</a></h4>
+            <p class="muted">${escapeHtml(thread.content || '')}</p>
+            <div class="discussion-meta-line">
+              <span>${escapeHtml(thread.authorName || 'Member')}</span>
+              <span>${escapeHtml(formatForumTime(latestAt))}</span>
+              <span>${(thread.replies || []).length} repl${(thread.replies || []).length === 1 ? 'y' : 'ies'}</span>
+              ${thread.locked ? '<span class="discussion-pill">Locked</span>' : ''}
+            </div>
+          </div>
+          <a class="pill-btn" href="${linkFor(`/discussions/thread/${thread.id}`)}">Open</a>
+        </article>
+      `;
+    }).join('');
+
+    return `
+      <section class="card panel-surface panel-surface--transparent">
+        <p class="hero-kicker">Discussions Board</p>
+        <h3>${escapeHtml(board.title)}</h3>
+        <p class="muted">${escapeHtml(board.description)}</p>
+        <form id="discussion-board-search-form" class="arena-input hub-search-controls" style="margin-top:10px;">
+          <input id="discussion-board-search-input" type="search" value="${escapeAttr(state.discussions.boardSearchTerm || '')}" placeholder="Search threads in ${escapeAttr(board.title)}..." />
+          <button class="pill-btn" type="submit">Search Board</button>
+          <a class="pill-btn" href="${linkFor('/discussions')}">All Boards</a>
+        </form>
+      </section>
+      <section class="card panel-surface panel-surface--transparent" style="margin-top:12px;">
+        <div class="discussion-board-head">
+          <h4>Pinned Topics</h4>
+          ${canCreate ? '<button class="pill-btn cta-primary" type="button" id="discussion-new-thread-toggle">New Discussion</button>' : '<span class="muted">Top-level posts are restricted to admins/mods.</span>'}
+        </div>
+        ${pinnedThreads.length ? threadListMarkup(pinnedThreads) : '<p class="muted">No pinned topics in this board yet.</p>'}
+      </section>
+      <section class="card panel-surface panel-surface--transparent" style="margin-top:12px;">
+        <h4>Threads</h4>
+        ${regularThreads.length ? threadListMarkup(regularThreads) : '<p class="muted">No threads match this search.</p>'}
+      </section>
+      ${canCreate ? `
+        <section class="card panel-surface panel-surface--transparent" style="margin-top:12px;">
+          <h4>Create New Discussion</h4>
+          <form id="discussion-new-thread-form" data-board-id="${escapeAttr(board.id)}" class="form-stack">
+            <label>Title<input name="title" maxlength="140" required value="${escapeAttr(state.discussions.draftByBoard?.[board.id]?.title || '')}" /></label>
+            <label>Post<textarea name="content" rows="5" maxlength="2000" required>${escapeHtml(state.discussions.draftByBoard?.[board.id]?.content || '')}</textarea></label>
+            <button class="pill-btn cta-primary" type="submit">Create Thread</button>
+          </form>
+        </section>
+      ` : ''}
+    `;
+  }
+
+  const boardCards = DISCUSSION_BOARD_DEFINITIONS
+    .map((board) => {
+      const boardThreads = getDiscussionThreadsForBoard(board.id);
+      if (searchTerm && !(`${board.title} ${board.description}`.toLowerCase().includes(searchTerm) || boardThreads.some((thread) => `${thread.title} ${thread.content}`.toLowerCase().includes(searchTerm)))) {
+        return '';
+      }
+      const latestThread = boardThreads[0];
+      const latestReply = latestThread?.replies?.length ? latestThread.replies[latestThread.replies.length - 1] : null;
+      const latestActivity = latestReply?.createdAt || latestThread?.createdAt;
+      return `
+        <article class="card panel-surface panel-surface--soft discussion-board-card">
+          <h4><a href="${linkFor(`/discussions/board/${board.id}`)}">${escapeHtml(board.title)}</a></h4>
+          <p class="muted">${escapeHtml(board.description)}</p>
+          <p class="muted"><strong>Thread count:</strong> ${boardThreads.length}</p>
+          <p class="muted"><strong>Latest activity:</strong> ${latestThread ? `${escapeHtml(latestThread.title)} · ${escapeHtml(formatForumTime(latestActivity))}` : 'No activity yet'}</p>
+          <div class="actions">
+            <a class="pill-btn" href="${linkFor(`/discussions/board/${board.id}`)}">Open Board</a>
+            ${canCreateTopLevelThread(board) ? `<a class="pill-btn cta-primary" href="${linkFor(`/discussions/board/${board.id}`)}">New Discussion</a>` : ''}
+          </div>
+        </article>
+      `;
+    })
+    .join('');
+
+  return `
+    <section class="card panel-surface panel-surface--transparent">
+      <p class="hero-kicker">Discussions Hub</p>
+      <h3>Forum boards for announcements, status, FAQ, and community discussion</h3>
+      <p class="muted">Browse official updates, maintenance notices, frequently asked questions, and open community conversations.</p>
+      <form id="discussion-search-form" class="arena-input hub-search-controls" style="margin-top:10px;">
+        <input id="discussion-search-input" type="search" value="${escapeAttr(state.discussions.searchTerm || '')}" placeholder="Search boards and discussion topics..." />
+        <button class="pill-btn cta-primary" type="submit">Search Discussions</button>
+      </form>
+    </section>
+    <section class="grid two discussion-board-grid" style="margin-top:12px;">
+      ${boardCards || '<article class="card panel-surface panel-surface--soft"><p class="muted">No boards matched your search.</p></article>'}
     </section>
   `;
 }
@@ -4753,7 +5026,6 @@ function applyRouteGuards(path) {
     '/roleplay': '/nexus/roleplay',
     '/members': '/hub/social',
     '/recruiter-console': '/hub/recruiter',
-    '/discussions': '/nexus/professional',
     '/profile/scenario-chat': '/nexus/professional',
     '/profile/area-chat': '/nexus/roleplay',
   };
@@ -4762,10 +5034,12 @@ function applyRouteGuards(path) {
   }
 
   const isScenarioRoute = path === '/scenario' || path.startsWith('/scenario/');
+  const isDiscussionRoute = path === '/discussions' || path.startsWith('/discussions/board/') || path.startsWith('/discussions/thread/');
   const isMemberProfileRoute = /^\/members\/[^/]+$/.test(path);
   const isUserProfileRoute = /^\/profile\/[^/]+$/.test(path);
   const isCharacterRoute = /^\/characters\/[^/]+$/.test(path);
   const known = routes[path]
+    || (isDiscussionRoute ? { key: 'discussions', requiresAuth: true } : null)
     || (isMemberProfileRoute || isUserProfileRoute ? { key: 'profile', requiresAuth: true } : null)
     || (isCharacterRoute ? { key: 'characterDetail', requiresAuth: true } : null)
     || (isScenarioRoute ? { key: 'scenarioDetail', requiresAuth: true } : null);
@@ -5405,6 +5679,107 @@ function attachProfileEditHandler() {
   }
 }
 
+function attachDiscussionHandlers() {
+  const searchForm = document.getElementById('discussion-search-form');
+  if (searchForm) {
+    searchForm.onsubmit = (event) => {
+      event.preventDefault();
+      const input = document.getElementById('discussion-search-input');
+      state.discussions.searchTerm = String(input?.value || '').trim();
+      render();
+    };
+  }
+
+  const boardSearchForm = document.getElementById('discussion-board-search-form');
+  if (boardSearchForm) {
+    boardSearchForm.onsubmit = (event) => {
+      event.preventDefault();
+      const input = document.getElementById('discussion-board-search-input');
+      state.discussions.boardSearchTerm = String(input?.value || '').trim();
+      render();
+    };
+  }
+
+  const newThreadForm = document.getElementById('discussion-new-thread-form');
+  const newThreadToggle = document.getElementById('discussion-new-thread-toggle');
+  if (newThreadToggle && newThreadForm) {
+    newThreadToggle.onclick = () => {
+      newThreadForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const titleInput = newThreadForm.querySelector('input[name="title"]');
+      titleInput?.focus();
+    };
+  }
+  if (newThreadForm) {
+    newThreadForm.onsubmit = (event) => {
+      event.preventDefault();
+      const boardId = String(newThreadForm.getAttribute('data-board-id') || '');
+      const board = getDiscussionBoard(boardId);
+      if (!board || !canCreateTopLevelThread(board)) {
+        setStatusMessage('Only admins/mods can create top-level threads in this board.', 'error');
+        render();
+        return;
+      }
+      const formData = new FormData(newThreadForm);
+      const title = String(formData.get('title') || '').trim();
+      const content = String(formData.get('content') || '').trim();
+      state.discussions.draftByBoard[boardId] = { title, content };
+      if (!title || !content) {
+        setStatusMessage('Enter both a title and post content.', 'error');
+        render();
+        return;
+      }
+      state.discussions.threads.unshift({
+        id: `thread-${slugifyScenario(title)}-${Date.now()}`,
+        boardId,
+        title,
+        content,
+        pinned: false,
+        locked: false,
+        authorName: state.currentUser?.displayName || state.currentUser?.legalName || 'Guild Member',
+        authorRole: canModerateDiscussions() ? 'moderator' : 'member',
+        createdAt: new Date().toISOString(),
+        replies: [],
+      });
+      state.discussions.draftByBoard[boardId] = { title: '', content: '' };
+      setStatusMessage('Discussion thread created.', 'success');
+      render();
+    };
+  }
+
+  const replyForm = document.getElementById('discussion-reply-form');
+  if (replyForm) {
+    replyForm.onsubmit = (event) => {
+      event.preventDefault();
+      const threadId = String(replyForm.getAttribute('data-thread-id') || '');
+      const thread = (state.discussions.threads || []).find((entry) => entry.id === threadId);
+      const board = getDiscussionBoard(thread?.boardId);
+      if (!thread || !canReplyInBoard(board, thread)) {
+        setStatusMessage('Replies are disabled for this thread.', 'error');
+        render();
+        return;
+      }
+      const formData = new FormData(replyForm);
+      const content = String(formData.get('replyContent') || '').trim();
+      state.discussions.replyDraftByThread[threadId] = content;
+      if (!content) {
+        setStatusMessage('Reply cannot be empty.', 'error');
+        render();
+        return;
+      }
+      thread.replies.push({
+        id: `reply-${Date.now()}`,
+        authorName: state.currentUser?.displayName || state.currentUser?.legalName || 'Guild Member',
+        authorRole: canModerateDiscussions() ? 'moderator' : 'member',
+        content,
+        createdAt: new Date().toISOString(),
+      });
+      state.discussions.replyDraftByThread[threadId] = '';
+      setStatusMessage('Reply posted.', 'success');
+      render();
+    };
+  }
+}
+
 function attachArenaHandlers() {
   function enterRoleplayRoom(roomId) {
     const currentUserId = getCurrentUserRoomId();
@@ -6039,11 +6414,15 @@ async function render() {
     }
 
     const route = routes[path]
+      || ((path === '/discussions' || path.startsWith('/discussions/board/') || path.startsWith('/discussions/thread/')) ? { key: 'discussions', requiresAuth: true } : null)
       || (/^\/(?:members|profile)\/[^/]+$/.test(path) ? { key: 'profile', requiresAuth: true } : null)
       || (/^\/characters\/[^/]+$/.test(path) ? { key: 'characterDetail', requiresAuth: true } : null)
       || { key: 'fallback' };
     const isScenarioRoute = path === '/scenario' || path.startsWith('/scenario/');
-    const resolvedRoute = isScenarioRoute ? { key: 'scenarioDetail', requiresAuth: true } : route;
+    const isDiscussionRoute = path === '/discussions' || path.startsWith('/discussions/board/') || path.startsWith('/discussions/thread/');
+    const resolvedRoute = isScenarioRoute
+      ? { key: 'scenarioDetail', requiresAuth: true }
+      : (isDiscussionRoute ? { key: 'discussions', requiresAuth: true } : route);
     const pageHtml = {
       landing: landingPage,
       home: homePage,
@@ -6072,6 +6451,7 @@ async function render() {
       directChat: directChatPage,
       scenarioChat: scenarioChatPage,
       areaChat: areaChatPage,
+      discussions: () => discussionsPage(path),
       scenarioDetail: () => scenarioDetailPage(path),
       profileEdit: profileEditPage,
       login: loginPage,
@@ -6264,6 +6644,7 @@ async function render() {
 
   attachProfileEditHandler();
   attachOnboardingProfileSetupHandlers();
+  attachDiscussionHandlers();
   attachArenaHandlers();
   attachRoleplayHandlers();
   attachNexusRoomHandlers();
