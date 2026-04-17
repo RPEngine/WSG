@@ -7,6 +7,7 @@ import {
   getMyProfessionalProfile,
   getMyProfileAccessRequests,
   getMyProfile,
+  ensureMyProfile,
   listMyCharacters,
   getMyProfileLayer,
   getMyProfileLayers,
@@ -30,6 +31,7 @@ const router = express.Router();
 const connectionLimiter = createRateLimiter({ keyPrefix: "connections:create", limit: 20, windowMs: 60_000, message: "Too many connection actions." });
 
 router.get("/profile/me", requireAuth, getMyProfile);
+router.post("/profile/me", requireAuth, requireObjectBody, ensureMyProfile);
 router.patch(
   "/profile/me",
   requireAuth,

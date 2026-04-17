@@ -15,6 +15,7 @@ import {
   touchLastActiveAt,
   updateUserPolicyAcceptance,
 } from "../models/userStore.js";
+import { ensureAppUser } from "../models/appDataStore.js";
 import {
   createPolicyAcceptanceRecord,
   createVerificationPlaceholder,
@@ -29,6 +30,20 @@ const googleOauthClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) 
 const isProduction = process.env.NODE_ENV === "production";
 const MFA_CODE = String(process.env.MFA_TEST_CODE || (isProduction ? "" : "000000"));
 const REAUTH_WINDOW_MS = Number(process.env.REAUTH_WINDOW_MS || (1000 * 60 * 15));
+
+function parseJwtPayload(token) {
+  try {
+    const payloadSegment = String(token || "").split(".")[1];
+    if (!payloadSegment) return null;
+    const normalized = payloadSegment.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    const decoded = Buffer.from(padded, "base64").toString("utf8");
+    const parsed = JSON.parse(decoded);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
 
 function validatePassword(password) {
   return typeof password === "string" && PASSWORD_POLICY_REGEX.test(password);
@@ -324,9 +339,28 @@ export async function getUserFromSessionToken(sessionToken) {
   if (!sessionToken) return null;
 
   const session = await getSession(sessionToken);
-  if (!session) return null;
+  let user = null;
+  if (session) {
+    user = await findUserById(session.user_id);
+  } else {
+    const claims = parseJwtPayload(sessionToken);
+    const expUnixSeconds = Number(claims?.exp || 0);
+    const isExpired = !expUnixSeconds || Number.isNaN(expUnixSeconds) || (expUnixSeconds * 1000) <= Date.now();
+    const userId = String(claims?.sub || "").trim();
+    const email = String(claims?.email || "").trim().toLowerCase();
+    const legalName = String(claims?.user_metadata?.full_name || claims?.user_metadata?.name || email.split("@")[0] || "Guild Member").trim();
 
-  const user = await findUserById(session.user_id);
+    if (!isExpired && userId && email) {
+      await ensureAppUser({
+        userId,
+        authProviderId: userId,
+        email,
+        legalName,
+      });
+      user = await findUserById(userId);
+    }
+  }
+
   if (!user) return null;
 
   await touchLastActiveAt(user.id);
