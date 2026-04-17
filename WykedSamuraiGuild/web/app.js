@@ -19,15 +19,15 @@ const routes = {
   '/members': { key: 'hubSocial', requiresAuth: true },
   '/discussions': { key: 'discussions', requiresAuth: true },
   '/profile': { key: 'profile', requiresAuth: true },
-  '/profile/edit': { key: 'profile', requiresAuth: true },
+  '/profile/edit': { key: 'profileEdit', requiresAuth: true },
   '/resume': { key: 'resume', requiresAuth: true },
   '/characters': { key: 'characters', requiresAuth: true },
-  '/connections': { key: 'hubSocial', requiresAuth: true },
-  '/activity': { key: 'utilitiesRoomUpdates', requiresAuth: true },
+  '/connections': { key: 'connections', requiresAuth: true },
+  '/activity': { key: 'activity', requiresAuth: true },
   '/recruiters': { key: 'recruiters', requiresAuth: true },
   '/settings': { key: 'settings', requiresAuth: true },
-  '/membership': { key: 'utilitiesInvites', requiresAuth: true },
-  '/help': { key: 'utilitiesTools', requiresAuth: true },
+  '/membership': { key: 'membership', requiresAuth: true },
+  '/help': { key: 'help', requiresAuth: true },
   '/utilities/notifications': { key: 'utilitiesNotifications', requiresAuth: true },
   '/utilities/invites': { key: 'utilitiesInvites', requiresAuth: true },
   '/utilities/room-updates': { key: 'utilitiesRoomUpdates', requiresAuth: true },
@@ -1060,6 +1060,23 @@ function withPersistedOnboardingProfile(user) {
     recruiters,
     recruiterSlotLimit,
   };
+}
+
+function buildLocalProfileFallback(user = state.currentUser) {
+  if (!user?.id) return null;
+  const onboardingProfile = readOnboardingProfile(user.id) || {};
+  return withPersistedOnboardingProfile({
+    ...user,
+    id: user.id,
+    legalName: user.legalName || user.displayName || user.username || 'Guild Member',
+    displayName: user.displayName || user.legalName || user.username || 'Guild Member',
+    username: user.username || user.email?.split('@')[0] || `member-${String(user.id).slice(0, 8)}`,
+    email: user.email || onboardingProfile.email || '',
+    headline: user.headline || onboardingProfile.resumeProfile?.headline || 'Guild member profile',
+    bio: user.bio || onboardingProfile.resumeProfile?.summary || 'Welcome to WSG. Complete profile setup to add your story.',
+    createdAt: user.createdAt || new Date().toISOString(),
+    profileVisibility: user.profileVisibility || 'public',
+  });
 }
 
 function readPersistedScenarioProgressForUser(userId = state.currentUser?.id) {
@@ -2578,19 +2595,7 @@ function Header(path) {
           <div class="account-menu-dropdown header-dropdown-menu" id="main-menu-dropdown">
             <a class="menu-parent-link" href="${linkFor('/home')}">Home</a>
             <a class="menu-parent-link" href="${linkFor('/nexus')}">Nexus</a>
-            <div class="menu-submenu">
-              <div class="menu-group-label">Nexus</div>
-              <a href="${linkFor('/nexus/professional')}">Professional</a>
-              <a href="${linkFor('/nexus/roleplay')}">Roleplay</a>
-            </div>
-            <a class="menu-parent-link" href="${linkFor('/profile')}">Profile</a>
             <a class="menu-parent-link" href="${linkFor('/hub')}">Hub</a>
-            <div class="menu-submenu">
-              <div class="menu-group-label">Hub</div>
-              <a href="${linkFor('/hub/social')}">Social</a>
-              <a href="${linkFor('/hub/recruiter')}">Recruiter</a>
-              <a href="${linkFor('/hub/reviews')}">Reviews</a>
-            </div>
             <a class="menu-parent-link" href="${linkFor('/discussions')}">Discussions</a>
           </div>
         </div>
@@ -3560,7 +3565,22 @@ function charactersPage() {
       </section>
     `;
   }
-  return card('Characters', '<p class="muted">Character roster management is available in Profile today. Dedicated Characters page is stubbed for next iteration.</p>');
+  const characters = Array.isArray(state.currentUser?.characters)
+    ? state.currentUser.characters
+    : (Array.isArray(state.currentUser?.roleplayCharacters) ? state.currentUser.roleplayCharacters : []);
+  return `
+    <section class="card panel-surface panel-surface--transparent">
+      <h3>Characters</h3>
+      <p class="muted">Manage your roleplay personas. This page always shows a real list or a first-time setup state.</p>
+      ${characters.length
+    ? `<ul class="list compact-list">${characters.map((character) => `<li><strong>${escapeHtml(character.name || 'Unnamed Character')}</strong> <span class="muted">· ${escapeHtml(character.system || 'WSG RP System')}</span></li>`).join('')}</ul>`
+    : '<p class="muted">No characters yet. Create your first character from Profile setup.</p>'}
+      <div class="actions">
+        <a class="pill-btn cta-primary" href="${linkFor('/profile')}">Open Profile</a>
+        <a class="pill-btn" href="${linkFor(ONBOARDING_PROFILE_SETUP_ROUTE)}">Open Profile Setup</a>
+      </div>
+    </section>
+  `;
 }
 
 function recruitersPage() {
@@ -3592,6 +3612,79 @@ function settingsPage() {
       </ul>
       <div class="actions">
         <a class="pill-btn cta-primary" href="${linkFor('/profile')}">Open Profile Settings</a>
+      </div>
+    </section>
+  `;
+}
+
+function connectionsPage() {
+  const connections = Array.isArray(state.network.connections) ? state.network.connections : [];
+  return `
+    <section class="card panel-surface panel-surface--transparent">
+      <h3>Connections</h3>
+      <p class="muted">Your network hub for people and company links. This destination is account-focused and never blank.</p>
+      ${connections.length
+    ? `<ul class="list compact-list">
+            ${connections.slice(0, 8).map((entry) => `<li><strong>${escapeHtml(entry.displayName || entry.username || 'Guild Member')}</strong> <span class="muted">· ${escapeHtml(entry.role || 'Member')}</span></li>`).join('')}
+          </ul>`
+    : '<p class="muted">No connections yet. Discover people in Hub and add your first connection.</p>'}
+      <div class="actions">
+        <a class="pill-btn cta-primary" href="${linkFor('/hub/social')}">Find Connections in Hub</a>
+      </div>
+    </section>
+  `;
+}
+
+function activityPage() {
+  const recentConnections = Array.isArray(state.network.connections) ? state.network.connections.slice(0, 3) : [];
+  return `
+    <section class="card panel-surface panel-surface--transparent">
+      <h3>Activity</h3>
+      <p class="muted">Recent account and community activity appears here with safe default content.</p>
+      <ul class="list compact-list">
+        <li><strong>Profile status:</strong> ${state.currentUser?.id ? 'Profile routing active' : 'Sign in to track profile activity'}.</li>
+        <li><strong>Connection updates:</strong> ${recentConnections.length ? `${recentConnections.length} visible connection updates.` : 'No connection updates yet.'}</li>
+        <li><strong>Next steps:</strong> Complete Profile Setup to unlock richer activity history.</li>
+      </ul>
+      <div class="actions">
+        <a class="pill-btn" href="${linkFor('/profile')}">View Profile</a>
+        <a class="pill-btn" href="${linkFor(ONBOARDING_PROFILE_SETUP_ROUTE)}">Complete Profile Setup</a>
+      </div>
+    </section>
+  `;
+}
+
+function membershipPage() {
+  return `
+    <section class="card panel-surface panel-surface--transparent">
+      <h3>Membership / Verification</h3>
+      <p class="muted">Membership status and verification controls with clear first-time guidance.</p>
+      <ul class="list compact-list">
+        <li><strong>Current tier:</strong> Free Member</li>
+        <li><strong>Verification:</strong> Not started</li>
+        <li><strong>Recommendation:</strong> Complete profile setup first, then begin verification review.</li>
+      </ul>
+      <div class="actions">
+        <a class="pill-btn cta-primary" href="${linkFor(ONBOARDING_PROFILE_SETUP_ROUTE)}">Complete Profile Setup</a>
+        <a class="pill-btn" href="${linkFor('/settings')}">Open Settings &amp; Privacy</a>
+      </div>
+    </section>
+  `;
+}
+
+function helpPage() {
+  return `
+    <section class="card panel-surface panel-surface--transparent">
+      <h3>Help</h3>
+      <p class="muted">Support resources and recovery links for common account issues.</p>
+      <ul class="list compact-list">
+        <li><strong>Profile setup issues:</strong> Use Profile Setup to create your first profile record.</li>
+        <li><strong>Routing issues:</strong> Use Account menu links for profile/account pages.</li>
+        <li><strong>Policy references:</strong> Code of Conduct, Content Policy, Platform Rules, and Privacy are available in the footer.</li>
+      </ul>
+      <div class="actions">
+        <a class="pill-btn cta-primary" href="${linkFor('/profile')}">Open Profile</a>
+        <a class="pill-btn" href="${linkFor('/discussions')}">Visit Discussions</a>
       </div>
     </section>
   `;
@@ -3642,12 +3735,17 @@ function profilePage() {
     return `
       <section class="card panel-surface panel-surface--transparent">
         <p class="hero-kicker">Profile</p>
-        <h3>Unable to load your profile</h3>
-        <p class="muted">${escapeHtml(profileLoadMessage || 'Something went wrong while loading your profile.')}</p>
-        <p class="muted">Please retry. If this persists, complete profile setup to create your first profile record.</p>
+        <h3>Profile setup is ready</h3>
+        <p class="muted">${escapeHtml(profileLoadMessage || 'We could not sync your saved profile data, but your account is active.')}</p>
+        <p class="muted">Start setup now to create your profile, then return here to view all profile sections.</p>
+        <ul class="list compact-list">
+          <li><strong>Step 1:</strong> Add your profile basics and headline.</li>
+          <li><strong>Step 2:</strong> Add resume and skills details.</li>
+          <li><strong>Step 3:</strong> Set visibility and account preferences.</li>
+        </ul>
         <div class="actions">
-          <button class="pill-btn cta-primary" id="profile-retry-load-btn" type="button">Retry Profile Load</button>
-          <a class="pill-btn" href="${linkFor(ONBOARDING_PROFILE_SETUP_ROUTE)}">Complete Profile</a>
+          <a class="pill-btn cta-primary" href="${linkFor(ONBOARDING_PROFILE_SETUP_ROUTE)}">Start Profile Setup</a>
+          <button class="pill-btn" id="profile-retry-load-btn" type="button">Retry Profile Sync</button>
         </div>
       </section>
     `;
@@ -4225,10 +4323,13 @@ function areaChatPage() {
 
 function profileEditPage() {
   return `
-    <section class="card">
-      <h3>Profile Edit moved</h3>
-      <p class="muted">Profile setup now lives directly in the Profile page.</p>
-      <a href="#/profile" class="pill-btn">Open Profile</a>
+    <section class="card panel-surface panel-surface--transparent">
+      <h3>Edit Profile</h3>
+      <p class="muted">Use Profile Setup for structured first-time setup, then manage ongoing edits from your Profile page.</p>
+      <div class="actions">
+        <a href="${linkFor(ONBOARDING_PROFILE_SETUP_ROUTE)}" class="pill-btn cta-primary">Open Profile Setup</a>
+        <a href="${linkFor('/profile')}" class="pill-btn">Open Profile</a>
+      </div>
     </section>
   `;
 }
@@ -5651,19 +5752,31 @@ async function loadProfileForRoute(path) {
         return;
       }
       if (resolved.status === 'permission_or_rls') {
-        state.activeProfile = state.currentUser || null;
+        const fallbackProfile = buildLocalProfileFallback(state.currentUser);
+        state.activeProfile = fallbackProfile;
+        if (fallbackProfile) {
+          state.currentUser = fallbackProfile;
+        }
         state.profileLoad = {
-          status: 'error',
-          message: 'Profile access is blocked by permissions. Please check Supabase RLS policy for your profile row.',
+          status: fallbackProfile ? 'ready' : 'error',
+          message: fallbackProfile
+            ? 'Loaded your local profile fallback while cloud profile permissions are being updated.'
+            : 'Profile access is blocked by permissions. Please check Supabase RLS policy for your profile row.',
           isOwnRoute: true,
         };
         return;
       }
       if (resolved.status === 'query_failure') {
-        state.activeProfile = state.currentUser || null;
+        const fallbackProfile = buildLocalProfileFallback(state.currentUser);
+        state.activeProfile = fallbackProfile;
+        if (fallbackProfile) {
+          state.currentUser = fallbackProfile;
+        }
         state.profileLoad = {
-          status: 'error',
-          message: 'Unable to load your profile right now.',
+          status: fallbackProfile ? 'ready' : 'error',
+          message: fallbackProfile
+            ? 'Loaded your local profile fallback while profile sync is temporarily unavailable.'
+            : 'Unable to load your profile right now.',
           isOwnRoute: true,
         };
         return;
@@ -5700,12 +5813,16 @@ async function loadProfileForRoute(path) {
       const rawMessage = error instanceof Error ? error.message : String(error);
       const reason = classifyProfileQueryFailure(error);
       const notFound = reason === 'no_row_found';
-      state.activeProfile = state.currentUser || null;
+      const fallbackProfile = buildLocalProfileFallback(state.currentUser);
+      state.activeProfile = fallbackProfile || state.currentUser || null;
+      if (fallbackProfile) {
+        state.currentUser = fallbackProfile;
+      }
       state.profileLoad = {
-        status: notFound ? 'empty' : 'error',
+        status: notFound ? 'empty' : (fallbackProfile ? 'ready' : 'error'),
         message: notFound
           ? 'Your profile has not been created yet.'
-          : (rawMessage || 'Unable to load your profile right now.'),
+          : (fallbackProfile ? 'Loaded your local profile fallback while profile sync is temporarily unavailable.' : (rawMessage || 'Unable to load your profile right now.')),
         isOwnRoute: true,
       };
       console.error('[profile:frontend] profile route load failure', {
@@ -7218,8 +7335,12 @@ async function render() {
       resume: resumePage,
       onboardingProfileSetup: onboardingProfileSetupPage,
       characters: charactersPage,
+      connections: connectionsPage,
+      activity: activityPage,
       recruiters: recruitersPage,
       settings: settingsPage,
+      membership: membershipPage,
+      help: helpPage,
       characterDetail: () => characterDetailPage(path),
       directChat: directChatPage,
       scenarioChat: scenarioChatPage,
