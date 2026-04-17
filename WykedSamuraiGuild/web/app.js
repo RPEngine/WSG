@@ -19,10 +19,15 @@ const routes = {
   '/members': { key: 'hubSocial', requiresAuth: true },
   '/discussions': { key: 'discussions', requiresAuth: true },
   '/profile': { key: 'profile', requiresAuth: true },
+  '/profile/edit': { key: 'profile', requiresAuth: true },
   '/resume': { key: 'resume', requiresAuth: true },
   '/characters': { key: 'characters', requiresAuth: true },
+  '/connections': { key: 'hubSocial', requiresAuth: true },
+  '/activity': { key: 'utilitiesRoomUpdates', requiresAuth: true },
   '/recruiters': { key: 'recruiters', requiresAuth: true },
   '/settings': { key: 'settings', requiresAuth: true },
+  '/membership': { key: 'utilitiesInvites', requiresAuth: true },
+  '/help': { key: 'utilitiesTools', requiresAuth: true },
   '/utilities/notifications': { key: 'utilitiesNotifications', requiresAuth: true },
   '/utilities/invites': { key: 'utilitiesInvites', requiresAuth: true },
   '/utilities/room-updates': { key: 'utilitiesRoomUpdates', requiresAuth: true },
@@ -2593,11 +2598,18 @@ function Header(path) {
           <div class="account-menu">
             <button type="button" class="pill-btn header-glass-btn account-menu-btn ${isCollapsed ? 'hide-when-header-collapsed' : ''}" id="account-menu-btn" aria-haspopup="true" aria-expanded="false">${escapeHtml(accountLabel)} ▾</button>
             <div class="account-menu-dropdown header-dropdown-menu" id="account-menu-dropdown">
-              <div class="menu-group-label">Account</div>
-              <a href="${linkFor('/resume')}">Resume</a>
-              <a href="${linkFor('/settings')}">Settings</a>
+              <div class="menu-group-label">Profile Center</div>
+              <a href="${linkFor('/profile')}">View Profile</a>
+              <a href="${linkFor('/profile/edit')}">Edit Profile</a>
               <a href="${linkFor('/characters')}">Characters</a>
-              <button type="button" class="menu-item-btn" id="logout-btn">Log out</button>
+              <a href="${linkFor('/resume')}">Resume / Professional Profile</a>
+              <a href="${linkFor('/connections')}">Connections</a>
+              <a href="${linkFor('/activity')}">Activity</a>
+              <div class="menu-group-label">Account</div>
+              <a href="${linkFor('/settings')}">Settings &amp; Privacy</a>
+              <a href="${linkFor('/membership')}">Membership / Verification</a>
+              <a href="${linkFor('/help')}">Help</a>
+              <button type="button" class="menu-item-btn" id="logout-btn">Sign Out</button>
             </div>
           </div>
         ` : `<a class="pill-btn header-glass-btn" href="#/login">${escapeHtml(accountLabel)}</a>`}
