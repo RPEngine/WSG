@@ -414,8 +414,8 @@ const SCENARIO_BLUEPRINTS = Object.freeze({
 });
 
 const BRAND_ASSETS = Object.freeze({
-  logo: '/assets/WGSGuildLogo.png',
-  compactLogo: '/assets/WGSGuildLogo.png',
+  logo: '/assets/branding/wyked-samurai-guild-logo-design.svg',
+  compactLogo: '/assets/branding/wyked-samurai-guild-logo-design.svg',
 });
 
 
@@ -1430,10 +1430,43 @@ async function apiRequest(path, options = {}) {
         error: data?.error || null,
       });
     }
-    throw new Error(data?.error || 'We could not process your request.');
+    const requestError = new Error(data?.error || 'We could not process your request.');
+    requestError.status = response.status;
+    requestError.path = path;
+    throw requestError;
   }
 
   return data;
+}
+
+function isNotFoundApiError(error) {
+  const status = Number(error?.status);
+  return status === 404;
+}
+
+async function loadOwnProfileFromApi() {
+  const data = await apiRequest('/profile/me', { method: 'GET' });
+  const normalizedLayered = normalizeLayeredProfile(data?.profile || null);
+  const normalizedUser = normalizedLayered.user
+    ? withPersistedOnboardingProfile(normalizedLayered.user)
+    : null;
+
+  if (!normalizedUser) {
+    return null;
+  }
+
+  state.currentUser = normalizedUser;
+  state.activeProfile = normalizedUser;
+  state.layers = normalizedLayered.layers || {};
+  state.availableLayers = Array.isArray(normalizedLayered.availableLayers) && normalizedLayered.availableLayers.length
+    ? normalizedLayered.availableLayers
+    : ['free'];
+  state.lockedLayers = Array.isArray(normalizedLayered.lockedLayers) && normalizedLayered.lockedLayers.length
+    ? normalizedLayered.lockedLayers
+    : ['professional', 'roleplay'];
+  syncProfilePrivacyFromUser(state.currentUser);
+
+  return normalizedUser;
 }
 
 async function checkBackendHealth() {
@@ -5643,6 +5676,15 @@ async function retryProfileCloudSyncFromLocal() {
   const localProfile = readOnboardingProfile(userId) || {};
   const resumeProfile = localProfile.resumeProfile || {};
   const skillProfile = localProfile.skillProfile || {};
+  try {
+    await loadOwnProfileFromApi();
+    return;
+  } catch (error) {
+    console.warn('[profile:frontend] retry profile API sync unavailable; falling back to direct profile sync.', {
+      status: error?.status || null,
+      message: error?.message || String(error),
+    });
+  }
   await upsertOwnSupabaseProfileFromOnboarding({ resumeProfile, skillProfile });
 }
 
@@ -5783,7 +5825,11 @@ async function loadConnections() {
     state.network.connections = [];
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.warn('[connections:frontend] loadConnections failed; using empty list fallback.', { message });
+    if (isNotFoundApiError(error)) {
+      console.info('[connections:frontend] /connections route unavailable; using empty list fallback.');
+    } else {
+      console.warn('[connections:frontend] loadConnections failed; using empty list fallback.', { message });
+    }
     state.network.connections = [];
   }
 }
@@ -5858,7 +5904,11 @@ async function loadProfileAccessRequests() {
     state.profileAccessRequests = Array.isArray(data?.items) ? data.items : [];
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.warn('[profile:frontend] loadProfileAccessRequests failed', { message });
+    if (isNotFoundApiError(error)) {
+      console.info('[profile:frontend] /profile/access-requests route unavailable; using empty state.');
+    } else {
+      console.warn('[profile:frontend] loadProfileAccessRequests failed', { message });
+    }
     state.profileAccessRequests = [];
   }
 }
@@ -5874,6 +5924,30 @@ async function loadProfileForRoute(path) {
   };
   if (path === '/profile') {
     try {
+      try {
+        const apiProfile = await loadOwnProfileFromApi();
+        if (apiProfile) {
+          state.profileLoad = {
+            status: 'ready',
+            message: '',
+            isOwnRoute: true,
+          };
+          console.log('[profile:frontend] profile route load success', {
+            path,
+            userId: state.currentUser?.id || null,
+            source: 'api.profile.me',
+          });
+          return;
+        }
+      } catch (apiError) {
+        if (!isNotFoundApiError(apiError)) {
+          console.warn('[profile:frontend] /profile/me unavailable; falling back to direct profile lookup.', {
+            status: apiError?.status || null,
+            message: apiError?.message || String(apiError),
+          });
+        }
+      }
+
       const resolved = await resolveOwnSupabaseProfile({ createIfMissing: true });
       if (resolved.status === 'auth_user_missing') {
         state.activeProfile = null;
@@ -6557,22 +6631,34 @@ function attachProfileEditHandler() {
       setProfileSyncState({ status: 'saving', message: 'Saving profile changes…', source: 'profile_layer', canRetry: false });
       render();
       try {
-        const existingProfile = await ensureProfileRecordForSave('profile_layer_save');
-        const authUser = state.auth.user;
         const parsedSkills = String(payload.skills || '')
           .split(',')
           .map((entry) => entry.trim())
           .filter(Boolean);
-
-        const savedProfile = await upsertSupabaseProfileRecord(authUser, {
-          email: String(existingProfile.email || state.currentUser?.email || authUser?.email || '').trim(),
-          username: String(existingProfile.username || state.currentUser?.username || authUser?.user_metadata?.username || '').trim(),
-          display_name: String(payload.displayName || existingProfile.display_name || state.currentUser?.displayName || '').trim(),
-          headline: String(payload.headline || '').trim(),
-          bio: String(payload.bio || '').trim(),
-          skills: parsedSkills,
-          updated_at: new Date().toISOString(),
-        }, 'profile_layer_save');
+        let savedProfile = null;
+        try {
+          const apiData = await apiRequest(`/profile/layers/${encodeURIComponent(layerKey)}`, {
+            method: 'PATCH',
+            body: JSON.stringify(payload),
+          });
+          savedProfile = apiData?.profile || null;
+        } catch (apiError) {
+          const existingProfile = await ensureProfileRecordForSave('profile_layer_save');
+          const authUser = state.auth.user;
+          savedProfile = await upsertSupabaseProfileRecord(authUser, {
+            email: String(existingProfile.email || state.currentUser?.email || authUser?.email || '').trim(),
+            username: String(existingProfile.username || state.currentUser?.username || authUser?.user_metadata?.username || '').trim(),
+            display_name: String(payload.displayName || existingProfile.display_name || state.currentUser?.displayName || '').trim(),
+            headline: String(payload.headline || '').trim(),
+            bio: String(payload.bio || '').trim(),
+            skills: parsedSkills,
+            updated_at: new Date().toISOString(),
+          }, 'profile_layer_save');
+          console.warn('[profile:frontend] profile layer API save failed; used fallback save path.', {
+            status: apiError?.status || null,
+            message: apiError?.message || String(apiError),
+          });
+        }
 
         const normalizedUser = normalizeSupabaseProfileRecord(savedProfile, state.currentUser);
         const nextLayers = {
@@ -6637,17 +6723,30 @@ function attachProfileEditHandler() {
       setProfileSyncState({ status: 'saving', message: 'Saving account settings…', source: 'account', canRetry: false });
       render();
       try {
-        const existingProfile = await ensureProfileRecordForSave('profile_hub_save');
-        const authUser = state.auth.user;
-        const savedProfile = await upsertSupabaseProfileRecord(authUser, {
-          email: String(payload.email || existingProfile.email || authUser?.email || '').trim(),
-          username: String(existingProfile.username || state.currentUser?.username || authUser?.user_metadata?.username || '').trim(),
-          display_name: String(existingProfile.display_name || state.currentUser?.displayName || '').trim(),
-          legal_name: String(payload.legalName || '').trim(),
-          role: String(payload.role || '').trim(),
-          organization_name: String(payload.organizationName || '').trim(),
-          updated_at: new Date().toISOString(),
-        }, 'profile_hub_save');
+        let savedProfile = null;
+        try {
+          const apiData = await apiRequest('/profile/hub', {
+            method: 'PATCH',
+            body: JSON.stringify(payload),
+          });
+          savedProfile = apiData?.profile || null;
+        } catch (apiError) {
+          const existingProfile = await ensureProfileRecordForSave('profile_hub_save');
+          const authUser = state.auth.user;
+          savedProfile = await upsertSupabaseProfileRecord(authUser, {
+            email: String(payload.email || existingProfile.email || authUser?.email || '').trim(),
+            username: String(existingProfile.username || state.currentUser?.username || authUser?.user_metadata?.username || '').trim(),
+            display_name: String(existingProfile.display_name || state.currentUser?.displayName || '').trim(),
+            legal_name: String(payload.legalName || '').trim(),
+            role: String(payload.role || '').trim(),
+            organization_name: String(payload.organizationName || '').trim(),
+            updated_at: new Date().toISOString(),
+          }, 'profile_hub_save');
+          console.warn('[profile:frontend] profile hub API save failed; used fallback save path.', {
+            status: apiError?.status || null,
+            message: apiError?.message || String(apiError),
+          });
+        }
         const normalizedUser = normalizeSupabaseProfileRecord(savedProfile, state.currentUser);
         state.currentUser = withPersistedOnboardingProfile(normalizedUser);
         syncProfilePrivacyFromUser(state.currentUser);
@@ -6706,19 +6805,32 @@ function attachProfileEditHandler() {
       setProfileSyncState({ status: 'saving', message: 'Saving privacy settings…', source: 'privacy', canRetry: false });
       render();
       try {
-        const existingProfile = await ensureProfileRecordForSave('profile_privacy_save');
-        const authUser = state.auth.user;
-        const savedProfile = await upsertSupabaseProfileRecord(authUser, {
-          email: String(existingProfile.email || state.currentUser?.email || authUser?.email || '').trim(),
-          username: String(existingProfile.username || state.currentUser?.username || authUser?.user_metadata?.username || '').trim(),
-          display_name: String(existingProfile.display_name || state.currentUser?.displayName || '').trim(),
-          visibility: payload.profileVisibility,
-          allow_shareable_link: payload.allowShareableLink === true,
-          allow_access_requests: payload.allowAccessRequests === true,
-          allow_recruiter_access_requests: payload.allowRecruiterAccessRequests === true,
-          show_in_member_search: payload.showInMemberSearch === true,
-          updated_at: new Date().toISOString(),
-        }, 'profile_privacy_save');
+        let savedProfile = null;
+        try {
+          const apiData = await apiRequest('/profile/privacy', {
+            method: 'PATCH',
+            body: JSON.stringify(payload),
+          });
+          savedProfile = apiData?.profile || null;
+        } catch (apiError) {
+          const existingProfile = await ensureProfileRecordForSave('profile_privacy_save');
+          const authUser = state.auth.user;
+          savedProfile = await upsertSupabaseProfileRecord(authUser, {
+            email: String(existingProfile.email || state.currentUser?.email || authUser?.email || '').trim(),
+            username: String(existingProfile.username || state.currentUser?.username || authUser?.user_metadata?.username || '').trim(),
+            display_name: String(existingProfile.display_name || state.currentUser?.displayName || '').trim(),
+            visibility: payload.profileVisibility,
+            allow_shareable_link: payload.allowShareableLink === true,
+            allow_access_requests: payload.allowAccessRequests === true,
+            allow_recruiter_access_requests: payload.allowRecruiterAccessRequests === true,
+            show_in_member_search: payload.showInMemberSearch === true,
+            updated_at: new Date().toISOString(),
+          }, 'profile_privacy_save');
+          console.warn('[profile:frontend] profile privacy API save failed; used fallback save path.', {
+            status: apiError?.status || null,
+            message: apiError?.message || String(apiError),
+          });
+        }
         state.currentUser = withPersistedOnboardingProfile(normalizeSupabaseProfileRecord(savedProfile, state.currentUser));
         syncProfilePrivacyFromUser(state.currentUser);
         state.activeProfile = state.currentUser;
