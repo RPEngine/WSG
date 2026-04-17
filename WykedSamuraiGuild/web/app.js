@@ -462,6 +462,8 @@ const state = {
   startupError: '',
   supabaseConfigMissing: false,
   members: [],
+  characters: [],
+  professionalProfile: null,
   activeProfile: null,
   activeLayer: 'free',
   availableLayers: ['free'],
@@ -1465,8 +1467,24 @@ async function loadOwnProfileFromApi() {
     ? normalizedLayered.lockedLayers
     : ['professional', 'roleplay'];
   syncProfilePrivacyFromUser(state.currentUser);
+  state.characters = Array.isArray(normalizedUser.characters) ? normalizedUser.characters : [];
+  state.professionalProfile = normalizedUser.professionalProfile || null;
 
   return normalizedUser;
+}
+
+async function loadOwnCharactersFromApi() {
+  const data = await apiRequest('/characters', { method: 'GET' });
+  const items = Array.isArray(data?.items) ? data.items : [];
+  state.characters = items;
+  if (state.currentUser) {
+    state.currentUser = {
+      ...state.currentUser,
+      characters: items,
+      roleplayCharacters: items,
+    };
+  }
+  return items;
 }
 
 async function checkBackendHealth() {
@@ -3641,19 +3659,17 @@ function charactersPage() {
       </section>
     `;
   }
-  const characters = Array.isArray(state.currentUser?.characters)
-    ? state.currentUser.characters
-    : (Array.isArray(state.currentUser?.roleplayCharacters) ? state.currentUser.roleplayCharacters : []);
+  const characters = Array.isArray(state.characters) ? state.characters : [];
   return `
     <section class="card panel-surface panel-surface--transparent">
       <h3>Characters</h3>
-      <p class="muted">Manage your roleplay personas. This page always shows a real list or a first-time setup state.</p>
+      <p class="muted">Manage your roleplay personas using backend-synced character records.</p>
       ${characters.length
-    ? `<ul class="list compact-list">${characters.map((character) => `<li><strong>${escapeHtml(character.name || 'Unnamed Character')}</strong> <span class="muted">· ${escapeHtml(character.system || 'WSG RP System')}</span></li>`).join('')}</ul>`
-    : '<p class="muted">No characters yet. Create your first character from Profile setup.</p>'}
+    ? `<ul class="list compact-list">${characters.map((character) => `<li><strong>${escapeHtml(character.name || 'Unnamed Character')}</strong> <span class="muted">· ${escapeHtml(character.world || 'WSG RP World')}</span> <button class="pill-btn" type="button" data-edit-character-id="${escapeAttr(character.id)}">Edit</button> <button class="pill-btn" type="button" data-delete-character-id="${escapeAttr(character.id)}">Delete</button></li>`).join('')}</ul>`
+    : '<p class="muted">No characters yet. Create your first character.</p>'}
       <div class="actions">
-        <a class="pill-btn cta-primary" href="${linkFor('/profile')}">Open Profile</a>
-        <a class="pill-btn" href="${linkFor(ONBOARDING_PROFILE_SETUP_ROUTE)}">Open Profile Setup</a>
+        <button class="pill-btn cta-primary" type="button" id="create-character-btn">Create Character</button>
+        <a class="pill-btn" href="${linkFor('/profile')}">Open Profile</a>
       </div>
     </section>
   `;
@@ -3768,9 +3784,7 @@ function helpPage() {
 
 function characterDetailPage(path) {
   const characterId = path.replace('/characters/', '').split('/')[0];
-  const knownCharacters = Array.isArray(state.currentUser?.characters)
-    ? state.currentUser.characters
-    : (Array.isArray(state.currentUser?.roleplayCharacters) ? state.currentUser.roleplayCharacters : []);
+  const knownCharacters = Array.isArray(state.characters) ? state.characters : [];
   const character = knownCharacters.find((entry) => String(entry.id) === String(characterId));
   return `
     <section class="card panel-surface panel-surface--transparent">
@@ -5924,118 +5938,29 @@ async function loadProfileForRoute(path) {
   };
   if (path === '/profile') {
     try {
-      try {
-        const apiProfile = await loadOwnProfileFromApi();
-        if (apiProfile) {
-          state.profileLoad = {
-            status: 'ready',
-            message: '',
-            isOwnRoute: true,
-          };
-          console.log('[profile:frontend] profile route load success', {
-            path,
-            userId: state.currentUser?.id || null,
-            source: 'api.profile.me',
-          });
-          return;
-        }
-      } catch (apiError) {
-        if (!isNotFoundApiError(apiError)) {
-          console.warn('[profile:frontend] /profile/me unavailable; falling back to direct profile lookup.', {
-            status: apiError?.status || null,
-            message: apiError?.message || String(apiError),
-          });
-        }
-      }
-
-      const resolved = await resolveOwnSupabaseProfile({ createIfMissing: true });
-      if (resolved.status === 'auth_user_missing') {
-        state.activeProfile = null;
-        state.profileLoad = {
-          status: 'error',
-          message: 'We could not find an authenticated user session. Please sign in again.',
-          isOwnRoute: true,
-        };
-        return;
-      }
-      if (resolved.status === 'permission_or_rls') {
-        const fallbackProfile = buildLocalProfileFallback(state.currentUser);
-        state.activeProfile = fallbackProfile;
-        if (fallbackProfile) {
-          state.currentUser = fallbackProfile;
-        }
-        state.profileLoad = {
-          status: fallbackProfile ? 'ready' : 'error',
-          message: fallbackProfile
-            ? 'Loaded your local profile fallback while cloud profile permissions are being updated.'
-            : 'Profile access is blocked by permissions. Please check Supabase RLS policy for your profile row.',
-          isOwnRoute: true,
-        };
-        return;
-      }
-      if (resolved.status === 'query_failure') {
-        const fallbackProfile = buildLocalProfileFallback(state.currentUser);
-        state.activeProfile = fallbackProfile;
-        if (fallbackProfile) {
-          state.currentUser = fallbackProfile;
-        }
-        state.profileLoad = {
-          status: fallbackProfile ? 'ready' : 'error',
-          message: fallbackProfile
-            ? 'Loaded your local profile fallback while profile sync is temporarily unavailable.'
-            : 'Unable to load your profile right now.',
-          isOwnRoute: true,
-        };
-        return;
-      }
-      if (!resolved.profile) {
-        state.activeProfile = state.currentUser || null;
-        state.profileLoad = {
-          status: 'empty',
-          message: 'Your profile has not been created yet.',
-          isOwnRoute: true,
-        };
-        return;
-      }
-
-      const normalizedUser = normalizeSupabaseProfileRecord(resolved.profile, state.currentUser);
-      state.activeProfile = normalizedUser;
-      state.currentUser = withPersistedOnboardingProfile(normalizedUser);
-      syncProfilePrivacyFromUser(state.currentUser);
-      state.layers = state.layers || {};
-      state.availableLayers = state.availableLayers || ['free'];
-      state.lockedLayers = state.lockedLayers || ['professional', 'roleplay'];
+      const apiProfile = await loadOwnProfileFromApi();
+      state.activeProfile = apiProfile || state.currentUser;
       state.profileLoad = {
-        status: 'ready',
-        message: '',
+        status: apiProfile ? 'ready' : 'empty',
+        message: apiProfile ? '' : 'Your profile has not been created yet.',
         isOwnRoute: true,
       };
       console.log('[profile:frontend] profile route load success', {
         path,
         userId: state.currentUser?.id || null,
-        source: 'supabase.profiles',
-        resolution: resolved.status,
+        source: 'api.profile.me',
       });
     } catch (error) {
       const rawMessage = error instanceof Error ? error.message : String(error);
-      const reason = classifyProfileQueryFailure(error);
-      const notFound = reason === 'no_row_found';
-      const fallbackProfile = buildLocalProfileFallback(state.currentUser);
-      state.activeProfile = fallbackProfile || state.currentUser || null;
-      if (fallbackProfile) {
-        state.currentUser = fallbackProfile;
-      }
+      state.activeProfile = state.currentUser || null;
       state.profileLoad = {
-        status: notFound ? 'empty' : (fallbackProfile ? 'ready' : 'error'),
-        message: notFound
-          ? 'Your profile has not been created yet.'
-          : (fallbackProfile ? 'Loaded your local profile fallback while profile sync is temporarily unavailable.' : 'Unable to load your profile right now.'),
+        status: 'error',
+        message: 'Unable to load your profile right now.',
         isOwnRoute: true,
       };
       console.error('[profile:frontend] profile route load failure', {
         path,
         message: rawMessage,
-        reason,
         hasCurrentUser: Boolean(state.currentUser?.id),
         userId: state.currentUser?.id || null,
         error,
@@ -6501,46 +6426,87 @@ function isStrongPassword(password) {
 function attachProfileEditHandler() {
   const createCharacterSlotButton = document.getElementById('create-character-slot-btn');
   if (createCharacterSlotButton) {
-    createCharacterSlotButton.onclick = () => {
-      const currentCharacters = Array.isArray(state.currentUser?.characters)
-        ? state.currentUser.characters
-        : (Array.isArray(state.currentUser?.roleplayCharacters) ? state.currentUser.roleplayCharacters : []);
-      const characterLimit = Number.isFinite(Number(state.currentUser?.characterSlotLimit))
-        ? Math.max(1, Number(state.currentUser.characterSlotLimit))
-        : (Number.isFinite(Number(state.currentUser?.roleplayCharacterLimit))
-          ? Math.max(1, Number(state.currentUser.roleplayCharacterLimit))
-          : 5);
-      if (currentCharacters.length >= characterLimit) {
+    createCharacterSlotButton.onclick = async () => {
+      const nextCharacterNumber = (Array.isArray(state.characters) ? state.characters.length : 0) + 1;
+      try {
+        await apiRequest('/characters', {
+          method: 'POST',
+          body: {
+            name: `Ronin Character ${nextCharacterNumber}`,
+            world: 'WSG RP World',
+            summary: '',
+            visibility: 'public',
+            status: 'active',
+          },
+        });
+        await loadOwnCharactersFromApi();
+        setStatusMessage('Character created.', 'success');
         render();
-        return;
+      } catch (error) {
+        setStatusMessage(error instanceof Error ? error.message : 'Unable to create character.', 'error');
       }
-      const nextCharacterNumber = currentCharacters.length + 1;
-      const newCharacter = {
-        id: crypto.randomUUID(),
-        name: `Ronin Character ${nextCharacterNumber}`,
-        system: 'WSG RP System',
-        createdAt: new Date().toISOString(),
-      };
-      state.currentUser = {
-        ...state.currentUser,
-        profileType: 'person',
-        characterSlotLimit: characterLimit,
-        characters: [...currentCharacters, newCharacter],
-        roleplayCharacterLimit: characterLimit,
-        roleplayCharacters: [...currentCharacters, newCharacter],
-      };
-      saveOnboardingProfile({
-        ...(readOnboardingProfile(state.currentUser.id) || {}),
-        profileType: 'person',
-        characters: state.currentUser.characters,
-        characterSlotLimit: state.currentUser.characterSlotLimit,
-        roleplayCharacters: state.currentUser.characters,
-        roleplayCharacterLimit: state.currentUser.characterSlotLimit,
-      }, state.currentUser.id);
-      setStatusMessage('Character slot created.', 'success');
-      render();
     };
   }
+
+  const createCharacterButton = document.getElementById('create-character-btn');
+  if (createCharacterButton) {
+    createCharacterButton.onclick = async () => {
+      const name = window.prompt('Character name');
+      if (!name || !String(name).trim()) return;
+      try {
+        await apiRequest('/characters', {
+          method: 'POST',
+          body: { name: String(name).trim(), world: 'WSG RP World', summary: '', visibility: 'public', status: 'active' },
+        });
+        await loadOwnCharactersFromApi();
+        setStatusMessage('Character created.', 'success');
+        render();
+      } catch (error) {
+        setStatusMessage(error instanceof Error ? error.message : 'Unable to create character.', 'error');
+      }
+    };
+  }
+
+  document.querySelectorAll('[data-edit-character-id]').forEach((button) => {
+    button.onclick = async () => {
+      const characterId = String(button.getAttribute('data-edit-character-id') || '');
+      const current = (state.characters || []).find((entry) => String(entry.id) === characterId);
+      const nextName = window.prompt('Edit character name', current?.name || '');
+      if (!nextName || !nextName.trim()) return;
+      try {
+        await apiRequest(`/characters/${encodeURIComponent(characterId)}`, {
+          method: 'PATCH',
+          body: {
+            name: nextName.trim(),
+            world: current?.world || '',
+            summary: current?.summary || '',
+            visibility: current?.visibility || 'public',
+            status: current?.status || 'active',
+            avatarUrl: current?.avatarUrl || '',
+          },
+        });
+        await loadOwnCharactersFromApi();
+        setStatusMessage('Character updated.', 'success');
+        render();
+      } catch (error) {
+        setStatusMessage(error instanceof Error ? error.message : 'Unable to update character.', 'error');
+      }
+    };
+  });
+
+  document.querySelectorAll('[data-delete-character-id]').forEach((button) => {
+    button.onclick = async () => {
+      const characterId = String(button.getAttribute('data-delete-character-id') || '');
+      try {
+        await apiRequest(`/characters/${encodeURIComponent(characterId)}`, { method: 'DELETE' });
+        await loadOwnCharactersFromApi();
+        setStatusMessage('Character deleted.', 'success');
+        render();
+      } catch (error) {
+        setStatusMessage(error instanceof Error ? error.message : 'Unable to delete character.', 'error');
+      }
+    };
+  });
 
   const createRecruiterSlotButton = document.getElementById('create-recruiter-slot-btn');
   if (createRecruiterSlotButton) {
@@ -6635,32 +6601,15 @@ function attachProfileEditHandler() {
           .split(',')
           .map((entry) => entry.trim())
           .filter(Boolean);
-        let savedProfile = null;
-        try {
-          const apiData = await apiRequest(`/profile/layers/${encodeURIComponent(layerKey)}`, {
-            method: 'PATCH',
-            body: JSON.stringify(payload),
-          });
-          savedProfile = apiData?.profile || null;
-        } catch (apiError) {
-          const existingProfile = await ensureProfileRecordForSave('profile_layer_save');
-          const authUser = state.auth.user;
-          savedProfile = await upsertSupabaseProfileRecord(authUser, {
-            email: String(existingProfile.email || state.currentUser?.email || authUser?.email || '').trim(),
-            username: String(existingProfile.username || state.currentUser?.username || authUser?.user_metadata?.username || '').trim(),
-            display_name: String(payload.displayName || existingProfile.display_name || state.currentUser?.displayName || '').trim(),
-            headline: String(payload.headline || '').trim(),
-            bio: String(payload.bio || '').trim(),
-            skills: parsedSkills,
-            updated_at: new Date().toISOString(),
-          }, 'profile_layer_save');
-          console.warn('[profile:frontend] profile layer API save failed; used fallback save path.', {
-            status: apiError?.status || null,
-            message: apiError?.message || String(apiError),
-          });
-        }
-
-        const normalizedUser = normalizeSupabaseProfileRecord(savedProfile, state.currentUser);
+        await apiRequest('/profile/me', {
+          method: 'PATCH',
+          body: JSON.stringify({
+            displayName: payload.displayName,
+            tagline: payload.headline,
+            about: payload.bio,
+          }),
+        });
+        const normalizedUser = await loadOwnProfileFromApi();
         const nextLayers = {
           ...(state.layers || {}),
           [layerKey]: {
@@ -6723,31 +6672,16 @@ function attachProfileEditHandler() {
       setProfileSyncState({ status: 'saving', message: 'Saving account settings…', source: 'account', canRetry: false });
       render();
       try {
-        let savedProfile = null;
-        try {
-          const apiData = await apiRequest('/profile/hub', {
-            method: 'PATCH',
-            body: JSON.stringify(payload),
-          });
-          savedProfile = apiData?.profile || null;
-        } catch (apiError) {
-          const existingProfile = await ensureProfileRecordForSave('profile_hub_save');
-          const authUser = state.auth.user;
-          savedProfile = await upsertSupabaseProfileRecord(authUser, {
-            email: String(payload.email || existingProfile.email || authUser?.email || '').trim(),
-            username: String(existingProfile.username || state.currentUser?.username || authUser?.user_metadata?.username || '').trim(),
-            display_name: String(existingProfile.display_name || state.currentUser?.displayName || '').trim(),
-            legal_name: String(payload.legalName || '').trim(),
-            role: String(payload.role || '').trim(),
-            organization_name: String(payload.organizationName || '').trim(),
-            updated_at: new Date().toISOString(),
-          }, 'profile_hub_save');
-          console.warn('[profile:frontend] profile hub API save failed; used fallback save path.', {
-            status: apiError?.status || null,
-            message: apiError?.message || String(apiError),
-          });
-        }
-        const normalizedUser = normalizeSupabaseProfileRecord(savedProfile, state.currentUser);
+        await apiRequest('/profile/me', {
+          method: 'PATCH',
+          body: JSON.stringify({
+            avatarUrl,
+            samuraiStatus,
+            roleTitle: payload.role,
+            organizationName: payload.organizationName,
+          }),
+        });
+        const normalizedUser = await loadOwnProfileFromApi();
         state.currentUser = withPersistedOnboardingProfile(normalizedUser);
         syncProfilePrivacyFromUser(state.currentUser);
         const nextProfileType = (payload.role === 'employer' || payload.role === 'recruiter') ? 'company' : 'person';
@@ -6805,33 +6739,11 @@ function attachProfileEditHandler() {
       setProfileSyncState({ status: 'saving', message: 'Saving privacy settings…', source: 'privacy', canRetry: false });
       render();
       try {
-        let savedProfile = null;
-        try {
-          const apiData = await apiRequest('/profile/privacy', {
-            method: 'PATCH',
-            body: JSON.stringify(payload),
-          });
-          savedProfile = apiData?.profile || null;
-        } catch (apiError) {
-          const existingProfile = await ensureProfileRecordForSave('profile_privacy_save');
-          const authUser = state.auth.user;
-          savedProfile = await upsertSupabaseProfileRecord(authUser, {
-            email: String(existingProfile.email || state.currentUser?.email || authUser?.email || '').trim(),
-            username: String(existingProfile.username || state.currentUser?.username || authUser?.user_metadata?.username || '').trim(),
-            display_name: String(existingProfile.display_name || state.currentUser?.displayName || '').trim(),
-            visibility: payload.profileVisibility,
-            allow_shareable_link: payload.allowShareableLink === true,
-            allow_access_requests: payload.allowAccessRequests === true,
-            allow_recruiter_access_requests: payload.allowRecruiterAccessRequests === true,
-            show_in_member_search: payload.showInMemberSearch === true,
-            updated_at: new Date().toISOString(),
-          }, 'profile_privacy_save');
-          console.warn('[profile:frontend] profile privacy API save failed; used fallback save path.', {
-            status: apiError?.status || null,
-            message: apiError?.message || String(apiError),
-          });
-        }
-        state.currentUser = withPersistedOnboardingProfile(normalizeSupabaseProfileRecord(savedProfile, state.currentUser));
+        const apiData = await apiRequest('/profile/privacy', {
+          method: 'PATCH',
+          body: JSON.stringify(payload),
+        });
+        state.currentUser = withPersistedOnboardingProfile(apiData?.profile || state.currentUser);
         syncProfilePrivacyFromUser(state.currentUser);
         state.activeProfile = state.currentUser;
         setProfileHubMessage('Privacy settings saved successfully.', 'success');
@@ -6884,9 +6796,16 @@ function attachProfileEditHandler() {
         canRetry: false,
       });
       try {
-        await upsertOwnSupabaseProfileFromOnboarding({
-          resumeProfile,
-          skillProfile: existingOnboarding.skillProfile || {},
+        await apiRequest('/profile/professional', {
+          method: 'PUT',
+          body: JSON.stringify({
+            headline: String(resumeProfile.headline || '').trim(),
+            summary: String(resumeProfile.summary || '').trim(),
+            skills: Array.isArray(existingOnboarding.skillProfile?.skills) ? existingOnboarding.skillProfile.skills : [],
+            resumeFilename: String(existingOnboarding.resumeUpload?.fileName || '').trim(),
+            openToWork: Boolean(resumeProfile.openToWork),
+            recruiterVisible: Boolean(resumeProfile.recruiterVisible),
+          }),
         });
         setProfileSyncState({
           status: 'synced',
@@ -6916,26 +6835,7 @@ function attachProfileEditHandler() {
   const profileSyncRetryButton = document.getElementById('profile-sync-retry-btn');
   if (profileSyncRetryButton) {
     profileSyncRetryButton.onclick = async () => {
-      setProfileSyncState({ status: 'saving', message: 'Retrying profile sync…', source: 'retry', canRetry: false });
-      render();
-      try {
-        await retryProfileCloudSyncFromLocal();
-        setProfileSyncState({ status: 'synced', message: 'Profile changes are now synced.', source: 'retry', canRetry: false });
-        setStatusMessage('Profile sync completed.', 'success');
-      } catch (error) {
-        console.error('[profile:frontend] manual profile sync retry failed', {
-          message: error?.message || String(error),
-          code: error?.code || null,
-          details: error?.details || null,
-        });
-        setProfileSyncState({
-          status: 'sync_failed',
-          message: 'Your changes are still saved locally, but sync is unavailable right now.',
-          source: 'retry',
-          canRetry: true,
-        });
-        setStatusMessage('Sync is still unavailable. Please try again shortly.', 'error');
-      }
+      await loadProfileForRoute('/profile');
       render();
     };
   }
@@ -7714,6 +7614,13 @@ async function render() {
     }
     if (path === '/profile' || isDynamicProfileRoute(path)) {
       await loadProfileForRoute(path);
+    }
+    if (path === '/characters' || /^\/characters\/[^/]+$/.test(path)) {
+      try {
+        await loadOwnCharactersFromApi();
+      } catch (error) {
+        console.warn('[characters:frontend] load characters failed', { message: error instanceof Error ? error.message : String(error) });
+      }
     }
     if (path === '/profile') {
       await loadProfileAccessRequests();

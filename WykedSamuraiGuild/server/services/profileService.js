@@ -16,6 +16,17 @@ import {
   upsertProfileLayer,
 } from "../models/userStore.js";
 import {
+  createCharacterByUserId,
+  deleteCharacterByUserId,
+  ensureAppUser,
+  getProfessionalProfileByUserId,
+  getProfileByUserId,
+  listCharactersByUserId,
+  updateCharacterByUserId,
+  upsertProfessionalProfileByUserId,
+  upsertProfileByUserId,
+} from "../models/appDataStore.js";
+import {
   addChannelMessage,
   addDirectMessage,
   getChannelThread,
@@ -73,6 +84,133 @@ export async function getOwnProfile(userId) {
 
 export async function getOwnProfileMe(userId) {
   return toProfileMeResponse(await getOwnProfile(userId));
+}
+
+export async function getOwnUnifiedProfile(user) {
+  if (!user?.id) return null;
+  await ensureAppUser({
+    userId: user.id,
+    authProviderId: user.provider_subject || "",
+    email: user.email || "",
+  });
+
+  const existing = await getProfileByUserId(user.id);
+  const fallbackUsername = String(user.email || "").split("@")[0] || "member";
+  const profile = existing || await upsertProfileByUserId(user.id, {
+    displayName: user.legal_name || fallbackUsername,
+    username: fallbackUsername,
+    organization: user.organization_name || "",
+    profileType: "person",
+    visibility: user.profile_visibility === "private" ? "private" : "public",
+  });
+
+  const professionalProfile = await getProfessionalProfileByUserId(user.id);
+  const characters = await listCharactersByUserId(user.id);
+
+  return {
+    id: user.id,
+    email: user.email || "",
+    legalName: user.legal_name || "",
+    role: user.role || "",
+    displayName: profile?.displayName || "",
+    username: profile?.username || fallbackUsername,
+    avatarUrl: profile?.avatarUrl || "",
+    tagline: profile?.tagline || "",
+    roleTitle: profile?.roleTitle || "",
+    organizationName: profile?.organization || user.organization_name || "",
+    samuraiStatus: profile?.samuraiStatus || "",
+    profileType: profile?.profileType || "person",
+    profileVisibility: profile?.visibility || "public",
+    about: profile?.about || "",
+    bio: profile?.about || "",
+    availableLayers: ["free"],
+    lockedLayers: [],
+    layers: {
+      free: {
+        displayName: profile?.displayName || "",
+        headline: profile?.tagline || "",
+        bio: profile?.about || "",
+        skills: professionalProfile?.skills || [],
+      },
+    },
+    characters,
+    professionalProfile,
+    createdAt: profile?.createdAt || user.created_at,
+    updatedAt: profile?.updatedAt || user.updated_at,
+  };
+}
+
+export async function saveOwnUnifiedProfile(user, payload = {}) {
+  if (!user?.id) return null;
+  const current = await getOwnUnifiedProfile(user);
+  const profile = await upsertProfileByUserId(user.id, {
+    id: current?.id,
+    displayName: String(payload.displayName ?? current?.displayName ?? "").trim(),
+    username: String(payload.username ?? current?.username ?? "").trim(),
+    avatarUrl: String(payload.avatarUrl ?? current?.avatarUrl ?? "").trim(),
+    tagline: String(payload.tagline ?? payload.headline ?? current?.tagline ?? "").trim(),
+    roleTitle: String(payload.roleTitle ?? current?.roleTitle ?? "").trim(),
+    organization: String(payload.organizationName ?? payload.organization ?? current?.organizationName ?? "").trim(),
+    samuraiStatus: String(payload.samuraiStatus ?? current?.samuraiStatus ?? "").trim(),
+    profileType: String(payload.profileType ?? current?.profileType ?? "person").trim() || "person",
+    visibility: String(payload.profileVisibility ?? current?.profileVisibility ?? "public").trim().toLowerCase() === "private" ? "private" : "public",
+    about: String(payload.about ?? payload.bio ?? current?.about ?? "").trim(),
+  });
+
+  const merged = { ...current, ...profile, organizationName: profile?.organization || current?.organizationName };
+  return {
+    ...current,
+    ...merged,
+    displayName: profile?.displayName || current?.displayName,
+    username: profile?.username || current?.username,
+    avatarUrl: profile?.avatarUrl || current?.avatarUrl,
+    tagline: profile?.tagline || current?.tagline,
+    roleTitle: profile?.roleTitle || current?.roleTitle,
+    organizationName: profile?.organization || current?.organizationName,
+    samuraiStatus: profile?.samuraiStatus || current?.samuraiStatus,
+    profileType: profile?.profileType || current?.profileType,
+    profileVisibility: profile?.visibility || current?.profileVisibility,
+    about: profile?.about || current?.about,
+    bio: profile?.about || current?.bio,
+    layers: {
+      free: {
+        displayName: profile?.displayName || "",
+        headline: profile?.tagline || "",
+        bio: profile?.about || "",
+        skills: current?.professionalProfile?.skills || [],
+      },
+    },
+  };
+}
+
+export async function saveOwnProfessionalProfile(userId, payload = {}) {
+  return upsertProfessionalProfileByUserId(userId, payload);
+}
+
+export async function getOwnProfessionalProfile(userId) {
+  return getProfessionalProfileByUserId(userId);
+}
+
+export async function listOwnCharacters(userId) {
+  return listCharactersByUserId(userId);
+}
+
+export async function createOwnCharacter(userId, payload = {}) {
+  const name = String(payload.name || "").trim();
+  if (!name) throw new Error("Character name is required.");
+  return createCharacterByUserId(userId, payload);
+}
+
+export async function updateOwnCharacter(userId, characterId, payload = {}) {
+  const name = String(payload.name || "").trim();
+  if (!name) throw new Error("Character name is required.");
+  return updateCharacterByUserId(userId, characterId, payload);
+}
+
+export async function deleteOwnCharacter(userId, characterId) {
+  const deleted = await deleteCharacterByUserId(userId, characterId);
+  if (!deleted) throw new Error("Character not found.");
+  return { deleted: true, characterId };
 }
 
 export async function listOwnProfileLayers(userId) {
