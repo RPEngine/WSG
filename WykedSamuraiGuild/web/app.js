@@ -357,8 +357,8 @@ const SCENARIO_BLUEPRINTS = Object.freeze({
 });
 
 const BRAND_ASSETS = Object.freeze({
-  logo: '/assets/banner_logo.png',
-  compactLogo: '/assets/banner_logo.png',
+  logo: '/assets/branding/wyked-samurai-guild-logo-design.svg',
+  compactLogo: '/assets/branding/wyked-samurai-guild-logo-design.svg',
 });
 
 
@@ -2357,22 +2357,29 @@ function Header(path) {
       <button type="button" class="header-collapse-btn" id="header-collapse-toggle" aria-label="${isCollapsed ? 'Expand header' : 'Collapse header'}" title="${isCollapsed ? 'Expand header' : 'Collapse header'}">${isCollapsed ? '▼' : '▲'}</button>
       <div class="header-left">
         <div class="brand">
-          ${guildBrandMark({ className: 'header-brand-mark' })}
+          ${guildBrandMark({ className: 'header-brand-mark header-logo' })}
         </div>
       </div>
       <div class="header-actions">
         <div class="header-menu">
           <button type="button" class="pill-btn header-glass-btn ${isCollapsed ? 'hide-when-header-collapsed' : ''}" id="main-menu-btn" aria-haspopup="true" aria-expanded="false">Menu ▾</button>
           <div class="account-menu-dropdown header-dropdown-menu" id="main-menu-dropdown">
-            <div class="menu-group-label">Menu</div>
+            <div class="menu-group-label">Home</div>
             <a href="${linkFor('/home')}">Home</a>
+            <div class="menu-group-label">Nexus</div>
             <a href="${linkFor('/nexus')}">Nexus</a>
-            <a href="${linkFor('/nexus/professional')}">Nexus • Professional</a>
-            <a href="${linkFor('/nexus/roleplay')}">Nexus • Roleplay</a>
+            <div class="menu-group-label">Professional</div>
+            <a href="${linkFor('/nexus/professional')}">Professional</a>
+            <div class="menu-group-label">Roleplay</div>
+            <a href="${linkFor('/nexus/roleplay')}">Roleplay</a>
+            <div class="menu-group-label">Hub</div>
             <a href="${linkFor('/hub')}">Hub</a>
-            <a href="${linkFor('/hub/social')}">Hub • Social</a>
-            <a href="${linkFor('/hub/recruiter')}">Hub • Recruiter</a>
-            <a href="${linkFor('/hub/reviews')}">Hub • Reviews</a>
+            <div class="menu-group-label">Social</div>
+            <a href="${linkFor('/hub/social')}">Social</a>
+            <div class="menu-group-label">Recruiter</div>
+            <a href="${linkFor('/hub/recruiter')}">Recruiter</a>
+            <div class="menu-group-label">Reviews</div>
+            <a href="${linkFor('/hub/reviews')}">Reviews</a>
           </div>
         </div>
         <div class="header-menu">
@@ -2414,9 +2421,7 @@ function AppShell(path, key, pageHtml, statusMarkup, pageSet) {
 }
 
 function homePage() {
-  const legalName = String(state.currentUser?.legalName || '').trim();
-  const displayName = state.currentUser?.displayName || state.currentUser?.username || 'Guild Member';
-  const greetingName = (legalName.split(/\s+/).filter(Boolean)[0] || displayName || 'Guild Member').trim();
+  const greetingName = String(state.currentUser?.displayName || state.currentUser?.username || 'Guild Member').trim();
   const welcomeCopy = isKnownReturningUser(state.currentUser?.id)
     ? `Welcome back, ${greetingName}`
     : `Welcome, ${greetingName}`;
@@ -2497,12 +2502,14 @@ function homePage() {
 
   return `
     <section class="home-hero tier-1">
-      <p class="home-kicker">Moonlit Command</p>
-      <h1>${escapeHtml(welcomeCopy)}</h1>
-      <p>Your watch begins under the silver moon. Track active operations, gather guild intel, and deploy where your presence shifts the story.</p>
-      <div class="home-hero-actions">
-        <a class="pill-btn cta-primary" href="${linkFor('/nexus')}">Open Nexus</a>
-        <a class="pill-btn home-secondary-action" href="${linkFor('/hub')}">Explore Hub</a>
+      <div class="hero-content">
+        <p class="home-kicker">Moonlit Command</p>
+        <h1>${escapeHtml(welcomeCopy)}</h1>
+        <p>Your watch begins under the silver moon. Track active operations, gather guild intel, and deploy where your presence shifts the story.</p>
+        <div class="home-hero-actions">
+          <a class="pill-btn cta-primary" href="${linkFor('/nexus')}">Open Nexus</a>
+          <a class="pill-btn home-secondary-action" href="${linkFor('/hub')}">Explore Hub</a>
+        </div>
       </div>
     </section>
 

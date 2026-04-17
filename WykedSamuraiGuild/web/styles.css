@@ -163,6 +163,7 @@ body {
   display: flex;
   align-items: center;
   gap: 16px;
+  flex: 1 1 auto;
   min-width: 0;
 }
 .brand-logo {
@@ -228,6 +229,12 @@ body {
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.menu-group-label:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
 }
 
 .menu-item-btn {
@@ -334,6 +341,13 @@ body {
   max-width: min(42vw, 360px);
   object-fit: contain;
   flex: 0 0 auto;
+}
+
+.header-logo img {
+  max-height: 56px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
 }
 
 .sidebar-brand-mark img {
@@ -2037,6 +2051,10 @@ body {
   border-radius: 50%;
   background: radial-gradient(circle, var(--accent-glow) 0%, transparent 68%);
   pointer-events: none;
+}
+
+.hero-content {
+  max-width: 620px;
 }
 
 .home-kicker {
