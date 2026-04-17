@@ -2466,18 +2466,18 @@ function Header(path) {
           <div class="account-menu-dropdown header-dropdown-menu" id="main-menu-dropdown">
             <a class="menu-parent-link" href="${linkFor('/home')}">Home</a>
             <a class="menu-parent-link" href="${linkFor('/nexus')}">Nexus</a>
+            <a class="menu-parent-link" href="${linkFor('/profile')}">Profile</a>
+            <a class="menu-parent-link" href="${linkFor('/hub')}">Hub</a>
+            <a class="menu-parent-link" href="${linkFor('/discussions')}">Discussions</a>
             <div class="menu-submenu">
               <a href="${linkFor('/nexus/professional')}">Professional</a>
               <a href="${linkFor('/nexus/roleplay')}">Roleplay</a>
             </div>
-            <a class="menu-parent-link" href="${linkFor('/hub')}">Hub</a>
             <div class="menu-submenu">
               <a href="${linkFor('/hub/social')}">Social</a>
               <a href="${linkFor('/hub/recruiter')}">Recruiter</a>
               <a href="${linkFor('/hub/reviews')}">Reviews</a>
             </div>
-            <a class="menu-parent-link" href="${linkFor('/discussions')}">Discussions</a>
-            <a class="menu-parent-link" href="${linkFor('/profile')}">Profile</a>
           </div>
         </div>
         ${state.currentUser ? `
@@ -3019,25 +3019,92 @@ function scenarioDetailPage(path) {
 
 
 function nexusPage() {
+  const profile = state.currentUser || {};
+  const displayName = String(profile.displayName || profile.username || profile.legalName || 'Guild Member').trim();
+  const samuraiStatus = String(profile?.primaryArchetype || '').trim().toLowerCase() === 'ronin' ? 'Ronin' : 'Samurai';
+  const notificationsCount = Number(state.notifications?.items?.length || 0);
+  const directMessagesCount = Number(state.network?.conversations?.length || 0);
+  const friendRequestCount = Number(state.network?.connectionRequests?.length || 0);
+  const recruiterSignalsCount = Number(state.recruiters?.list?.length || 0);
+  const activeTasksCount = Number(state.tasks?.items?.length || 0);
   return `
     <section class="scenario-hero guild-hero panel-surface panel-surface--soft">
-      <p class="hero-kicker">Nexus Gateway</p>
-      <h3>Choose Professional or Roleplay</h3>
-      <p class="hero-description">One shared gateway, two mirrored modes. Professional uses burnt orange and brass styling while Roleplay uses blue and teal.</p>
+      <p class="hero-kicker">Nexus</p>
+      <h3>Activity Dashboard</h3>
+      <p class="hero-description">Track your guild activity in one place, then jump into Professional or Roleplay rooms when you are ready.</p>
     </section>
+
     <div class="grid two">
       ${GlowCard({
-    title: 'Professional Mode',
+    title: 'Profile Snapshot',
     body: `
-          <p class="muted">AI-run scenarios, interviewing practice, and ongoing professional rooms.</p>
-          <div class="actions"><a class="pill-btn cta-primary" href="${linkFor('/nexus/professional')}">Open Professional Rooms</a></div>
+          <div class="profile-summary-row">
+            ${avatarMarkup(profile, 'md')}
+            <div>
+              <strong>${escapeHtml(displayName)}</strong>
+              <p class="muted" style="margin:4px 0 0;">${escapeHtml(samuraiStatus)} Status</p>
+            </div>
+          </div>
+          <div class="actions" style="margin-top:10px;">
+            <a class="pill-btn cta-primary" href="${linkFor('/profile')}">Edit Profile</a>
+          </div>
         `,
   })}
       ${GlowCard({
-    title: 'Roleplay Mode',
+    title: 'Notifications',
     body: `
-          <p class="muted">AI-moderated roleplay and social rooms for reputation and community activity.</p>
-          <div class="actions"><a class="pill-btn cta-primary" href="${linkFor('/nexus/roleplay')}">Open Roleplay Rooms</a></div>
+          <p class="muted">Unread notifications and alerts from across WSG.</p>
+          <p><strong>${notificationsCount}</strong> pending notification${notificationsCount === 1 ? '' : 's'}.</p>
+          <div class="actions"><a class="pill-btn" href="${linkFor('/utilities/notifications')}">Open Notifications</a></div>
+        `,
+  })}
+      ${GlowCard({
+    title: 'Messages',
+    body: `
+          <p class="muted">Direct conversations and room follow-ups.</p>
+          <p><strong>${directMessagesCount}</strong> active conversation${directMessagesCount === 1 ? '' : 's'}.</p>
+          <div class="actions"><a class="pill-btn" href="${linkFor('/hub/social')}">Open Messages</a></div>
+        `,
+  })}
+      ${GlowCard({
+    title: 'Friend Requests',
+    body: `
+          <p class="muted">Connection requests waiting for your review.</p>
+          <p><strong>${friendRequestCount}</strong> request${friendRequestCount === 1 ? '' : 's'} awaiting response.</p>
+          <div class="actions"><a class="pill-btn" href="${linkFor('/hub/social')}">Review Requests</a></div>
+        `,
+  })}
+      ${GlowCard({
+    title: 'Recruiter Activity',
+    body: `
+          <p class="muted">Recruiter visibility, introductions, and access signals.</p>
+          <p><strong>${recruiterSignalsCount}</strong> recruiter signal${recruiterSignalsCount === 1 ? '' : 's'} detected.</p>
+          <div class="actions"><a class="pill-btn" href="${linkFor('/hub/recruiter')}">Open Recruiter Hub</a></div>
+        `,
+  })}
+      ${GlowCard({
+    title: 'Tasks',
+    body: `
+          <p class="muted">Your personal task queue and pending actions.</p>
+          <p><strong>${activeTasksCount}</strong> active task${activeTasksCount === 1 ? '' : 's'}.</p>
+          <div class="actions"><a class="pill-btn" href="${linkFor('/home')}">View Tasks</a></div>
+        `,
+  })}
+    </div>
+
+    <div class="grid two" style="margin-top:12px;">
+      ${GlowCard({
+    title: 'Professional Rooms',
+    body: `
+          <p class="muted">AI-run scenarios, interviewing practice, and workplace simulations.</p>
+          <div class="actions"><a class="pill-btn cta-primary" href="${linkFor('/nexus/professional')}">Open Professional Nexus</a></div>
+        `,
+  })}
+      ${GlowCard({
+    title: 'Roleplay Rooms',
+    body: `
+          <p class="muted">AI-moderated roleplay and social rooms for guild reputation building.</p>
+          <div class="actions"><a class="pill-btn cta-primary" href="${linkFor('/nexus/roleplay')}">Open Roleplay Nexus</a></div>
         `,
   })}
     </div>
