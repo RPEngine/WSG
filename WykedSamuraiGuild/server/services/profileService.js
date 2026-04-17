@@ -86,8 +86,10 @@ export async function getOwnProfileMe(userId) {
   return toProfileMeResponse(await getOwnProfile(userId));
 }
 
-export async function getOwnUnifiedProfile(user) {
+export async function getOwnUnifiedProfile(user, options = {}) {
   if (!user?.id) return null;
+  const { createIfMissing = false } = options;
+
   await ensureAppUser({
     userId: user.id,
     authProviderId: user.provider_subject || "",
@@ -96,13 +98,19 @@ export async function getOwnUnifiedProfile(user) {
 
   const existing = await getProfileByUserId(user.id);
   const fallbackUsername = String(user.email || "").split("@")[0] || "member";
-  const profile = existing || await upsertProfileByUserId(user.id, {
-    displayName: user.legal_name || fallbackUsername,
-    username: fallbackUsername,
-    organization: user.organization_name || "",
-    profileType: "person",
-    visibility: user.profile_visibility === "private" ? "private" : "public",
-  });
+  const profile = existing || (createIfMissing
+    ? await upsertProfileByUserId(user.id, {
+      displayName: user.legal_name || fallbackUsername,
+      username: fallbackUsername,
+      organization: user.organization_name || "",
+      profileType: "person",
+      visibility: user.profile_visibility === "private" ? "private" : "public",
+    })
+    : null);
+
+  if (!profile) {
+    return null;
+  }
 
   const professionalProfile = await getProfessionalProfileByUserId(user.id);
   const characters = await listCharactersByUserId(user.id);
@@ -142,7 +150,7 @@ export async function getOwnUnifiedProfile(user) {
 
 export async function saveOwnUnifiedProfile(user, payload = {}) {
   if (!user?.id) return null;
-  const current = await getOwnUnifiedProfile(user);
+  const current = await getOwnUnifiedProfile(user, { createIfMissing: true });
   const profile = await upsertProfileByUserId(user.id, {
     id: current?.id,
     displayName: String(payload.displayName ?? current?.displayName ?? "").trim(),

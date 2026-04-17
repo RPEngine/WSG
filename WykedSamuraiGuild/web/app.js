@@ -5325,7 +5325,21 @@ function syncAuthStateFromSupabase(session) {
 async function ensureBackendProfileForAuthenticatedUser(context = 'auth_flow') {
   if (!state.auth.user?.id) return null;
   try {
-    const profile = await loadOwnProfileFromApi();
+    let profile = await loadOwnProfileFromApi();
+
+    if (!profile) {
+      const fallbackDisplayName = String(state.currentUser?.displayName || state.auth.user?.user_metadata?.full_name || state.auth.user?.email || 'WSG Member').trim();
+      await apiRequest('/profile/me', {
+        method: 'POST',
+        body: JSON.stringify({
+          displayName: fallbackDisplayName,
+          username: String(state.currentUser?.username || fallbackDisplayName.split('@')[0] || 'member').trim(),
+          profileVisibility: String(state.currentUser?.profileVisibility || 'public').toLowerCase() === 'private' ? 'private' : 'public',
+        }),
+      });
+      profile = await loadOwnProfileFromApi();
+    }
+
     if (profile && location.hash.slice(1) === '/profile') {
       state.activeProfile = profile;
     }
