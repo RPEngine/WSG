@@ -357,8 +357,8 @@ const SCENARIO_BLUEPRINTS = Object.freeze({
 });
 
 const BRAND_ASSETS = Object.freeze({
-  logo: '/assets/branding/wyked-samurai-guild-logo-design.svg',
-  compactLogo: '/assets/branding/wyked-samurai-guild-logo-design.svg',
+  logo: '/assets/WGSGuildLogo.png',
+  compactLogo: '/assets/WGSGuildLogo.png',
 });
 
 
@@ -2364,32 +2364,20 @@ function Header(path) {
         <div class="header-menu">
           <button type="button" class="pill-btn header-glass-btn ${isCollapsed ? 'hide-when-header-collapsed' : ''}" id="main-menu-btn" aria-haspopup="true" aria-expanded="false">Menu ▾</button>
           <div class="account-menu-dropdown header-dropdown-menu" id="main-menu-dropdown">
-            <div class="menu-group-label">Home</div>
-            <a href="${linkFor('/home')}">Home</a>
-            <div class="menu-group-label">Nexus</div>
-            <a href="${linkFor('/nexus')}">Nexus</a>
-            <div class="menu-group-label">Professional</div>
-            <a href="${linkFor('/nexus/professional')}">Professional</a>
-            <div class="menu-group-label">Roleplay</div>
-            <a href="${linkFor('/nexus/roleplay')}">Roleplay</a>
-            <div class="menu-group-label">Hub</div>
-            <a href="${linkFor('/hub')}">Hub</a>
-            <div class="menu-group-label">Social</div>
-            <a href="${linkFor('/hub/social')}">Social</a>
-            <div class="menu-group-label">Recruiter</div>
-            <a href="${linkFor('/hub/recruiter')}">Recruiter</a>
-            <div class="menu-group-label">Reviews</div>
-            <a href="${linkFor('/hub/reviews')}">Reviews</a>
-          </div>
-        </div>
-        <div class="header-menu">
-          <button type="button" class="pill-btn header-glass-btn ${isCollapsed ? 'hide-when-header-collapsed' : ''}" id="utilities-menu-btn" aria-haspopup="true" aria-expanded="false">Utilities ▾</button>
-          <div class="account-menu-dropdown header-dropdown-menu" id="utilities-menu-dropdown">
-            <a href="${linkFor('/utilities/notifications')}">Notifications</a>
-            <a href="${linkFor('/utilities/invites')}">Invites</a>
-            <a href="${linkFor('/utilities/room-updates')}">Room updates</a>
-            <a href="${linkFor('/utilities/scenario-updates')}">Scenario updates</a>
-            <a href="${linkFor('/utilities/tools')}">More tools (soon)</a>
+            <a class="menu-parent-link" href="${linkFor('/home')}">Home</a>
+            <a class="menu-parent-link" href="${linkFor('/nexus')}">Nexus</a>
+            <div class="menu-submenu">
+              <a href="${linkFor('/nexus/professional')}">Professional</a>
+              <a href="${linkFor('/nexus/roleplay')}">Roleplay</a>
+            </div>
+            <a class="menu-parent-link" href="${linkFor('/hub')}">Hub</a>
+            <div class="menu-submenu">
+              <a href="${linkFor('/hub/social')}">Social</a>
+              <a href="${linkFor('/hub/recruiter')}">Recruiter</a>
+              <a href="${linkFor('/hub/reviews')}">Reviews</a>
+            </div>
+            <a class="menu-parent-link" href="${linkFor('/discussions')}">Discussions</a>
+            <a class="menu-parent-link" href="${linkFor('/profile')}">Profile</a>
           </div>
         </div>
         ${state.currentUser ? `
@@ -2397,7 +2385,6 @@ function Header(path) {
             <button type="button" class="pill-btn header-glass-btn account-menu-btn ${isCollapsed ? 'hide-when-header-collapsed' : ''}" id="account-menu-btn" aria-haspopup="true" aria-expanded="false">${escapeHtml(accountLabel)} ▾</button>
             <div class="account-menu-dropdown header-dropdown-menu" id="account-menu-dropdown">
               <div class="menu-group-label">Account</div>
-              <a href="${linkFor('/profile')}">Profile</a>
               <a href="${linkFor('/resume')}">Resume</a>
               <a href="${linkFor('/settings')}">Settings</a>
               ${accountTypeLink}
@@ -5656,8 +5643,6 @@ function attachHeaderActions() {
     };
   }
 
-  const utilitiesMenuButton = document.getElementById('utilities-menu-btn');
-  const utilitiesMenuDropdown = document.getElementById('utilities-menu-dropdown');
   const mainMenuButton = document.getElementById('main-menu-btn');
   const mainMenuDropdown = document.getElementById('main-menu-dropdown');
   const accountMenuButton = document.getElementById('account-menu-btn');
@@ -5666,7 +5651,6 @@ function attachHeaderActions() {
   const closeHeaderMenus = (except) => {
     const menus = [
       { id: 'main', button: mainMenuButton, dropdown: mainMenuDropdown },
-      { id: 'utilities', button: utilitiesMenuButton, dropdown: utilitiesMenuDropdown },
       { id: 'account', button: accountMenuButton, dropdown: accountMenuDropdown },
     ];
     menus.forEach((menu) => {
@@ -5687,15 +5671,6 @@ function attachHeaderActions() {
     };
   }
 
-  if (utilitiesMenuButton && utilitiesMenuDropdown) {
-    utilitiesMenuButton.onclick = (event) => {
-      event.stopPropagation();
-      const isOpen = utilitiesMenuDropdown.classList.toggle('is-open');
-      utilitiesMenuButton.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-      closeHeaderMenus('utilities');
-    };
-  }
-
   if (accountMenuButton && accountMenuDropdown) {
     accountMenuButton.onclick = (event) => {
       event.stopPropagation();
@@ -5709,8 +5684,6 @@ function attachHeaderActions() {
     document.addEventListener('click', (event) => {
       const accountButton = document.getElementById('account-menu-btn');
       const accountDropdown = document.getElementById('account-menu-dropdown');
-      const utilitiesButton = document.getElementById('utilities-menu-btn');
-      const utilitiesDropdown = document.getElementById('utilities-menu-dropdown');
       const mainButton = document.getElementById('main-menu-btn');
       const mainDropdown = document.getElementById('main-menu-dropdown');
       if (mainDropdown && mainButton && !mainDropdown.contains(event.target) && event.target !== mainButton) {
@@ -5720,10 +5693,6 @@ function attachHeaderActions() {
       if (accountDropdown && accountButton && !accountDropdown.contains(event.target) && event.target !== accountButton) {
         accountDropdown.classList.remove('is-open');
         accountButton.setAttribute('aria-expanded', 'false');
-      }
-      if (utilitiesDropdown && utilitiesButton && !utilitiesDropdown.contains(event.target) && event.target !== utilitiesButton) {
-        utilitiesDropdown.classList.remove('is-open');
-        utilitiesButton.setAttribute('aria-expanded', 'false');
       }
     });
     headerOutsideClickHandlerBound = true;
