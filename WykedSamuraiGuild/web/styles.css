@@ -214,10 +214,31 @@ body {
   padding: 8px 10px;
   border-radius: 8px;
   font-size: 0.88rem;
+  display: block;
 }
 
 .account-menu-dropdown a:hover {
   background: var(--panel-soft);
+}
+
+.menu-parent-link {
+  font-weight: 600;
+}
+
+.menu-submenu {
+  display: grid;
+  gap: 4px;
+  margin: -2px 0 2px;
+  padding: 0 0 2px 14px;
+}
+
+.menu-submenu a {
+  font-size: 0.84rem;
+  color: var(--text-muted);
+}
+
+.menu-submenu a:hover {
+  color: var(--text-main);
 }
 
 .menu-group-label {
