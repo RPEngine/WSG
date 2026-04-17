@@ -4814,6 +4814,254 @@ function syncAuthStateFromSupabase(session) {
   state.auth.loading = false;
 }
 
+function normalizeSupabaseProfileRecord(record = {}, fallbackUser = null) {
+  const authUser = fallbackUser || state.auth.user;
+  const authEmail = String(authUser?.email || '').trim();
+  const emailName = authEmail.split('@')[0] || 'member';
+  const username = String(
+    record.username
+    || fallbackUser?.username
+    || authUser?.user_metadata?.username
+    || emailName,
+  ).trim();
+  const displayName = String(
+    record.display_name
+    || record.displayName
+    || fallbackUser?.displayName
+    || authUser?.user_metadata?.displayName
+    || authUser?.user_metadata?.full_name
+    || username
+    || authEmail
+    || 'WSG Member',
+  ).trim();
+  const legalName = String(
+    record.legal_name
+    || fallbackUser?.legalName
+    || authUser?.user_metadata?.legalName
+    || authUser?.user_metadata?.full_name
+    || displayName,
+  ).trim();
+  return {
+    ...fallbackUser,
+    id: String(record.user_id || fallbackUser?.id || authUser?.id || ''),
+    userId: String(record.user_id || fallbackUser?.id || authUser?.id || ''),
+    username,
+    displayName,
+    legalName,
+    email: String(record.email || fallbackUser?.email || authEmail || '').trim(),
+    role: String(record.role || fallbackUser?.role || 'member').trim(),
+    profileVisibility: String(record.visibility || record.profile_visibility || fallbackUser?.profileVisibility || 'public').toLowerCase() === 'private'
+      ? 'private'
+      : 'public',
+    createdAt: record.created_at || fallbackUser?.createdAt || null,
+    updatedAt: record.updated_at || fallbackUser?.updatedAt || null,
+    supabaseProfile: record,
+  };
+}
+
+function classifyProfileQueryFailure(error) {
+  const rawMessage = error instanceof Error ? error.message : String(error || '');
+  const message = rawMessage.toLowerCase();
+  const code = String(error?.code || error?.status || '').toLowerCase();
+  if (code === 'pgrst116' || message.includes('0 rows')) {
+    return 'no_row_found';
+  }
+  if (code === '401' || code === '403' || code === '42501' || message.includes('row-level security') || message.includes('permission denied')) {
+    return 'permission_or_rls';
+  }
+  if (message.includes('jwt') || message.includes('not authenticated') || message.includes('auth')) {
+    return 'auth_user_missing';
+  }
+  return 'query_failure';
+}
+
+async function fetchSupabaseProfileRecord(authUser) {
+  if (!supabase) {
+    throw new Error('Supabase client is not available.');
+  }
+  if (!authUser?.id) {
+    throw new Error('Authenticated Supabase user is missing.');
+  }
+  const username = String(authUser?.user_metadata?.username || '').trim();
+  const email = String(authUser?.email || '').trim().toLowerCase();
+  const lookupAttempts = [
+    { key: 'user_id', value: authUser.id },
+    { key: 'id', value: authUser.id },
+    ...(email ? [{ key: 'email', value: email }] : []),
+    ...(username ? [{ key: 'username', value: username }] : []),
+  ];
+  for (const attempt of lookupAttempts) {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq(attempt.key, attempt.value)
+      .limit(1)
+      .maybeSingle();
+    if (error) {
+      const reason = classifyProfileQueryFailure(error);
+      if (reason === 'no_row_found') {
+        console.info('[profile:frontend] profile lookup returned no row', { key: attempt.key, value: attempt.value });
+        continue;
+      }
+      console.error('[profile:frontend] profile lookup query failed', {
+        key: attempt.key,
+        value: attempt.value,
+        reason,
+        code: error?.code || null,
+        message: error?.message || String(error),
+        details: error?.details || null,
+        hint: error?.hint || null,
+      });
+      throw error;
+    }
+    if (data) {
+      if (attempt.key !== 'user_id' && data.user_id !== authUser.id) {
+        const { error: remapError } = await supabase
+          .from('profiles')
+          .update({ user_id: authUser.id, updated_at: new Date().toISOString() })
+          .eq('id', data.id);
+        if (remapError) {
+          console.warn('[profile:frontend] profile row found using fallback key but failed to remap user_id', {
+            lookupKey: attempt.key,
+            authUserId: authUser.id,
+            rowId: data.id,
+            code: remapError?.code || null,
+            message: remapError?.message || String(remapError),
+          });
+        }
+      }
+      console.log('[profile:frontend] profile row loaded', { lookupKey: attempt.key, authUserId: authUser.id, rowId: data.id || null });
+      return data;
+    }
+  }
+  return null;
+}
+
+async function createSupabaseProfileRecord(authUser, seeded = {}) {
+  if (!supabase) throw new Error('Supabase client is not available.');
+  if (!authUser?.id) throw new Error('Authenticated Supabase user is missing.');
+  const email = String(authUser?.email || '').trim().toLowerCase();
+  const emailName = email.split('@')[0] || 'member';
+  const username = String(seeded.username || authUser?.user_metadata?.username || emailName || `member-${String(authUser.id).slice(0, 8)}`).trim();
+  const displayName = String(
+    seeded.displayName
+    || seeded.display_name
+    || authUser?.user_metadata?.displayName
+    || authUser?.user_metadata?.full_name
+    || username
+    || email,
+  ).trim();
+  const profilePayload = {
+    user_id: authUser.id,
+    email,
+    username,
+    display_name: displayName,
+    visibility: String(seeded.visibility || 'public').toLowerCase() === 'private' ? 'private' : 'public',
+    updated_at: new Date().toISOString(),
+  };
+  const { data, error } = await supabase
+    .from('profiles')
+    .upsert(profilePayload, { onConflict: 'user_id' })
+    .select('*')
+    .single();
+  if (error) {
+    console.error('[profile:frontend] profile auto-create failed', {
+      authUserId: authUser.id,
+      code: error?.code || null,
+      message: error?.message || String(error),
+      details: error?.details || null,
+      hint: error?.hint || null,
+      reason: classifyProfileQueryFailure(error),
+    });
+    throw error;
+  }
+  console.log('[profile:frontend] profile row auto-created', { authUserId: authUser.id, rowId: data?.id || null });
+  return data;
+}
+
+async function resolveOwnSupabaseProfile({ createIfMissing = true } = {}) {
+  const authUser = state.auth.user;
+  if (!authUser?.id) {
+    console.warn('[profile:frontend] profile load skipped: authenticated user is missing');
+    return { status: 'auth_user_missing', profile: null, error: new Error('Authenticated user session is missing.') };
+  }
+  try {
+    const existing = await fetchSupabaseProfileRecord(authUser);
+    if (existing) {
+      return { status: 'ready', profile: existing, error: null };
+    }
+    if (!createIfMissing) {
+      console.info('[profile:frontend] no profile row found; setup/create flow required', { authUserId: authUser.id });
+      return { status: 'no_row_found', profile: null, error: null };
+    }
+    const created = await createSupabaseProfileRecord(authUser, {});
+    return { status: 'created', profile: created, error: null };
+  } catch (error) {
+    return { status: classifyProfileQueryFailure(error), profile: null, error };
+  }
+}
+
+async function upsertOwnSupabaseProfileFromOnboarding({ resumeProfile = {}, skillProfile = {} } = {}) {
+  const authUser = state.auth.user;
+  if (!supabase || !authUser?.id) {
+    return null;
+  }
+  const currentResolved = await resolveOwnSupabaseProfile({ createIfMissing: true });
+  const existingProfile = currentResolved.profile || {};
+  const fallbackEmail = String(authUser?.email || '').trim().toLowerCase();
+  const fallbackUsername = String(authUser?.user_metadata?.username || fallbackEmail.split('@')[0] || `member-${String(authUser.id).slice(0, 8)}`).trim();
+  const parsedSkills = Array.isArray(skillProfile.skills)
+    ? skillProfile.skills
+    : (Array.isArray(resumeProfile.skills) ? resumeProfile.skills : []);
+  const displayName = String(
+    resumeProfile.preferredName
+    || resumeProfile.fullName
+    || existingProfile.display_name
+    || authUser?.user_metadata?.displayName
+    || fallbackUsername,
+  ).trim();
+  const payload = {
+    user_id: authUser.id,
+    email: String(existingProfile.email || fallbackEmail),
+    username: String(existingProfile.username || fallbackUsername),
+    display_name: displayName,
+    headline: String(resumeProfile.headline || existingProfile.headline || '').trim(),
+    bio: String(resumeProfile.summary || existingProfile.bio || '').trim(),
+    skills: parsedSkills,
+    location: String(resumeProfile.location || existingProfile.location || '').trim(),
+    visibility: String(existingProfile.visibility || 'public').toLowerCase() === 'private' ? 'private' : 'public',
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .upsert(payload, { onConflict: 'user_id' })
+    .select('*')
+    .single();
+  if (error) {
+    console.error('[profile:frontend] onboarding profile upsert failed', {
+      authUserId: authUser.id,
+      code: error?.code || null,
+      message: error?.message || String(error),
+      details: error?.details || null,
+      hint: error?.hint || null,
+      reason: classifyProfileQueryFailure(error),
+    });
+    throw error;
+  }
+
+  const normalized = normalizeSupabaseProfileRecord(data, state.currentUser);
+  state.currentUser = withPersistedOnboardingProfile(normalized);
+  state.activeProfile = normalized;
+  state.profileLoad = {
+    status: 'ready',
+    message: '',
+    isOwnRoute: true,
+  };
+  syncProfilePrivacyFromUser(state.currentUser);
+  return data;
+}
+
 function clearClientSecurityState() {
   const prefixesToClear = [
     ONBOARDING_PROFILE_PREFIX,
@@ -5042,30 +5290,51 @@ async function loadProfileForRoute(path) {
   };
   if (path === '/profile') {
     try {
-      const result = await apiRequest('/profile/me');
-      const normalized = normalizeLayeredProfile(result.profile);
-      if (!normalized.user?.id) {
+      const resolved = await resolveOwnSupabaseProfile({ createIfMissing: true });
+      if (resolved.status === 'auth_user_missing') {
+        state.activeProfile = null;
+        state.profileLoad = {
+          status: 'error',
+          message: 'We could not find an authenticated user session. Please sign in again.',
+          isOwnRoute: true,
+        };
+        return;
+      }
+      if (resolved.status === 'permission_or_rls') {
+        state.activeProfile = state.currentUser || null;
+        state.profileLoad = {
+          status: 'error',
+          message: 'Profile access is blocked by permissions. Please check Supabase RLS policy for your profile row.',
+          isOwnRoute: true,
+        };
+        return;
+      }
+      if (resolved.status === 'query_failure') {
+        state.activeProfile = state.currentUser || null;
+        state.profileLoad = {
+          status: 'error',
+          message: 'Unable to load your profile right now.',
+          isOwnRoute: true,
+        };
+        return;
+      }
+      if (!resolved.profile) {
         state.activeProfile = state.currentUser || null;
         state.profileLoad = {
           status: 'empty',
           message: 'Your profile has not been created yet.',
           isOwnRoute: true,
         };
-        console.warn('[profile:frontend] profile route load returned empty user payload', {
-          path,
-          hasCurrentUser: Boolean(state.currentUser?.id),
-        });
         return;
       }
-      state.activeProfile = normalized.user;
-      state.currentUser = withPersistedOnboardingProfile(normalized.user);
+
+      const normalizedUser = normalizeSupabaseProfileRecord(resolved.profile, state.currentUser);
+      state.activeProfile = normalizedUser;
+      state.currentUser = withPersistedOnboardingProfile(normalizedUser);
       syncProfilePrivacyFromUser(state.currentUser);
-      state.layers = normalized.layers;
-      state.availableLayers = normalized.availableLayers;
-      state.lockedLayers = normalized.lockedLayers;
-      if (!state.availableLayers.includes(state.activeLayer)) {
-        state.activeLayer = state.availableLayers[0] || 'free';
-      }
+      state.layers = state.layers || {};
+      state.availableLayers = state.availableLayers || ['free'];
+      state.lockedLayers = state.lockedLayers || ['professional', 'roleplay'];
       state.profileLoad = {
         status: 'ready',
         message: '',
@@ -5073,14 +5342,14 @@ async function loadProfileForRoute(path) {
       };
       console.log('[profile:frontend] profile route load success', {
         path,
-        hasCurrentUser: Boolean(state.currentUser),
         userId: state.currentUser?.id || null,
-        activeLayer: state.activeLayer,
+        source: 'supabase.profiles',
+        resolution: resolved.status,
       });
     } catch (error) {
       const rawMessage = error instanceof Error ? error.message : String(error);
-      const lowerMessage = rawMessage.toLowerCase();
-      const notFound = lowerMessage.includes('not found') || lowerMessage.includes('404');
+      const reason = classifyProfileQueryFailure(error);
+      const notFound = reason === 'no_row_found';
       state.activeProfile = state.currentUser || null;
       state.profileLoad = {
         status: notFound ? 'empty' : 'error',
@@ -5092,6 +5361,7 @@ async function loadProfileForRoute(path) {
       console.error('[profile:frontend] profile route load failure', {
         path,
         message: rawMessage,
+        reason,
         hasCurrentUser: Boolean(state.currentUser?.id),
         userId: state.currentUser?.id || null,
         error,
@@ -6876,7 +7146,7 @@ function attachOnboardingProfileSetupHandlers() {
 
   const resumeForm = document.getElementById('onboarding-resume-form');
   if (resumeForm) {
-    resumeForm.onsubmit = (event) => {
+    resumeForm.onsubmit = async (event) => {
       event.preventDefault();
       const formData = new FormData(resumeForm);
       const currentProfile = readOnboardingProfile(currentUser.id) || {};
@@ -6906,15 +7176,27 @@ function attachOnboardingProfileSetupHandlers() {
           skills: parsedSkills.length ? parsedSkills : (currentProfile.skillProfile?.skills || []),
         },
       }, currentUser.id);
-      state.currentUser = withPersistedOnboardingProfile(state.currentUser);
-      setStatusMessage('Resume profile saved.', 'success');
+      try {
+        await upsertOwnSupabaseProfileFromOnboarding({
+          resumeProfile,
+          skillProfile: {
+            ...(currentProfile.skillProfile || {}),
+            skills: parsedSkills.length ? parsedSkills : (currentProfile.skillProfile?.skills || []),
+          },
+        });
+        state.currentUser = withPersistedOnboardingProfile(state.currentUser);
+        setStatusMessage('Resume profile saved and synced to Supabase profile record.', 'success');
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        setStatusMessage(`Resume saved locally, but profile sync failed: ${message}`, 'error');
+      }
       render();
     };
   }
 
   const skillForm = document.getElementById('onboarding-skill-form');
   if (skillForm) {
-    skillForm.onsubmit = (event) => {
+    skillForm.onsubmit = async (event) => {
       event.preventDefault();
       const formData = new FormData(skillForm);
       const currentProfile = readOnboardingProfile(currentUser.id) || {};
@@ -6922,19 +7204,29 @@ function attachOnboardingProfileSetupHandlers() {
         .split(',')
         .map((entry) => entry.trim())
         .filter(Boolean);
+      const skillProfile = {
+        skills,
+        tradeExperience: String(formData.get('tradeExperience') || '').trim(),
+        toolsSystems: String(formData.get('toolsSystems') || '').trim(),
+        specialties: String(formData.get('specialties') || '').trim(),
+        updatedAt: new Date().toISOString(),
+      };
       saveOnboardingProfile({
         ...currentProfile,
         profileSetupSkipped: false,
-        skillProfile: {
-          skills,
-          tradeExperience: String(formData.get('tradeExperience') || '').trim(),
-          toolsSystems: String(formData.get('toolsSystems') || '').trim(),
-          specialties: String(formData.get('specialties') || '').trim(),
-          updatedAt: new Date().toISOString(),
-        },
+        skillProfile,
       }, currentUser.id);
-      state.currentUser = withPersistedOnboardingProfile(state.currentUser);
-      setStatusMessage('Skill profile saved.', 'success');
+      try {
+        await upsertOwnSupabaseProfileFromOnboarding({
+          resumeProfile: currentProfile.resumeProfile || {},
+          skillProfile,
+        });
+        state.currentUser = withPersistedOnboardingProfile(state.currentUser);
+        setStatusMessage('Skill profile saved and synced to Supabase profile record.', 'success');
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        setStatusMessage(`Skills saved locally, but profile sync failed: ${message}`, 'error');
+      }
       render();
     };
   }
