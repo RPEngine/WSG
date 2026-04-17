@@ -51,13 +51,41 @@ function mapProfessionalProfileRow(row) {
   };
 }
 
-export async function ensureAppUser({ userId, authProviderId = "", email = "" }) {
+export async function ensureAppUser({
+  userId,
+  authProviderId = "",
+  email = "",
+  legalName = "",
+  role = "employee_member",
+  organizationName = "",
+}) {
   const safeEmail = String(email || "").trim().toLowerCase();
   const safeProviderId = String(authProviderId || "").trim();
+  const fallbackLegalName = String(legalName || safeEmail.split("@")[0] || "Guild Member").trim() || "Guild Member";
+  const safeRole = String(role || "employee_member").trim() || "employee_member";
+  const safeOrganization = String(organizationName || "").trim();
+
+  await pool.query(
+    `INSERT INTO users (
+      id,
+      legal_name,
+      email,
+      role,
+      organization_name,
+      auth_provider,
+      provider_subject,
+      auth_provider_id
+    )
+     VALUES ($1, $2, $3, $4, $5, 'supabase', $6, $6)
+     ON CONFLICT (id)
+     DO NOTHING`,
+    [userId, fallbackLegalName, safeEmail, safeRole, safeOrganization, safeProviderId],
+  );
 
   await pool.query(
     `UPDATE users
      SET auth_provider_id = COALESCE(NULLIF($2, ''), auth_provider_id),
+         provider_subject = COALESCE(NULLIF($2, ''), provider_subject),
          email = COALESCE(NULLIF($3, ''), email),
          updated_at = NOW()
      WHERE id = $1`,
