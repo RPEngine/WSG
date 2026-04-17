@@ -36,7 +36,7 @@ import {
 export async function getMyProfile(req, res) {
   console.log("[profile] profile fetch request received", { userId: req.user.id, email: req.user.email });
   const profile = await getOwnUnifiedProfile(req.user);
-  console.log("[profile] profile fetch success", { userId: profile?.user?.id, email: profile?.user?.email });
+  console.log("[profile] profile fetch success", { userId: profile?.id, email: profile?.email });
   return res.json({ profile });
 }
 
