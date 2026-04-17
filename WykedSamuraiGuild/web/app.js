@@ -1396,15 +1396,23 @@ function ScenarioCard({ title, summary, status, timeRemaining, tone = 'harbor', 
 }
 
 function MemberCard(member) {
+  const visibility = member?.profileVisibility === 'private' ? 'private' : 'public';
+  const showFullListing = visibility === 'public' && member?.showInMemberSearch !== false;
+  const subtitle = showFullListing
+    ? (member.bio ? escapeHtml(member.bio) : '<span class="muted">No about section yet.</span>')
+    : '<span class="muted">Private member profile. Limited preview.</span>';
+  const statusTag = String(member?.primaryArchetype || '').trim().toLowerCase() === 'ronin' ? 'Ronin' : 'Samurai';
   return `
     <article class="card member-row">
       <div>${avatarMarkup(member)}</div>
       <div>
         <h3 style="margin:0;">${escapeHtml(member.displayName)}</h3>
         <p class="muted" style="margin:4px 0;">@${escapeHtml(member.username)}</p>
-        <p>${member.bio ? escapeHtml(member.bio) : '<span class="muted">No bio yet.</span>'}</p>
+        <p>${subtitle}</p>
       </div>
       <div class="member-meta">
+        <span class="room-visibility-badge ${visibility === 'private' ? 'is-private' : 'is-public'}">${visibility.toUpperCase()}</span>
+        <span class="skill-tag">${escapeHtml(statusTag)}</span>
         <span>Trials completed: <strong>${escapeHtml(member.trialCount || 0)}</strong></span>
         <a class="pill-btn" href="#/members/${escapeAttr(member.id)}">View profile</a>
       </div>
@@ -3245,10 +3253,10 @@ function hubSocialPage() {
       <article class="card panel-surface panel-surface--soft hub-snapshot-card">
         <p class="hero-kicker">People Search</p>
         <h4>${escapeHtml(profile.displayName || profile.username || 'Unknown User')}</h4>
-        <p class="muted">${escapeHtml(profile.role || profile.headline || 'Community member')}</p>
-        <p class="muted">Badges: ${escapeHtml(Array.isArray(profile.badges) && profile.badges.length ? profile.badges.join(', ') : 'Newcomer')}</p>
-        <p class="muted">Score: ${escapeHtml(String(profile.score || '—'))} · Reputation: ${escapeHtml(String(profile.reputation || 'Building'))}</p>
-        <p class="muted">Metadata: ${escapeHtml(profile.location || 'Location pending')} · ${escapeHtml(profile.availability || 'Status pending')}</p>
+        <p class="muted">${escapeHtml(profile.role || profile.headline || 'Community member')} · <span class="room-visibility-badge ${(profile.profileVisibility === 'private') ? 'is-private' : 'is-public'}">${escapeHtml((profile.profileVisibility || 'public').toUpperCase())}</span></p>
+        <p class="muted">${profile.profileVisibility === 'private' ? 'Private profile: full details available only after approved access.' : `Badges: ${escapeHtml(Array.isArray(profile.badges) && profile.badges.length ? profile.badges.join(', ') : 'Newcomer')}`}</p>
+        <p class="muted">${profile.profileVisibility === 'private' ? 'Limited preview in search results.' : `Score: ${escapeHtml(String(profile.score || '—'))} · Reputation: ${escapeHtml(String(profile.reputation || 'Building'))}`}</p>
+        <p class="muted">${profile.profileVisibility === 'private' ? 'Metadata hidden for private profile.' : `Metadata: ${escapeHtml(profile.location || 'Location pending')} · ${escapeHtml(profile.availability || 'Status pending')}`}</p>
         <a class="pill-btn" href="${linkFor(`/members/${profile.id || ''}`)}">Open profile</a>
       </article>
     `).join('')
@@ -3356,7 +3364,23 @@ function recruitersPage() {
 }
 
 function settingsPage() {
-  return card('Settings', '<p class="muted">Account and preference controls will be expanded here. Current editable settings remain in Profile.</p>');
+  const visibility = state.profilePrivacy.visibility === 'private' ? 'Private' : 'Public';
+  return `
+    <section class="card panel-surface panel-surface--transparent">
+      <h3>Profile Settings</h3>
+      <p class="muted">Manage profile visibility and access controls from your Profile page settings section.</p>
+      <ul class="list compact-list">
+        <li><strong>Profile Visibility:</strong> ${escapeHtml(visibility)}</li>
+        <li><strong>Allow shareable link:</strong> ${state.profilePrivacy.allowShareableLink ? 'On' : 'Off'}</li>
+        <li><strong>Allow access requests:</strong> ${state.profilePrivacy.allowAccessRequests ? 'On' : 'Off'}</li>
+        <li><strong>Allow recruiter requests:</strong> ${state.profilePrivacy.allowRecruiterAccessRequests ? 'On' : 'Off'}</li>
+        <li><strong>Show in member search:</strong> ${state.profilePrivacy.showInMemberSearch ? 'On' : 'Off'}</li>
+      </ul>
+      <div class="actions">
+        <a class="pill-btn cta-primary" href="${linkFor('/profile')}">Open Profile Settings</a>
+      </div>
+    </section>
+  `;
 }
 
 function characterDetailPage(path) {
@@ -3401,6 +3425,20 @@ function profilePage() {
   if (!profile) {
     return card('Profile', '<p class="muted">Profile is unavailable right now.</p>');
   }
+  const visibility = profile?.profileVisibility === 'private' ? 'private' : 'public';
+  const isRecruiterViewer = String(state.currentUser?.role || '').trim().toLowerCase() === 'recruiter';
+  const freeLayer = profile.layers?.free || {};
+  const displayName = freeLayer.displayName || profile.displayName || profile.legalName || profile.username || 'WSG Member';
+  const tagline = freeLayer.headline || profile.headline || profile.role || profile.organizationName || 'Guild member';
+  const about = freeLayer.bio || profile.bio || 'No about section added yet.';
+  const skills = Array.isArray(freeLayer.skills) ? freeLayer.skills : (Array.isArray(profile.skillsInterests) ? profile.skillsInterests : []);
+  const uniqueSkills = [...new Set(skills.map((item) => String(item || '').trim()).filter(Boolean))];
+  const samuraiStatus = String(profile?.primaryArchetype || '').trim().toLowerCase() === 'ronin' ? 'Ronin' : 'Samurai';
+  const shareableRoute = `/profile/${encodeURIComponent(profile.id || '')}`;
+  const profileUrl = `${location.origin}${location.pathname}#${shareableRoute}`;
+  const canShowShareLink = visibility === 'public' || profile?.allowShareableLink === true || isOwnProfileRoute;
+  const recruiterInfoEnabled = Boolean(profile?.allowRecruiterAccessRequests);
+
   const isLockedProfile = !isOwnProfileRoute && profile.locked === true;
   if (isLockedProfile) {
     const canRequestAccess = profile?.access?.canRequestAccess === true;
@@ -3409,42 +3447,23 @@ function profilePage() {
     return `
       <section class="card profile-edit-section panel-surface panel-surface--transparent">
         <p class="hero-kicker">Private Profile</p>
-        <h3>${escapeHtml(profile.displayName || profile.username || 'Private Member')}</h3>
+        <h3>${escapeHtml(displayName)}</h3>
+        <p class="muted">@${escapeHtml(profile.username || 'username-pending')} · ${escapeHtml(samuraiStatus)} · <span class="room-visibility-badge is-private">PRIVATE</span></p>
         <p class="muted">${escapeHtml(requestLabel)}</p>
         <p class="muted">This profile is private and full details are hidden until the owner grants access.</p>
-        ${canRequestAccess ? `<button class="pill-btn cta-primary" id="request-profile-access-btn" type="button">${requestStatus === 'pending' ? 'Request Pending' : 'Request Access'}</button>` : '<p class="muted">Access requests are disabled for this profile.</p>'}
+        ${canShowShareLink ? `<p class="muted">Direct profile route: <code>${escapeHtml(profileUrl)}</code></p>` : ''}
+        ${canRequestAccess ? `<button class="pill-btn cta-primary" id="request-profile-access-btn" type="button">${requestStatus === 'pending' ? 'Request Pending' : (isRecruiterViewer ? 'Request Recruiter Access' : 'Request Access')}</button>` : '<p class="muted">Access requests are disabled for this profile.</p>'}
       </section>
     `;
   }
 
   const activeLayer = isOwnProfileRoute ? (state.activeLayer || 'free') : 'free';
-  const activeData = isOwnProfileRoute ? (state.layers?.[activeLayer] || {}) : (profile.layers?.free || {});
+  const activeData = isOwnProfileRoute ? (state.layers?.[activeLayer] || {}) : freeLayer;
   const profileType = normalizeProfileType(profile);
   const isCompanyProfile = profileType === 'Company' || profileType === 'Recruiter';
   const profileSource = readProfileFrameworkSource(profile, activeData, isOwnProfileRoute);
-  const allSkills = [
-    ...(Array.isArray(activeData.skills) ? activeData.skills : []),
-    ...(Array.isArray(profileSource.skillProfile?.skills) ? profileSource.skillProfile.skills : []),
-  ].map((skill) => String(skill || '').trim()).filter(Boolean);
-  const uniqueSkills = [...new Set(allSkills)];
-  const identityName = isCompanyProfile
-    ? (profile.organizationName || profile.displayName || profile.legalName || profile.username)
-    : (activeData.displayName || profile.displayName || profile.legalName || profile.username);
-  const headlineText = activeData.headline || profileSource.resumeProfile?.headline || profile.bio || '';
   const joinedLabel = formatDate(profile.createdAt);
-  const personWorkModes = [
-    profileSource.onboardingProfile?.workPreferences?.remote ? 'Remote' : '',
-    profileSource.onboardingProfile?.workPreferences?.onSite ? 'On-site' : '',
-    profileSource.onboardingProfile?.workPreferences?.hybrid ? 'Hybrid' : '',
-    profileSource.onboardingProfile?.workPreferences?.reliableTransportation ? 'Reliable transportation' : '',
-    profileSource.onboardingProfile?.workPreferences?.publicTransportation ? 'Public transportation' : '',
-    profileSource.onboardingProfile?.workPreferences?.relocationNeeded ? 'Relocation needed' : '',
-  ].filter(Boolean);
-  const companyWorkModes = [
-    profileSource.companyProfile?.workModel || '',
-    profileSource.companyProfile?.relocationSupport ? 'Relocation support available' : '',
-    profileSource.companyProfile?.schedulingExpectations || '',
-  ].filter(Boolean);
+  const identityName = isCompanyProfile ? (profile.organizationName || displayName) : displayName;
 
   const tabMarkup = PROFILE_LAYER_ORDER.map((layerKey) => {
     const meta = PROFILE_LAYER_META[layerKey];
@@ -3461,89 +3480,75 @@ function profilePage() {
   const layerBioLabel = activeLayer === 'professional' ? 'Professional Bio' : activeLayer === 'roleplay' ? 'Roleplay Bio' : 'Short Bio';
   const layerSkillsLabel = activeLayer === 'free' ? 'Basic Tags' : 'Tags / Skills';
 
-  const identitySection = renderProfileFrameworkSection(
-    '1. Identity',
-    'Who are they, when did they join, and where are they based?',
-    [
-      { label: isCompanyProfile ? 'Company / Recruiter Name' : 'Real Name', value: isCompanyProfile ? (profile.organizationName || profile.legalName) : profile.legalName },
-      { label: isCompanyProfile ? 'Display Name' : 'Preferred / Display Name', value: identityName },
-      { label: 'Username', value: profile.username },
-      { label: 'Profile Type', value: profileType },
-      { label: 'Joined Date', value: joinedLabel, fallback: 'Join date pending' },
-      { label: 'Location', value: profileSource.resumeProfile?.location || profileSource.companyProfile?.hqLocation || profile.location, fallback: 'Location pending' },
-    ],
-  );
-
-  const purposeSection = renderProfileFrameworkSection(
-    '2. Purpose on Platform',
-    'What do they want to get out of being here?',
-    [
-      {
-        label: 'Platform Goal',
-        value: profile.motivation || profileSource.onboardingProfile?.platformGoal || profileSource.resumeProfile?.desiredRoles || profileSource.companyProfile?.platformGoal,
-        fallback: 'Purpose not shared yet',
-      },
-      {
-        label: isCompanyProfile ? 'Mission / Company Summary' : 'Professional Summary / About',
-        value: activeData.bio || headlineText || profileSource.resumeProfile?.summary || profileSource.companyProfile?.missionStatement,
-        fallback: 'Summary not added yet',
-      },
-    ],
-  );
-
-  const workStyleSection = renderProfileFrameworkSection(
-    '3. Work Style / Work Access',
-    isCompanyProfile ? 'How they operate and treat employees.' : 'How they work best and what access needs they have.',
-    isCompanyProfile
-      ? [
-        { label: 'Work Model', value: companyWorkModes, fallback: 'Work model not listed yet' },
-        { label: 'Employment Policies', value: profileSource.companyProfile?.employmentPolicies, fallback: 'Employment policies pending' },
-        { label: 'Social / Workplace Policies', value: profileSource.companyProfile?.socialPolicies, fallback: 'Workplace policy details pending' },
-        { label: 'How Employees Are Treated', value: profileSource.companyProfile?.employeeTreatment, fallback: 'Employee experience details pending' },
-      ]
-      : [
-        { label: 'Willing to Relocate', value: profileSource.onboardingProfile?.workPreferences?.relocationWillingness, fallback: 'Relocation preference not set' },
-        { label: 'Transportation / Work Access', value: personWorkModes, fallback: 'Work access preferences pending' },
-      ],
-  );
-
-  const experienceSection = renderProfileFrameworkSection(
-    '4. Experience / Skills / Services',
-    isCompanyProfile ? 'What the organization does and who they want to hire.' : 'Experience details, resume signals, and practical skills.',
-    isCompanyProfile
-      ? [
-        { label: 'Business (What They Do)', value: profileSource.companyProfile?.business, fallback: 'Business focus pending' },
-        { label: 'Services (How They Do It)', value: profileSource.companyProfile?.services, fallback: 'Service model pending' },
-        { label: 'Hiring Priorities', value: profileSource.companyProfile?.hiringPriorities, fallback: 'Hiring priorities not listed yet' },
-      ]
-      : [
-        { label: 'Resume / Work History', value: profileSource.resumeProfile?.workHistory || profileSource.onboardingProfile?.resumeUpload?.fileName, fallback: 'Resume details pending' },
-        { label: 'Skills / Specialties', value: uniqueSkills.length ? uniqueSkills : profileSource.skillProfile?.specialties, fallback: 'Skills not listed yet' },
-        { label: 'Certifications / Education', value: [profileSource.resumeProfile?.certifications, profileSource.resumeProfile?.education].filter(Boolean), fallback: 'Certifications or education not added yet' },
-      ],
-  );
-
   return `
     <section class="feature profile-display-hero guild-identity-hero panel-surface panel-surface--transparent">
       <div class="profile-summary-row">
         ${avatarMarkup(profile, 'lg')}
         <div>
-          <p class="hero-kicker">Unified Profile Framework</p>
+          <p class="hero-kicker">WSG Profile</p>
           <h3 style="margin:0;">${escapeHtml(identityName)}</h3>
-          <p class="muted" style="margin:4px 0;">${escapeHtml(profileType)} · @${escapeHtml(profile.username || 'username-pending')}</p>
-          <p class="muted" style="margin:0;">Tier: ${escapeHtml(profile.accessTier || 'free')} · Subscription: ${escapeHtml(profile.subscriptionStatus || 'inactive')}</p>
+          <p class="muted" style="margin:4px 0;">@${escapeHtml(profile.username || 'username-pending')} · ${escapeHtml(tagline || 'Guild member')}</p>
+          <p class="muted" style="margin:0;">${escapeHtml(samuraiStatus)} · ${escapeHtml(profileType)} · Joined ${escapeHtml(joinedLabel)} · <span class="room-visibility-badge ${visibility === 'private' ? 'is-private' : 'is-public'}">${visibility.toUpperCase()}</span></p>
         </div>
       </div>
-      <p class="profile-display-bio">${escapeHtml(headlineText || 'Profile summary will appear here when available.')}</p>
+      ${canShowShareLink ? `<p class="muted" style="margin:0;">Shareable route: <code>${escapeHtml(profileUrl)}</code></p>` : ''}
+      <p class="profile-display-bio">${escapeHtml(about)}</p>
       <div class="tag-list profile-tag-list">
-        ${uniqueSkills.length ? uniqueSkills.map((skill) => `<span class="skill-tag">${escapeHtml(skill)}</span>`).join('') : '<span class="muted">No skills or services listed yet.</span>'}
+        ${uniqueSkills.length ? uniqueSkills.map((skill) => `<span class="skill-tag">${escapeHtml(skill)}</span>`).join('') : '<span class="muted">No skills listed yet.</span>'}
       </div>
     </section>
 
-    ${identitySection}
-    ${purposeSection}
-    ${workStyleSection}
-    ${experienceSection}
+    ${renderProfileFrameworkSection(
+    'About',
+    'Identity and profile summary.',
+    [
+      { label: 'Display Name', value: displayName },
+      { label: 'Username', value: profile.username },
+      { label: 'Tagline / Role', value: tagline, fallback: 'No tagline added yet' },
+      { label: 'Samurai / Ronin', value: samuraiStatus },
+      { label: 'Profile Type', value: profileType },
+      { label: 'Visibility', value: visibility.toUpperCase() },
+    ],
+  )}
+
+    ${renderProfileFrameworkSection(
+    'Experience / Resume',
+    'Career and contribution signal.',
+    [
+      { label: 'Work History', value: profileSource.resumeProfile?.workHistory || profileSource.onboardingProfile?.resumeUpload?.fileName, fallback: 'Resume details pending' },
+      { label: 'Education', value: profileSource.resumeProfile?.education, fallback: 'Education not added yet' },
+      { label: 'Certifications', value: profileSource.resumeProfile?.certifications, fallback: 'No certifications listed yet' },
+    ],
+  )}
+
+    ${renderProfileFrameworkSection(
+    'Skills / Strengths',
+    'Capabilities and strengths shared on WSG.',
+    [
+      { label: 'Skills', value: uniqueSkills.length ? uniqueSkills : profileSource.skillProfile?.specialties, fallback: 'No skills listed yet' },
+      { label: 'Specialties', value: profileSource.skillProfile?.specialties, fallback: 'Specialties not listed yet' },
+      { label: 'Tools / Systems', value: profileSource.skillProfile?.toolsSystems, fallback: 'Tools not listed yet' },
+    ],
+  )}
+
+    ${renderProfileFrameworkSection(
+    'Connections',
+    'Current network links and connection graph.',
+    [
+      { label: 'Total Connections', value: Array.isArray(profile.connections) ? String(profile.connections.length) : '0' },
+      { label: 'Connection Visibility', value: visibility === 'public' ? 'Visible' : 'Private profile context' },
+    ],
+  )}
+
+    ${recruiterInfoEnabled ? renderProfileFrameworkSection(
+    'Recruiter Info',
+    'Recruiter-facing access preferences.',
+    [
+      { label: 'Recruiter Requests', value: profile.allowRecruiterAccessRequests === true ? 'Enabled' : 'Disabled' },
+      { label: 'Recruiter Visibility', value: visibility === 'public' ? 'Public profile' : 'Private profile request flow required' },
+      { label: 'Recruiter Viewer Context', value: isRecruiterViewer ? 'You are browsing as a recruiter.' : 'Non-recruiter viewer.' },
+    ],
+  ) : ''}
 
     ${!isOwnProfileRoute ? '' : `
     <section class="card profile-tabs-card panel-surface panel-surface--soft" style="margin-top:12px;">
@@ -3607,6 +3612,13 @@ function profilePage() {
         <p id="profile-hub-feedback" class="status-banner ${state.profileHub.message ? `status-${state.profileHub.tone}` : 'status-info'}" role="alert" aria-live="assertive">${escapeHtml(state.profileHub.message || 'Make updates and save when ready.')}</p>
         <label>Legal Name<input name="legalName" value="${escapeAttr(profile.legalName || '')}" required /></label>
         <label>Email<input name="email" value="${escapeAttr(profile.email || '')}" required /></label>
+        <label>Avatar URL<input name="avatarUrl" value="${escapeAttr(profile.avatarUrl || '')}" placeholder="https://..." /></label>
+        <label>Samurai / Ronin Status
+          <select name="samuraiStatus">
+            <option value="samurai" ${samuraiStatus === 'Samurai' ? 'selected' : ''}>Samurai</option>
+            <option value="ronin" ${samuraiStatus === 'Ronin' ? 'selected' : ''}>Ronin</option>
+          </select>
+        </label>
         <label>Role / Title
           <select name="role">
             <option value="employee_member" ${profile.role === 'employee_member' ? 'selected' : ''}>Employee / Member</option>
@@ -5001,12 +5013,29 @@ async function loadProfileForRoute(path) {
   }
 
   const match = path.match(/^\/(?:members|profile)\/([^/]+)$/);
-  if (!match) {
+  const usernameMatch = path.match(/^\/u\/([^/]+)$/);
+  if (!match && !usernameMatch) {
     return;
   }
 
   try {
-    const memberId = decodeURIComponent(match[1]);
+    let memberId = '';
+    if (match) {
+      memberId = decodeURIComponent(match[1]);
+    } else if (usernameMatch) {
+      const username = decodeURIComponent(usernameMatch[1]).toLowerCase();
+      const knownMembers = Array.isArray(state.members) ? state.members : [];
+      const candidate = knownMembers.find((entry) => String(entry.username || '').toLowerCase() === username);
+      memberId = candidate?.id || '';
+    }
+    if (!memberId) {
+      state.activeProfile = null;
+      return;
+    }
+    if (memberId === state.currentUser?.id) {
+      state.activeProfile = state.currentUser;
+      return;
+    }
     const data = await apiRequest(`/members/${encodeURIComponent(memberId)}`);
     state.activeProfile = data.profile;
     console.log('[profile:frontend] member profile fetch success', { memberId });
@@ -5037,10 +5066,11 @@ function applyRouteGuards(path) {
   const isDiscussionRoute = path === '/discussions' || path.startsWith('/discussions/board/') || path.startsWith('/discussions/thread/');
   const isMemberProfileRoute = /^\/members\/[^/]+$/.test(path);
   const isUserProfileRoute = /^\/profile\/[^/]+$/.test(path);
+  const isUsernameProfileRoute = /^\/u\/[^/]+$/.test(path);
   const isCharacterRoute = /^\/characters\/[^/]+$/.test(path);
   const known = routes[path]
     || (isDiscussionRoute ? { key: 'discussions', requiresAuth: true } : null)
-    || (isMemberProfileRoute || isUserProfileRoute ? { key: 'profile', requiresAuth: true } : null)
+    || (isMemberProfileRoute || isUserProfileRoute || isUsernameProfileRoute ? { key: 'profile', requiresAuth: true } : null)
     || (isCharacterRoute ? { key: 'characterDetail', requiresAuth: true } : null)
     || (isScenarioRoute ? { key: 'scenarioDetail', requiresAuth: true } : null);
   if (!known) {
@@ -5555,6 +5585,8 @@ function attachProfileEditHandler() {
         role: String(formData.get('role') || state.currentUser?.role || ''),
         organizationName: String(formData.get('organizationName') || state.currentUser?.organizationName || ''),
       };
+      const avatarUrl = String(formData.get('avatarUrl') || '').trim();
+      const samuraiStatus = String(formData.get('samuraiStatus') || 'samurai').trim().toLowerCase() === 'ronin' ? 'ronin' : 'samurai';
       state.profileHub.saving = true;
       setProfileHubMessage('Saving account settings...', 'info');
       render();
@@ -5568,8 +5600,15 @@ function attachProfileEditHandler() {
         saveOnboardingProfile({
           ...existingOnboarding,
           profileType: nextProfileType,
+          avatarUrl,
+          primaryArchetype: samuraiStatus === 'ronin' ? 'Ronin' : 'Samurai',
         }, state.currentUser.id);
         state.currentUser = withPersistedOnboardingProfile(state.currentUser);
+        state.currentUser = {
+          ...state.currentUser,
+          avatarUrl,
+          primaryArchetype: samuraiStatus === 'ronin' ? 'Ronin' : 'Samurai',
+        };
         state.activeProfile = state.currentUser;
         state.layers = normalized.layers;
         state.availableLayers = normalized.availableLayers;
@@ -6390,7 +6429,7 @@ async function render() {
     if (path.startsWith('/hub') || path === '/members') {
       await ensureMembersLoaded();
     }
-    if (path === '/profile' || /^\/(?:members|profile)\/[^/]+$/.test(path)) {
+    if (path === '/profile' || /^\/(?:members|profile|u)\/[^/]+$/.test(path)) {
       await loadProfileForRoute(path);
     }
     if (path === '/profile') {
@@ -6415,7 +6454,7 @@ async function render() {
 
     const route = routes[path]
       || ((path === '/discussions' || path.startsWith('/discussions/board/') || path.startsWith('/discussions/thread/')) ? { key: 'discussions', requiresAuth: true } : null)
-      || (/^\/(?:members|profile)\/[^/]+$/.test(path) ? { key: 'profile', requiresAuth: true } : null)
+      || (/^\/(?:members|profile|u)\/[^/]+$/.test(path) ? { key: 'profile', requiresAuth: true } : null)
       || (/^\/characters\/[^/]+$/.test(path) ? { key: 'characterDetail', requiresAuth: true } : null)
       || { key: 'fallback' };
     const isScenarioRoute = path === '/scenario' || path.startsWith('/scenario/');
