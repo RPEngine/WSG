@@ -19,7 +19,7 @@ const routes = {
   '/members': { key: 'hubSocial', requiresAuth: true },
   '/discussions': { key: 'discussions', requiresAuth: true },
   '/profile': { key: 'profile', requiresAuth: true },
-  '/profile/edit': { key: 'profileEdit', requiresAuth: true },
+  '/profile/edit': { key: 'profile', requiresAuth: true },
   '/resume': { key: 'resume', requiresAuth: true },
   '/characters': { key: 'characters', requiresAuth: true },
   '/connections': { key: 'connections', requiresAuth: true },
@@ -472,6 +472,13 @@ const state = {
     message: '',
     tone: 'info',
   },
+  profileInlineEdit: {
+    overview: false,
+    resume: false,
+    skills: false,
+    account: false,
+    privacy: false,
+  },
   profilePrivacy: {
     visibility: 'public',
     allowShareableLink: true,
@@ -778,6 +785,11 @@ function setFormMessage(formName, message, tone = 'info') {
 function setProfileHubMessage(message, tone = 'info') {
   state.profileHub.message = message;
   state.profileHub.tone = tone;
+}
+
+function setProfileInlineEdit(sectionKey, isEditing) {
+  if (!sectionKey || !Object.prototype.hasOwnProperty.call(state.profileInlineEdit, sectionKey)) return;
+  state.profileInlineEdit[sectionKey] = Boolean(isEditing);
 }
 
 function getPolicyAcceptanceStorageKey(userId) {
@@ -2605,7 +2617,7 @@ function Header(path) {
             <div class="account-menu-dropdown header-dropdown-menu" id="account-menu-dropdown">
               <div class="menu-group-label">Profile Center</div>
               <a href="${linkFor('/profile')}">View Profile</a>
-              <a href="${linkFor('/profile/edit')}">Edit Profile</a>
+              <a href="${linkFor('/profile')}">Edit Profile</a>
               <a href="${linkFor('/characters')}">Characters</a>
               <a href="${linkFor('/resume')}">Resume / Professional Profile</a>
               <a href="${linkFor('/connections')}">Connections</a>
@@ -3526,7 +3538,6 @@ function profileSectionNav() {
       <p class="hero-kicker">My Profile</p>
       <div class="tabs profile-tabs profile-tabs--section-links">
         <a class="pill-btn" href="#profile-overview">Overview</a>
-        <a class="pill-btn" href="#profile-edit">Edit Profile</a>
         <a class="pill-btn" href="#profile-account-settings">Account Settings</a>
         <a class="pill-btn" href="#profile-connections">Connections</a>
         <a class="pill-btn" href="#profile-activity">Activity</a>
@@ -3821,6 +3832,10 @@ function profilePage() {
   const isSlotLimitReached = slotsUsed >= slotMeta.slotLimit;
   const layerBioLabel = activeLayer === 'professional' ? 'Professional Bio' : activeLayer === 'roleplay' ? 'Roleplay Bio' : 'Short Bio';
   const layerSkillsLabel = activeLayer === 'free' ? 'Basic Tags' : 'Tags / Skills';
+  const resumeProfile = profileSource.resumeProfile || profileSource.onboardingProfile?.resumeProfile || {};
+  const resumeWorkHistory = resumeProfile.workHistory || profileSource.onboardingProfile?.resumeUpload?.fileName || '';
+  const resumeEducation = resumeProfile.education || '';
+  const resumeCertifications = resumeProfile.certifications || '';
 
   const profileContent = `
     ${isOwnProfileRoute ? profileSectionNav() : ''}
@@ -3842,38 +3857,77 @@ function profilePage() {
       </div>
     </section>
 
-    ${renderProfileFrameworkSection(
-    'About',
-    'Identity and profile summary.',
-    [
-      { label: 'Display Name', value: displayName },
-      { label: 'Username', value: profile.username },
-      { label: 'Tagline / Role', value: tagline, fallback: 'No tagline added yet' },
-      { label: 'Samurai / Ronin', value: samuraiStatus },
-      { label: 'Profile Type', value: profileType },
-      { label: 'Visibility', value: visibility.toUpperCase() },
-    ],
-  )}
+    <section class="card panel-surface panel-surface--transparent profile-framework-section">
+      <div class="actions" style="justify-content:space-between; align-items:center;">
+        <h3 style="margin:0;">About</h3>
+        ${isOwnProfileRoute ? `<button class="pill-btn" data-profile-inline-edit="overview" type="button">${state.profileInlineEdit.overview ? 'Close' : 'Edit'}</button>` : ''}
+      </div>
+      <p class="muted">Identity and profile summary.</p>
+      <div class="profile-framework-grid">
+        ${renderFrameworkField('Display Name', displayName)}
+        ${renderFrameworkField('Username', profile.username)}
+        ${renderFrameworkField('Tagline / Role', tagline, 'No tagline added yet')}
+        ${renderFrameworkField('Samurai / Ronin', samuraiStatus)}
+        ${renderFrameworkField('Profile Type', profileType)}
+        ${renderFrameworkField('Visibility', visibility.toUpperCase())}
+      </div>
+      ${isOwnProfileRoute ? `
+        <div id="profile-layer-tabs" class="actions profile-layer-actions" style="margin-top:10px; margin-bottom:10px;">${tabMarkup}</div>
+        ${isLayerLocked ? `
+          <div class="status-banner status-info">
+            <strong>${escapeHtml(PROFILE_LAYER_META[activeLayer]?.label || activeLayer)} layer is locked.</strong>
+            <p style="margin:6px 0 0;">Upgrade your access tier to unlock this layer. Payment flow is not implemented yet.</p>
+          </div>
+        ` : ''}
+        ${state.profileInlineEdit.overview && !isLayerLocked ? `
+          <form id="profile-layer-form" class="form-stack">
+            <input type="hidden" name="layerKey" value="${escapeAttr(activeLayer)}" />
+            <label>Display Name<input name="displayName" value="${escapeAttr(activeData.displayName || '')}" required maxlength="60" /></label>
+            ${(activeLayer === 'professional' || activeLayer === 'roleplay') ? `<label>Headline<input name="headline" value="${escapeAttr(activeData.headline || '')}" maxlength="120" /></label>` : ''}
+            <label>${layerBioLabel}<textarea name="bio" rows="4" maxlength="800">${escapeHtml(activeData.bio || '')}</textarea></label>
+            <label>${layerSkillsLabel} (comma-separated)<input name="skills" value="${escapeAttr((skillsList || []).join(', '))}" /></label>
+            <div class="actions">
+              <button class="pill-btn cta-primary" id="save-profile-layer-btn" type="submit" ${state.profileHub.saving ? 'disabled' : ''}>${state.profileHub.saving ? 'Saving...' : 'Save'}</button>
+              <button class="pill-btn" data-profile-inline-cancel="overview" type="button" ${state.profileHub.saving ? 'disabled' : ''}>Cancel</button>
+            </div>
+          </form>
+        ` : ''}
+      ` : ''}
+    </section>
+
+    <section class="card panel-surface panel-surface--transparent profile-framework-section">
+      <div class="actions" style="justify-content:space-between; align-items:center;">
+        <h3 style="margin:0;">Experience / Resume</h3>
+        ${isOwnProfileRoute ? `<button class="pill-btn" data-profile-inline-edit="resume" type="button">${state.profileInlineEdit.resume ? 'Close' : 'Edit'}</button>` : ''}
+      </div>
+      <p class="muted">Career and contribution signal.</p>
+      <div class="profile-framework-grid">
+        ${renderFrameworkField('Work History', resumeWorkHistory, 'Resume details pending')}
+        ${renderFrameworkField('Education', resumeEducation, 'Education not added yet')}
+        ${renderFrameworkField('Certifications', resumeCertifications, 'No certifications listed yet')}
+      </div>
+      ${isOwnProfileRoute && state.profileInlineEdit.resume ? `
+        <form id="profile-resume-form" class="form-stack" style="margin-top:10px;">
+          <label>Work History<input name="workHistory" value="${escapeAttr(resumeWorkHistory)}" maxlength="240" /></label>
+          <label>Education<input name="education" value="${escapeAttr(resumeEducation)}" maxlength="240" /></label>
+          <label>Certifications<input name="certifications" value="${escapeAttr(resumeCertifications)}" maxlength="240" /></label>
+          <div class="actions">
+            <button class="pill-btn cta-primary" id="save-profile-resume-btn" type="submit">Save</button>
+            <button class="pill-btn" data-profile-inline-cancel="resume" type="button">Cancel</button>
+          </div>
+        </form>
+      ` : ''}
+    </section>
 
     ${renderProfileFrameworkSection(
-    'Experience / Resume',
-    'Career and contribution signal.',
-    [
-      { label: 'Work History', value: profileSource.resumeProfile?.workHistory || profileSource.onboardingProfile?.resumeUpload?.fileName, fallback: 'Resume details pending' },
-      { label: 'Education', value: profileSource.resumeProfile?.education, fallback: 'Education not added yet' },
-      { label: 'Certifications', value: profileSource.resumeProfile?.certifications, fallback: 'No certifications listed yet' },
-    ],
-  )}
-
-    ${renderProfileFrameworkSection(
-    'Skills / Strengths',
-    'Capabilities and strengths shared on WSG.',
-    [
-      { label: 'Skills', value: uniqueSkills.length ? uniqueSkills : profileSource.skillProfile?.specialties, fallback: 'No skills listed yet' },
-      { label: 'Specialties', value: profileSource.skillProfile?.specialties, fallback: 'Specialties not listed yet' },
-      { label: 'Tools / Systems', value: profileSource.skillProfile?.toolsSystems, fallback: 'Tools not listed yet' },
-    ],
-  )}
+      'Skills / Strengths',
+      'Capabilities and strengths shared on WSG. Edit from the About section for the active profile layer.',
+      [
+        { label: 'Skills', value: uniqueSkills.length ? uniqueSkills : profileSource.skillProfile?.specialties, fallback: 'No skills listed yet' },
+        { label: 'Specialties', value: profileSource.skillProfile?.specialties, fallback: 'Specialties not listed yet' },
+        { label: 'Tools / Systems', value: profileSource.skillProfile?.toolsSystems, fallback: 'Tools not listed yet' },
+      ],
+    )}
 
     ${renderProfileFrameworkSection(
     'Connections',
@@ -3896,7 +3950,7 @@ function profilePage() {
 
     ${!isOwnProfileRoute ? '' : `
 
-    <section id="profile-edit" class="card profile-edit-section panel-surface panel-surface--transparent" style="margin-top:12px;">
+    <section class="card profile-edit-section panel-surface panel-surface--transparent" style="margin-top:12px;">
       <h3>${escapeHtml(slotMeta.sectionTitle)}</h3>
       <p class="muted">${escapeHtml(slotMeta.sectionDescription)}</p>
       <p class="muted roleplay-slot-indicator">${slotsUsed} / ${slotMeta.slotLimit} used ${escapeHtml(slotMeta.slotCountLabel)}</p>
@@ -3919,31 +3973,13 @@ function profilePage() {
       ${isSlotLimitReached ? `<p class="muted roleplay-limit-message">${escapeHtml(slotMeta.limitMessage)}</p>` : ''}
     </section>
 
-    <section class="card profile-edit-section panel-surface panel-surface--transparent">
-      <h3>Profile Layers</h3>
-      <p class="muted">Edit each unlocked layer independently. Locked layers show upgrade messaging only for now.</p>
-      <div id="profile-layer-tabs" class="actions profile-layer-actions" style="margin-bottom:10px;">${tabMarkup}</div>
-      ${isLayerLocked ? `
-        <div class="status-banner status-info">
-          <strong>${escapeHtml(PROFILE_LAYER_META[activeLayer]?.label || activeLayer)} layer is locked.</strong>
-          <p style="margin:6px 0 0;">Upgrade your access tier to unlock this layer. Payment flow is not implemented yet.</p>
-        </div>
-      ` : `
-      <form id="profile-layer-form" class="form-stack">
-        <input type="hidden" name="layerKey" value="${escapeAttr(activeLayer)}" />
-        <label>Display Name<input name="displayName" value="${escapeAttr(activeData.displayName || '')}" required maxlength="60" /></label>
-        ${(activeLayer === 'professional' || activeLayer === 'roleplay') ? `<label>Headline<input name="headline" value="${escapeAttr(activeData.headline || '')}" maxlength="120" /></label>` : ''}
-        <label>${layerBioLabel}<textarea name="bio" rows="4" maxlength="800">${escapeHtml(activeData.bio || '')}</textarea></label>
-        <label>${layerSkillsLabel} (comma-separated)<input name="skills" value="${escapeAttr((skillsList || []).join(', '))}" /></label>
-        <button class="pill-btn" id="save-profile-layer-btn" type="submit" ${state.profileHub.saving ? 'disabled' : ''}>${state.profileHub.saving ? 'Saving Layer...' : 'Save Active Layer'}</button>
-      </form>
-      `}
-    </section>
-
     <section id="profile-account-settings" class="card profile-edit-section panel-surface panel-surface--transparent" style="margin-top:12px;">
       <h3>Account Settings</h3>
       <p class="muted">Account settings stay global to your user account (not per layer).</p>
-      <form id="profile-hub-form" class="form-stack">
+      <div class="actions" style="margin-top:10px;">
+        <button class="pill-btn" data-profile-inline-edit="account" type="button">${state.profileInlineEdit.account ? 'Close' : 'Edit'}</button>
+      </div>
+      <form id="profile-hub-form" class="form-stack" ${state.profileInlineEdit.account ? '' : 'hidden'}>
         <p id="profile-hub-feedback" class="status-banner ${state.profileHub.message ? `status-${state.profileHub.tone}` : 'status-info'}" role="alert" aria-live="assertive">${escapeHtml(state.profileHub.message || 'Make updates and save when ready.')}</p>
         <label>Legal Name<input name="legalName" value="${escapeAttr(profile.legalName || '')}" required /></label>
         <label>Email<input name="email" value="${escapeAttr(profile.email || '')}" required /></label>
@@ -3962,14 +3998,20 @@ function profilePage() {
           </select>
         </label>
         <label>Organization<input name="organizationName" value="${escapeAttr(profile.organizationName || '')}" /></label>
-        <button class="pill-btn" id="save-profile-hub-btn" type="submit" ${state.profileHub.saving ? 'disabled' : ''}>${state.profileHub.saving ? 'Saving Account...' : 'Save Account Settings'}</button>
+        <div class="actions">
+          <button class="pill-btn cta-primary" id="save-profile-hub-btn" type="submit" ${state.profileHub.saving ? 'disabled' : ''}>${state.profileHub.saving ? 'Saving...' : 'Save'}</button>
+          <button class="pill-btn" data-profile-inline-cancel="account" type="button" ${state.profileHub.saving ? 'disabled' : ''}>Cancel</button>
+        </div>
       </form>
     </section>
 
     <section class="card profile-edit-section panel-surface panel-surface--transparent" style="margin-top:12px;">
       <h3>Profile Privacy & Visibility</h3>
       <p class="muted">Control profile browsing, share link behavior, and recruiter access requests.</p>
-      <form id="profile-privacy-form" class="form-stack">
+      <div class="actions" style="margin-top:10px;">
+        <button class="pill-btn" data-profile-inline-edit="privacy" type="button">${state.profileInlineEdit.privacy ? 'Close' : 'Edit'}</button>
+      </div>
+      <form id="profile-privacy-form" class="form-stack" ${state.profileInlineEdit.privacy ? '' : 'hidden'}>
         <label>Profile Visibility
           <select name="profileVisibility">
             <option value="public" ${state.profilePrivacy.visibility === 'public' ? 'selected' : ''}>Public</option>
@@ -3980,7 +4022,10 @@ function profilePage() {
         <label><input type="checkbox" name="allowAccessRequests" ${state.profilePrivacy.allowAccessRequests ? 'checked' : ''} /> Allow access requests</label>
         <label><input type="checkbox" name="allowRecruiterAccessRequests" ${state.profilePrivacy.allowRecruiterAccessRequests ? 'checked' : ''} /> Allow recruiter access requests</label>
         <label><input type="checkbox" name="showInMemberSearch" ${state.profilePrivacy.showInMemberSearch ? 'checked' : ''} /> Show in member search</label>
-        <button class="pill-btn" id="save-profile-privacy-btn" type="submit" ${state.profileHub.saving ? 'disabled' : ''}>${state.profileHub.saving ? 'Saving Privacy...' : 'Save Privacy Settings'}</button>
+        <div class="actions">
+          <button class="pill-btn cta-primary" id="save-profile-privacy-btn" type="submit" ${state.profileHub.saving ? 'disabled' : ''}>${state.profileHub.saving ? 'Saving...' : 'Save'}</button>
+          <button class="pill-btn" data-profile-inline-cancel="privacy" type="button" ${state.profileHub.saving ? 'disabled' : ''}>Cancel</button>
+        </div>
       </form>
     </section>
 
@@ -6370,6 +6415,24 @@ function attachProfileEditHandler() {
     };
   }
 
+  document.querySelectorAll('[data-profile-inline-edit]').forEach((button) => {
+    button.onclick = () => {
+      const sectionKey = String(button.getAttribute('data-profile-inline-edit') || '').trim();
+      if (!sectionKey) return;
+      setProfileInlineEdit(sectionKey, !state.profileInlineEdit[sectionKey]);
+      render();
+    };
+  });
+
+  document.querySelectorAll('[data-profile-inline-cancel]').forEach((button) => {
+    button.onclick = () => {
+      const sectionKey = String(button.getAttribute('data-profile-inline-cancel') || '').trim();
+      if (!sectionKey) return;
+      setProfileInlineEdit(sectionKey, false);
+      render();
+    };
+  });
+
   const layerTabs = document.getElementById('profile-layer-tabs');
   if (layerTabs) {
     layerTabs.querySelectorAll('[data-layer-tab]').forEach((button) => {
@@ -6414,6 +6477,7 @@ function attachProfileEditHandler() {
         state.availableLayers = normalized.availableLayers;
         state.lockedLayers = normalized.lockedLayers;
         setProfileHubMessage('Profile layer saved successfully.', 'success');
+        setProfileInlineEdit('overview', false);
       } catch (error) {
         setProfileHubMessage(error instanceof Error ? error.message : 'Unable to save profile layer right now.', 'error');
       } finally {
@@ -6466,6 +6530,7 @@ function attachProfileEditHandler() {
         state.lockedLayers = normalized.lockedLayers;
         setProfileHubMessage('Account settings saved successfully.', 'success');
         setStatusMessage('Account settings saved successfully.', 'success');
+        setProfileInlineEdit('account', false);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unable to save account settings right now.';
         setProfileHubMessage(message, 'error');
@@ -6503,6 +6568,7 @@ function attachProfileEditHandler() {
         setProfileHubMessage('Privacy settings saved successfully.', 'success');
         setStatusMessage('Privacy settings saved.', 'success');
         state.membersLoaded = false;
+        setProfileInlineEdit('privacy', false);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unable to save privacy settings right now.';
         setProfileHubMessage(message, 'error');
@@ -6511,6 +6577,33 @@ function attachProfileEditHandler() {
         state.profileHub.saving = false;
         render();
       }
+    };
+  }
+
+  const profileResumeForm = document.getElementById('profile-resume-form');
+  if (profileResumeForm) {
+    profileResumeForm.onsubmit = (event) => {
+      event.preventDefault();
+      const formData = new FormData(profileResumeForm);
+      const existingOnboarding = readOnboardingProfile(state.currentUser?.id) || {};
+      const resumeProfile = {
+        ...(existingOnboarding.resumeProfile || {}),
+        workHistory: String(formData.get('workHistory') || '').trim(),
+        education: String(formData.get('education') || '').trim(),
+        certifications: String(formData.get('certifications') || '').trim(),
+      };
+      saveOnboardingProfile({
+        ...existingOnboarding,
+        resumeProfile,
+      }, state.currentUser?.id);
+      state.currentUser = withPersistedOnboardingProfile({
+        ...(state.currentUser || {}),
+        resumeProfile,
+      });
+      state.activeProfile = state.currentUser;
+      setProfileInlineEdit('resume', false);
+      setStatusMessage('Resume details saved.', 'success');
+      render();
     };
   }
 
