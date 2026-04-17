@@ -992,6 +992,30 @@ body {
   align-content: start;
 }
 
+.profile-page-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+  gap: 14px;
+  align-items: start;
+}
+
+.profile-main-column {
+  min-width: 0;
+}
+
+.profile-support-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.profile-support-panel .hero-kicker {
+  margin-bottom: 0;
+}
+
+.profile-support-panel h3 {
+  margin: 0;
+}
+
 .tag-list {
   display: flex;
   flex-wrap: wrap;
@@ -2962,6 +2986,10 @@ select:focus-visible {
 
 @media (max-width: 980px) {
   .profile-hub-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-page-layout {
     grid-template-columns: 1fr;
   }
 

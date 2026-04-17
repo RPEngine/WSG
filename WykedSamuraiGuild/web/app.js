@@ -3697,7 +3697,7 @@ function profilePage() {
   const layerBioLabel = activeLayer === 'professional' ? 'Professional Bio' : activeLayer === 'roleplay' ? 'Roleplay Bio' : 'Short Bio';
   const layerSkillsLabel = activeLayer === 'free' ? 'Basic Tags' : 'Tags / Skills';
 
-  return `
+  const profileContent = `
     <section class="feature profile-display-hero guild-identity-hero panel-surface panel-surface--transparent">
       <div class="profile-summary-row">
         ${avatarMarkup(profile, 'lg')}
@@ -3887,6 +3887,30 @@ function profilePage() {
     : '<p class="muted">No access requests right now.</p>'}
     </section>
     `}
+  `;
+
+  const supportPanel = isOwnProfileRoute ? `
+    <aside class="card panel-surface panel-surface--soft profile-support-panel">
+      <p class="hero-kicker">Support</p>
+      <h3>Support the Guild</h3>
+      <p class="muted">Wyked Samurai Guild is community funded.<br/>Donations help keep the platform online and help support new features.</p>
+      <a href='https://ko-fi.com/P5P71XX4JD' target='_blank'>
+        <img height='36'
+        style='border:0px;height:36px;'
+        src='https://storage.ko-fi.com/cdn/kofi5.png?v=6'
+        border='0'
+        alt='Support Wyked Samurai Guild on Ko-fi' />
+      </a>
+    </aside>
+  ` : '';
+
+  return `
+    <section class="profile-page-layout">
+      <div class="profile-main-column">
+        ${profileContent}
+      </div>
+      ${supportPanel}
+    </section>
   `;
 }
 
