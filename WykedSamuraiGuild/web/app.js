@@ -2559,10 +2559,6 @@ function SiteFooter() {
 function Header(path) {
   const isCollapsed = state.shell.headerCollapsed;
   const accountLabel = state.currentUser ? 'Account' : 'Log in';
-  const slotProfileType = state.currentUser ? normalizeSlotProfileType(state.currentUser) : 'person';
-  const accountTypeLink = slotProfileType === 'company'
-    ? `<a href="${linkFor('/recruiters')}">Recruiters</a>`
-    : `<a href="${linkFor('/characters')}">Characters</a>`;
   return `
     <header class="header panel ${isCollapsed ? 'is-collapsed' : ''}">
       <button type="button" class="header-collapse-btn" id="header-collapse-toggle" aria-label="${isCollapsed ? 'Expand header' : 'Collapse header'}" title="${isCollapsed ? 'Expand header' : 'Collapse header'}">${isCollapsed ? '▼' : '▲'}</button>
@@ -2577,18 +2573,20 @@ function Header(path) {
           <div class="account-menu-dropdown header-dropdown-menu" id="main-menu-dropdown">
             <a class="menu-parent-link" href="${linkFor('/home')}">Home</a>
             <a class="menu-parent-link" href="${linkFor('/nexus')}">Nexus</a>
-            <a class="menu-parent-link" href="${linkFor('/profile')}">Profile</a>
-            <a class="menu-parent-link" href="${linkFor('/hub')}">Hub</a>
-            <a class="menu-parent-link" href="${linkFor('/discussions')}">Discussions</a>
             <div class="menu-submenu">
+              <div class="menu-group-label">Nexus</div>
               <a href="${linkFor('/nexus/professional')}">Professional</a>
               <a href="${linkFor('/nexus/roleplay')}">Roleplay</a>
             </div>
+            <a class="menu-parent-link" href="${linkFor('/profile')}">Profile</a>
+            <a class="menu-parent-link" href="${linkFor('/hub')}">Hub</a>
             <div class="menu-submenu">
+              <div class="menu-group-label">Hub</div>
               <a href="${linkFor('/hub/social')}">Social</a>
               <a href="${linkFor('/hub/recruiter')}">Recruiter</a>
               <a href="${linkFor('/hub/reviews')}">Reviews</a>
             </div>
+            <a class="menu-parent-link" href="${linkFor('/discussions')}">Discussions</a>
           </div>
         </div>
         ${state.currentUser ? `
@@ -2598,7 +2596,7 @@ function Header(path) {
               <div class="menu-group-label">Account</div>
               <a href="${linkFor('/resume')}">Resume</a>
               <a href="${linkFor('/settings')}">Settings</a>
-              ${accountTypeLink}
+              <a href="${linkFor('/characters')}">Characters</a>
               <button type="button" class="menu-item-btn" id="logout-btn">Log out</button>
             </div>
           </div>
@@ -5043,10 +5041,12 @@ function normalizeSupabaseProfileRecord(record = {}, fallbackUser = null) {
     || authUser?.user_metadata?.full_name
     || displayName,
   ).trim();
+  const linkedUserId = String(record.user_id || authUser?.id || fallbackUser?.id || record.id || '');
   return {
     ...fallbackUser,
-    id: String(record.id || record.user_id || fallbackUser?.id || authUser?.id || ''),
-    userId: String(record.id || record.user_id || fallbackUser?.id || authUser?.id || ''),
+    id: linkedUserId,
+    userId: linkedUserId,
+    profileRecordId: String(record.id || linkedUserId || ''),
     username,
     displayName,
     legalName,
@@ -5059,6 +5059,29 @@ function normalizeSupabaseProfileRecord(record = {}, fallbackUser = null) {
     updatedAt: record.updated_at || fallbackUser?.updatedAt || null,
     supabaseProfile: record,
   };
+}
+
+function isMissingColumnError(error) {
+  const code = String(error?.code || '').toLowerCase();
+  const message = String(error?.message || '').toLowerCase();
+  return code === '42703' || (message.includes('column') && message.includes('does not exist'));
+}
+
+function readMissingColumnName(error) {
+  const message = String(error?.message || '');
+  const match = message.match(/column\s+["']?([a-zA-Z0-9_]+)["']?\s+does not exist/i);
+  return match ? String(match[1] || '').trim() : '';
+}
+
+async function fetchSupabaseProfileByColumn(authUser, lookupColumn) {
+  if (!lookupColumn) return { data: null, error: null };
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq(lookupColumn, authUser.id)
+    .limit(1)
+    .maybeSingle();
+  return { data, error };
 }
 
 function classifyProfileQueryFailure(error) {
@@ -5084,34 +5107,118 @@ async function fetchSupabaseProfileRecord(authUser) {
   if (!authUser?.id) {
     throw new Error('Authenticated Supabase user is missing.');
   }
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', authUser.id)
-    .limit(1)
-    .maybeSingle();
-  if (error) {
-    const reason = classifyProfileQueryFailure(error);
-    if (reason === 'no_row_found') {
-      console.info('[profile:frontend] profile lookup returned no row', { key: 'id', value: authUser.id });
-      return null;
+  const lookupColumns = ['id', 'user_id'];
+  let lastError = null;
+  for (const lookupColumn of lookupColumns) {
+    const { data, error } = await fetchSupabaseProfileByColumn(authUser, lookupColumn);
+    if (error) {
+      if (isMissingColumnError(error)) {
+        console.warn('[profile:frontend] profile lookup skipped missing column', {
+          key: lookupColumn,
+          authUserId: authUser.id,
+          code: error?.code || null,
+          message: error?.message || String(error),
+        });
+        continue;
+      }
+      const reason = classifyProfileQueryFailure(error);
+      if (reason === 'no_row_found') {
+        console.info('[profile:frontend] profile lookup returned no row', { key: lookupColumn, value: authUser.id });
+        continue;
+      }
+      console.error('[profile:frontend] profile lookup query failed', {
+        key: lookupColumn,
+        value: authUser.id,
+        reason,
+        code: error?.code || null,
+        message: error?.message || String(error),
+        details: error?.details || null,
+        hint: error?.hint || null,
+      });
+      throw error;
     }
-    console.error('[profile:frontend] profile lookup query failed', {
-      key: 'id',
-      value: authUser.id,
-      reason,
-      code: error?.code || null,
-      message: error?.message || String(error),
-      details: error?.details || null,
-      hint: error?.hint || null,
-    });
-    throw error;
+    if (data) {
+      console.log('[profile:frontend] profile row loaded', { lookupKey: lookupColumn, authUserId: authUser.id, rowId: data.id || null });
+      return data;
+    }
+    lastError = error || lastError;
   }
-  if (data) {
-    console.log('[profile:frontend] profile row loaded', { lookupKey: 'id', authUserId: authUser.id, rowId: data.id || null });
-    return data;
-  }
+  if (lastError) throw lastError;
   return null;
+}
+
+async function upsertSupabaseProfileRecord(authUser, payloadFields = {}, context = 'generic_upsert') {
+  if (!supabase) throw new Error('Supabase client is not available.');
+  if (!authUser?.id) throw new Error('Authenticated Supabase user is missing.');
+  const upsertAttempts = [
+    { key: 'id', payload: { id: authUser.id, ...payloadFields } },
+    { key: 'user_id', payload: { user_id: authUser.id, ...payloadFields } },
+  ];
+  let lastError = null;
+  for (const attempt of upsertAttempts) {
+    const attemptPayload = { ...attempt.payload };
+    for (let retry = 0; retry < 3; retry += 1) {
+      const { data, error } = await supabase
+        .from('profiles')
+        .upsert(attemptPayload, { onConflict: attempt.key })
+        .select('*')
+        .single();
+      if (!error) {
+        console.log('[profile:frontend] profile upsert success', {
+          context,
+          lookupKey: attempt.key,
+          authUserId: authUser.id,
+          rowId: data?.id || null,
+        });
+        return data;
+      }
+      if (isMissingColumnError(error)) {
+        const missingColumn = readMissingColumnName(error);
+        if (missingColumn && Object.prototype.hasOwnProperty.call(attemptPayload, missingColumn)) {
+          delete attemptPayload[missingColumn];
+          console.warn('[profile:frontend] profile upsert retrying without missing payload column', {
+            context,
+            lookupKey: attempt.key,
+            authUserId: authUser.id,
+            missingColumn,
+          });
+          lastError = error;
+          continue;
+        }
+        console.warn('[profile:frontend] profile upsert skipped missing column', {
+          context,
+          lookupKey: attempt.key,
+          authUserId: authUser.id,
+          code: error?.code || null,
+          message: error?.message || String(error),
+        });
+        lastError = error;
+        break;
+      }
+      if (attempt.key === 'id') {
+        console.warn('[profile:frontend] profile upsert failed on primary attempt, trying user_id fallback', {
+          context,
+          authUserId: authUser.id,
+          code: error?.code || null,
+          message: error?.message || String(error),
+        });
+        lastError = error;
+        break;
+      }
+      lastError = error;
+      break;
+    }
+  }
+  console.error('[profile:frontend] profile upsert failed', {
+    context,
+    authUserId: authUser.id,
+    code: lastError?.code || null,
+    message: lastError?.message || String(lastError || ''),
+    details: lastError?.details || null,
+    hint: lastError?.hint || null,
+    reason: classifyProfileQueryFailure(lastError),
+  });
+  throw lastError || new Error('Profile upsert failed.');
 }
 
 async function createSupabaseProfileRecord(authUser, seeded = {}) {
@@ -5129,7 +5236,6 @@ async function createSupabaseProfileRecord(authUser, seeded = {}) {
     || email,
   ).trim();
   const profilePayload = {
-    id: authUser.id,
     email,
     username,
     display_name: displayName,
@@ -5137,24 +5243,7 @@ async function createSupabaseProfileRecord(authUser, seeded = {}) {
     visibility: String(seeded.visibility || 'public').toLowerCase() === 'private' ? 'private' : 'public',
     updated_at: new Date().toISOString(),
   };
-  const { data, error } = await supabase
-    .from('profiles')
-    .upsert(profilePayload, { onConflict: 'id' })
-    .select('*')
-    .single();
-  if (error) {
-    console.error('[profile:frontend] profile auto-create failed', {
-      authUserId: authUser.id,
-      code: error?.code || null,
-      message: error?.message || String(error),
-      details: error?.details || null,
-      hint: error?.hint || null,
-      reason: classifyProfileQueryFailure(error),
-    });
-    throw error;
-  }
-  console.log('[profile:frontend] profile row auto-created', { authUserId: authUser.id, rowId: data?.id || null });
-  return data;
+  return upsertSupabaseProfileRecord(authUser, profilePayload, 'create_profile_record');
 }
 
 async function resolveOwnSupabaseProfile({ createIfMissing = true } = {}) {
@@ -5223,7 +5312,6 @@ async function upsertOwnSupabaseProfileFromOnboarding({ resumeProfile = {}, skil
     || fallbackUsername,
   ).trim();
   const payload = {
-    id: authUser.id,
     email: String(existingProfile.email || fallbackEmail),
     username: String(existingProfile.username || fallbackUsername),
     display_name: displayName,
@@ -5232,25 +5320,11 @@ async function upsertOwnSupabaseProfileFromOnboarding({ resumeProfile = {}, skil
     skills: parsedSkills,
     location: String(resumeProfile.location || existingProfile.location || '').trim(),
     visibility: String(existingProfile.visibility || 'public').toLowerCase() === 'private' ? 'private' : 'public',
+    resume_filename: String(resumeProfile.resumeFileName || existingProfile.resume_filename || '').trim(),
     updated_at: new Date().toISOString(),
   };
 
-  const { data, error } = await supabase
-    .from('profiles')
-    .upsert(payload, { onConflict: 'id' })
-    .select('*')
-    .single();
-  if (error) {
-    console.error('[profile:frontend] onboarding profile upsert failed', {
-      authUserId: authUser.id,
-      code: error?.code || null,
-      message: error?.message || String(error),
-      details: error?.details || null,
-      hint: error?.hint || null,
-      reason: classifyProfileQueryFailure(error),
-    });
-    throw error;
-  }
+  const data = await upsertSupabaseProfileRecord(authUser, payload, 'onboarding_profile_sync');
 
   const normalized = normalizeSupabaseProfileRecord(data, state.currentUser);
   state.currentUser = withPersistedOnboardingProfile(normalized);
@@ -7376,7 +7450,27 @@ function attachOnboardingProfileSetupHandlers() {
           parseStatus: parseFailed ? 'failed' : 'success',
         },
       }, currentUser.id);
-      state.currentUser = withPersistedOnboardingProfile(state.currentUser);
+      try {
+        await upsertOwnSupabaseProfileFromOnboarding({
+          resumeProfile: {
+            ...(finalResumeProfile || {}),
+            resumeFileName: fileName,
+          },
+          skillProfile: nextSkillProfile,
+        });
+        state.currentUser = withPersistedOnboardingProfile(state.currentUser);
+      } catch (error) {
+        console.error('[profile:frontend] resume upload sync failed', {
+          authUserId: currentUser.id,
+          code: error?.code || null,
+          message: error?.message || String(error),
+          details: error?.details || null,
+          hint: error?.hint || null,
+        });
+        setStatusMessage(`Resume uploaded locally, but profile sync failed: ${error instanceof Error ? error.message : String(error)}`, 'error');
+        render();
+        return;
+      }
       if (parseFailed) {
         setStatusMessage('Resume uploaded. We could not parse profile suggestions, so you can fill fields manually below.', 'info');
       } else if (finalChangedFields.length) {
@@ -7384,11 +7478,7 @@ function attachOnboardingProfileSetupHandlers() {
       } else {
         setStatusMessage('Resume uploaded. Existing profile data was kept unchanged.', 'info');
       }
-      render();
-      const resumeBuilder = document.getElementById('resume-builder');
-      if (resumeBuilder) {
-        resumeBuilder.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
+      location.hash = '/profile';
     };
   }
 
@@ -7415,6 +7505,7 @@ function attachOnboardingProfileSetupHandlers() {
         skills: parsedSkills,
         location: String(formData.get('location') || '').trim(),
         desiredRoles: String(formData.get('desiredRoles') || '').trim(),
+        resumeFileName: String(currentProfile?.resumeUpload?.fileName || '').trim(),
         updatedAt: new Date().toISOString(),
       };
       saveOnboardingProfile({
@@ -7436,6 +7527,7 @@ function attachOnboardingProfileSetupHandlers() {
         });
         state.currentUser = withPersistedOnboardingProfile(state.currentUser);
         setStatusMessage('Resume profile saved and synced to Supabase profile record.', 'success');
+        location.hash = '/profile';
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         setStatusMessage(`Resume saved locally, but profile sync failed: ${message}`, 'error');
@@ -7473,6 +7565,7 @@ function attachOnboardingProfileSetupHandlers() {
         });
         state.currentUser = withPersistedOnboardingProfile(state.currentUser);
         setStatusMessage('Skill profile saved and synced to Supabase profile record.', 'success');
+        location.hash = '/profile';
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         setStatusMessage(`Skills saved locally, but profile sync failed: ${message}`, 'error');
