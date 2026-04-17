@@ -2617,7 +2617,6 @@ function Header(path) {
             <div class="account-menu-dropdown header-dropdown-menu" id="account-menu-dropdown">
               <div class="menu-group-label">Profile Center</div>
               <a href="${linkFor('/profile')}">View Profile</a>
-              <a href="${linkFor('/profile')}">Edit Profile</a>
               <a href="${linkFor('/characters')}">Characters</a>
               <a href="${linkFor('/resume')}">Resume / Professional Profile</a>
               <a href="${linkFor('/connections')}">Connections</a>
@@ -5917,10 +5916,11 @@ async function loadProfileForRoute(path) {
       return;
     }
     const data = await apiRequest(`/members/${encodeURIComponent(memberId)}`);
-    state.activeProfile = data.profile;
+    const memberProfile = data?.profile || null;
+    state.activeProfile = memberProfile;
     state.profileLoad = {
-      status: data?.profile ? 'ready' : 'empty',
-      message: data?.profile ? '' : 'That profile could not be found.',
+      status: memberProfile ? 'ready' : 'empty',
+      message: memberProfile ? '' : 'That profile could not be found.',
       isOwnRoute: false,
     };
     console.log('[profile:frontend] member profile fetch success', { memberId });
@@ -6469,7 +6469,7 @@ function attachProfileEditHandler() {
       render();
       try {
         const result = await apiRequest(`/profile/layers/${layerKey}`, { method: 'PATCH', body: JSON.stringify(payload) });
-        const normalized = normalizeLayeredProfile(result.profile);
+        const normalized = normalizeLayeredProfile(result?.profile || result || null);
         state.currentUser = withPersistedOnboardingProfile(normalized.user);
         syncProfilePrivacyFromUser(state.currentUser);
         state.activeProfile = state.currentUser;
@@ -6507,7 +6507,7 @@ function attachProfileEditHandler() {
       render();
       try {
         const result = await apiRequest('/profile/hub', { method: 'PATCH', body: JSON.stringify(payload) });
-        const normalized = normalizeLayeredProfile(result.profile);
+        const normalized = normalizeLayeredProfile(result?.profile || result || null);
         state.currentUser = withPersistedOnboardingProfile(normalized.user);
         syncProfilePrivacyFromUser(state.currentUser);
         const nextProfileType = (payload.role === 'employer' || payload.role === 'recruiter') ? 'company' : 'person';
@@ -6561,7 +6561,7 @@ function attachProfileEditHandler() {
       render();
       try {
         const result = await apiRequest('/profile/privacy', { method: 'PATCH', body: JSON.stringify(payload) });
-        const normalized = normalizeLayeredProfile(result.profile);
+        const normalized = normalizeLayeredProfile(result?.profile || result || null);
         state.currentUser = withPersistedOnboardingProfile(normalized.user);
         syncProfilePrivacyFromUser(state.currentUser);
         state.activeProfile = state.currentUser;
