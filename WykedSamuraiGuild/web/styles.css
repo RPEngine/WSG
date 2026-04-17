@@ -195,7 +195,7 @@ body {
   top: calc(100% + 8px);
   min-width: 200px;
   border: 1px solid var(--border);
-  background: var(--panel-bg);
+  background: var(--panel-strong);
   border-radius: 12px;
   padding: 8px;
   display: none;
@@ -239,6 +239,18 @@ body {
 
 .menu-submenu a:hover {
   color: var(--text-main);
+}
+
+.profile-section-nav {
+  margin-bottom: 12px;
+}
+
+.profile-tabs--section-links {
+  flex-wrap: wrap;
+}
+
+.profile-tabs--section-links .pill-btn {
+  text-decoration: none;
 }
 
 .menu-group-label {
@@ -3862,6 +3874,11 @@ h1, h2, h3, h4, .title, .lockup-title { font-family: var(--heading-font); }
   .hub-search-controls button {
     width: 100%;
     max-width: none;
+  }
+
+  .profile-tabs--section-links .pill-btn {
+    width: 100%;
+    justify-content: center;
   }
 }
 
