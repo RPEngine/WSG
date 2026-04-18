@@ -36,6 +36,27 @@ const allowedOrigins = Array.from(
   new Set(isProduction ? productionOrigins : [...productionOrigins, ...localDevOrigins]),
 );
 
+function applyApiCorsHeaders(req, res) {
+  const requestOrigin = normalizeOrigin(req.headers.origin);
+  if (!requestOrigin || !allowedOrigins.includes(requestOrigin)) {
+    return false;
+  }
+
+  res.setHeader("Access-Control-Allow-Origin", req.headers.origin);
+  res.setHeader("Vary", "Origin");
+  res.setHeader("Access-Control-Allow-Methods", ALLOWED_METHODS.join(","));
+
+  const requestedHeaders = String(req.headers["access-control-request-headers"] || "")
+    .split(",")
+    .map((header) => header.trim())
+    .filter(Boolean);
+  const mergedHeaders = Array.from(new Set([...ALLOWED_HEADERS, ...requestedHeaders]));
+  res.setHeader("Access-Control-Allow-Headers", mergedHeaders.join(","));
+  res.setHeader("Access-Control-Max-Age", "86400");
+
+  return true;
+}
+
 const corsOptions = {
   origin(origin, callback) {
     if (!origin) {
@@ -60,6 +81,16 @@ app.disable("x-powered-by");
 app.use(applySecurityHeaders);
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
+app.use("/api", (req, res, next) => {
+  const hasCorsHeaders = applyApiCorsHeaders(req, res);
+  if (req.method === "OPTIONS") {
+    if (!hasCorsHeaders) {
+      return res.status(403).json({ error: "CORS blocked for origin." });
+    }
+    return res.status(204).send();
+  }
+  return next();
+});
 app.use(express.json({ limit: "100kb" }));
 
 app.get("/health", healthCheck);
