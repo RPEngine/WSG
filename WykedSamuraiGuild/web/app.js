@@ -1312,6 +1312,9 @@ function resolveApiBaseUrl() {
     if (renderConfiguredBase) {
       return renderConfiguredBase.replace(/\/$/, '');
     }
+    if (/wyked-samurai-frontend/i.test(host)) {
+      return `${protocol}//${host.replace(/wyked-samurai-frontend/i, 'wyked-samurai-backend')}`;
+    }
     return `${protocol}//${host}`;
   }
 
