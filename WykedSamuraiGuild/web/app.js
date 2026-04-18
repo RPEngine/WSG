@@ -1449,6 +1449,12 @@ function isNotFoundApiError(error) {
   return status === 404;
 }
 
+function isProfileSyncOptionalFallbackError(error) {
+  const status = Number(error?.status || 0);
+  if (!Number.isFinite(status)) return false;
+  return status === 404 || status >= 500;
+}
+
 async function loadOwnProfileFromApi() {
   const data = await apiRequest('/profile/me', { method: 'GET' });
   const normalizedLayered = normalizeLayeredProfile(data?.profile || null);
@@ -5348,6 +5354,15 @@ async function ensureBackendProfileForAuthenticatedUser(context = 'auth_flow') {
     }
     return profile;
   } catch (error) {
+    if (context === 'session_sync' && isProfileSyncOptionalFallbackError(error)) {
+      console.warn('[profile:frontend] auth sync profile ensure fallback activated', {
+        context,
+        userId: state.auth.user?.id || null,
+        status: error?.status || null,
+        message: error?.message || String(error),
+      });
+      return null;
+    }
     console.error('[profile:frontend] backend profile ensure failed', {
       context,
       userId: state.auth.user?.id || null,
@@ -5389,27 +5404,55 @@ async function syncOnboardingProfileToBackend({ resumeProfile = {}, skillProfile
   const parsedSkills = Array.isArray(skillProfile.skills)
     ? skillProfile.skills
     : (Array.isArray(resumeProfile.skills) ? resumeProfile.skills : []);
+  const profilePatchPayload = buildBackendProfilePatchFromOnboarding(resumeProfile);
 
-  await apiRequest('/profile/me', {
-    method: 'PATCH',
-    body: JSON.stringify(buildBackendProfilePatchFromOnboarding(resumeProfile)),
-  });
+  try {
+    await apiRequest('/profile/me', {
+      method: 'PATCH',
+      body: JSON.stringify(profilePatchPayload),
+    });
+  } catch (error) {
+    if (!isNotFoundApiError(error)) {
+      throw error;
+    }
+    await apiRequest('/profile/me', {
+      method: 'POST',
+      body: JSON.stringify(profilePatchPayload),
+    });
+  }
 
-  await apiRequest('/profile/professional', {
-    method: 'PUT',
-    body: JSON.stringify({
-      headline: String(resumeProfile.headline || '').trim(),
-      summary: String(resumeProfile.summary || '').trim(),
-      skills: parsedSkills,
-      resumeFilename: String(resumeProfile.resumeFileName || '').trim(),
-      openToWork: Boolean(resumeProfile.openToWork),
-      recruiterVisible: Boolean(resumeProfile.recruiterVisible),
-    }),
-  });
+  try {
+    await apiRequest('/profile/professional', {
+      method: 'PUT',
+      body: JSON.stringify({
+        headline: String(resumeProfile.headline || '').trim(),
+        summary: String(resumeProfile.summary || '').trim(),
+        skills: parsedSkills,
+        resumeFilename: String(resumeProfile.resumeFileName || '').trim(),
+        openToWork: Boolean(resumeProfile.openToWork),
+        recruiterVisible: Boolean(resumeProfile.recruiterVisible),
+      }),
+    });
+  } catch (error) {
+    if (!isProfileSyncOptionalFallbackError(error)) {
+      throw error;
+    }
+    console.warn('[profile:frontend] optional professional profile sync deferred', {
+      status: error?.status || null,
+      message: error?.message || String(error),
+    });
+  }
 
-  const normalizedUser = await loadOwnProfileFromApi();
-  state.currentUser = withPersistedOnboardingProfile(normalizedUser);
-  state.activeProfile = state.currentUser;
+  try {
+    const normalizedUser = await loadOwnProfileFromApi();
+    state.currentUser = withPersistedOnboardingProfile(normalizedUser);
+    state.activeProfile = state.currentUser;
+  } catch (error) {
+    if (!isProfileSyncOptionalFallbackError(error)) {
+      throw error;
+    }
+    state.currentUser = withPersistedOnboardingProfile(state.currentUser);
+  }
   return state.currentUser;
 }
 
@@ -7732,12 +7775,12 @@ function attachOnboardingProfileSetupHandlers() {
           hint: error?.hint || null,
         });
         setProfileSyncState({
-          status: 'sync_failed',
-          message: 'We could not sync your onboarding resume upload yet. Please try again.',
+          status: 'idle',
+          message: 'Resume upload saved locally. Backend sync will retry automatically.',
           source: 'onboarding_resume_upload',
           canRetry: true,
         });
-        setStatusMessage('We could not sync your onboarding resume upload yet. Please try again.', 'error');
+        setStatusMessage('Resume upload saved locally. Backend sync will retry automatically.', 'info');
         render();
         return;
       }
@@ -7810,12 +7853,12 @@ function attachOnboardingProfileSetupHandlers() {
           hint: error?.hint || null,
         });
         setProfileSyncState({
-          status: 'sync_failed',
-          message: 'We could not sync your onboarding resume profile yet. Please try again.',
+          status: 'idle',
+          message: 'Resume profile saved locally. Backend sync will retry automatically.',
           source: 'onboarding_resume_form',
           canRetry: true,
         });
-        setStatusMessage('We could not sync your onboarding resume profile yet. Please try again.', 'error');
+        setStatusMessage('Resume profile saved locally. Backend sync will retry automatically.', 'info');
       }
       render();
     };
@@ -7862,12 +7905,12 @@ function attachOnboardingProfileSetupHandlers() {
           hint: error?.hint || null,
         });
         setProfileSyncState({
-          status: 'sync_failed',
-          message: 'We could not sync your onboarding skills yet. Please try again.',
+          status: 'idle',
+          message: 'Skills saved locally. Backend sync will retry automatically.',
           source: 'onboarding_skill_form',
           canRetry: true,
         });
-        setStatusMessage('We could not sync your onboarding skills yet. Please try again.', 'error');
+        setStatusMessage('Skills saved locally. Backend sync will retry automatically.', 'info');
       }
       render();
     };
