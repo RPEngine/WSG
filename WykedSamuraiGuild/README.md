@@ -45,7 +45,7 @@ Frontend (`/web`):
   - `WSG_SUPABASE_ANON_KEY` (publishable/anon key only — never a service role key)
   These values are injected into `<meta name="wsg-supabase-url">` and `<meta name="wsg-supabase-anon-key">` during the frontend build.
 - Frontend Supabase source of truth: `web/supabaseClient.js` (the static web app does not use `src/lib/supabase.ts`).
-- Render deployments use same-origin API by default unless `wsg-backend-base-url` / runtime backend vars are explicitly configured.
+- Render deployments prefer an explicit backend origin and avoid same-origin `/api/*` fallbacks when hosted on a static web service.
 - Production-safe override order on Render:
   1. `<meta name="wsg-backend-base-url" content="">`
   2. `window.WSG_BACKEND_BASE_URL`
