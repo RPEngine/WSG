@@ -10,6 +10,7 @@ import { applySecurityHeaders } from "./middleware/securityHeaders.js";
 
 const app = express();
 const isProduction = process.env.NODE_ENV === "production";
+const RENDER_WEB_ORIGIN = "https://wsg-web.onrender.com";
 
 function parseOrigins(value) {
   return String(value || "")
@@ -23,15 +24,16 @@ const localDevOrigins = [
   "http://localhost:5173",
   "http://localhost:3000",
 ];
+const productionOrigins = [
+  ...configuredOrigins,
+  RENDER_WEB_ORIGIN,
+];
 
 const allowedOrigins = Array.from(new Set(isProduction
-  ? [...configuredOrigins]
-  : [...configuredOrigins, ...localDevOrigins]));
+  ? productionOrigins
+  : [...productionOrigins, ...localDevOrigins]));
 
-app.set("trust proxy", 1);
-app.disable("x-powered-by");
-app.use(applySecurityHeaders);
-app.use(cors({
+const corsOptions = {
   origin(origin, callback) {
     if (!origin) {
       return callback(null, true);
@@ -45,7 +47,14 @@ app.use(cors({
   },
   methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
-}));
+  optionsSuccessStatus: 204,
+};
+
+app.set("trust proxy", 1);
+app.disable("x-powered-by");
+app.use(applySecurityHeaders);
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 app.use(express.json({ limit: "100kb" }));
 
 app.get("/health", healthCheck);
