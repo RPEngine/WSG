@@ -38,7 +38,11 @@ export async function getMyProfile(req, res) {
   try {
     const profile = await getOwnUnifiedProfile(req.user);
     console.log("[profile] profile fetch success", { userId: req.user.id, hasProfile: Boolean(profile), email: req.user.email });
-    return res.json({ profile: profile || null, hasProfile: Boolean(profile), noProfileYet: !profile });
+    return res.json({
+      profile: profile || null,
+      hasProfile: Boolean(profile),
+      noProfileYet: !profile,
+    });
   } catch (error) {
     console.warn("[profile] profile fetch failure", { userId: req.user.id, error: error.message || "Unable to fetch profile." });
     return res.status(500).json({ error: "Unable to fetch profile." });
@@ -49,7 +53,12 @@ export async function ensureMyProfile(req, res) {
   try {
     const existingProfile = await getOwnUnifiedProfile(req.user);
     const profile = await saveOwnUnifiedProfile(req.user, req.body || {});
-    return res.status(200).json({ profile, created: !existingProfile });
+    return res.status(existingProfile ? 200 : 201).json({
+      profile,
+      created: !existingProfile,
+      hasProfile: true,
+      noProfileYet: false,
+    });
   } catch (error) {
     return res.status(400).json({ error: error.message || "Unable to ensure profile." });
   }
