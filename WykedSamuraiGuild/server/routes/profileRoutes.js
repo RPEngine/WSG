@@ -32,6 +32,8 @@ const connectionLimiter = createRateLimiter({ keyPrefix: "connections:create", l
 
 router.get("/profile/me", requireAuth, getMyProfile);
 router.post("/profile/me", requireAuth, requireObjectBody, ensureMyProfile);
+router.put("/profile/me", requireAuth, requireObjectBody, updateMyProfile);
+router.post("/profile/ensure", requireAuth, requireObjectBody, ensureMyProfile);
 router.patch(
   "/profile/me",
   requireAuth,

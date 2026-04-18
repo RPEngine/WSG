@@ -4,7 +4,11 @@ import {
 } from "../services/connectionsService.js";
 
 export async function listConnections(req, res) {
-  const items = await listConnectionsForUser(req.user.id);
+  const userId = req.user?.id || null;
+  if (!userId) {
+    return res.json({ items: [], connections: [], count: 0 });
+  }
+  const items = await listConnectionsForUser(userId);
   return res.json({ items, count: items.length });
 }
 
