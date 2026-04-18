@@ -1,5 +1,4 @@
 import express from "express";
-import cors from "cors";
 import apiRoutes from "./routes/apiRoutes.js";
 import { healthCheck } from "./controllers/healthController.js";
 import { aiChat, generateAiScenario } from "./controllers/aiController.js";
@@ -42,30 +41,35 @@ const allowedOrigins = Array.from(
   new Set(isProduction ? productionOrigins : [...productionOrigins, ...localDevOrigins]),
 );
 
-const corsOptions = {
-  origin(origin, callback) {
-    if (!origin) {
-      return callback(null, true);
-    }
+function applyCorsHeaders(req, res, next) {
+  const requestOrigin = req.get("origin");
 
-    const normalizedOrigin = normalizeOrigin(origin);
-    if (allowedOrigins.includes(normalizedOrigin)) {
-      return callback(null, true);
-    }
+  if (!requestOrigin) {
+    return next();
+  }
 
-    return callback(Object.assign(new Error("CORS blocked for origin."), { status: 403 }));
-  },
-  methods: ALLOWED_METHODS,
-  allowedHeaders: ALLOWED_HEADERS,
-  optionsSuccessStatus: 204,
-  maxAge: 86400,
-};
+  const normalizedOrigin = normalizeOrigin(requestOrigin);
+  if (!allowedOrigins.includes(normalizedOrigin)) {
+    return next(Object.assign(new Error("CORS blocked for origin."), { status: 403 }));
+  }
+
+  res.setHeader("Access-Control-Allow-Origin", requestOrigin);
+  res.setHeader("Vary", "Origin");
+  res.setHeader("Access-Control-Allow-Methods", ALLOWED_METHODS.join(","));
+  res.setHeader("Access-Control-Allow-Headers", ALLOWED_HEADERS.join(","));
+  res.setHeader("Access-Control-Max-Age", "86400");
+
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
+  }
+
+  return next();
+}
 
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
 app.use(applySecurityHeaders);
-app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
+app.use(applyCorsHeaders);
 app.use(express.json({ limit: "100kb" }));
 
 app.get("/health", healthCheck);
