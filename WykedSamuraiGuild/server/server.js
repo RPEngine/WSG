@@ -1,4 +1,3 @@
-import cors from "cors";
 import express from "express";
 import apiRoutes from "./routes/apiRoutes.js";
 import { healthCheck } from "./controllers/healthController.js";
@@ -57,30 +56,9 @@ function applyApiCorsHeaders(req, res) {
   return true;
 }
 
-const corsOptions = {
-  origin(origin, callback) {
-    if (!origin) {
-      return callback(null, true);
-    }
-
-    const normalizedOrigin = normalizeOrigin(origin);
-    if (!allowedOrigins.includes(normalizedOrigin)) {
-      return callback(Object.assign(new Error("CORS blocked for origin."), { status: 403 }));
-    }
-
-    return callback(null, true);
-  },
-  methods: ALLOWED_METHODS,
-  allowedHeaders: ALLOWED_HEADERS,
-  optionsSuccessStatus: 204,
-  maxAge: 86400,
-};
-
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
 app.use(applySecurityHeaders);
-app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
 app.use("/api", (req, res, next) => {
   const hasCorsHeaders = applyApiCorsHeaders(req, res);
   if (req.method === "OPTIONS") {
