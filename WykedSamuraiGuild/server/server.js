@@ -11,11 +11,20 @@ import { applySecurityHeaders } from "./middleware/securityHeaders.js";
 const app = express();
 const isProduction = process.env.NODE_ENV === "production";
 const RENDER_WEB_ORIGIN = "https://wsg-web.onrender.com";
+const ALLOWED_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
+const ALLOWED_HEADERS = ["Content-Type", "Authorization"];
+
+function normalizeOrigin(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\/+$/, "")
+    .toLowerCase();
+}
 
 function parseOrigins(value) {
   return String(value || "")
     .split(",")
-    .map((origin) => origin.trim())
+    .map((origin) => normalizeOrigin(origin))
     .filter(Boolean);
 }
 
@@ -23,15 +32,15 @@ const configuredOrigins = parseOrigins(process.env.WSG_FRONTEND_ORIGIN || proces
 const localDevOrigins = [
   "http://localhost:5173",
   "http://localhost:3000",
-];
+].map((origin) => normalizeOrigin(origin));
 const productionOrigins = [
   ...configuredOrigins,
-  RENDER_WEB_ORIGIN,
+  normalizeOrigin(RENDER_WEB_ORIGIN),
 ];
 
-const allowedOrigins = Array.from(new Set(isProduction
-  ? productionOrigins
-  : [...productionOrigins, ...localDevOrigins]));
+const allowedOrigins = Array.from(
+  new Set(isProduction ? productionOrigins : [...productionOrigins, ...localDevOrigins]),
+);
 
 const corsOptions = {
   origin(origin, callback) {
@@ -39,15 +48,17 @@ const corsOptions = {
       return callback(null, true);
     }
 
-    if (allowedOrigins.includes(origin)) {
+    const normalizedOrigin = normalizeOrigin(origin);
+    if (allowedOrigins.includes(normalizedOrigin)) {
       return callback(null, true);
     }
 
     return callback(Object.assign(new Error("CORS blocked for origin."), { status: 403 }));
   },
-  methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  methods: ALLOWED_METHODS,
+  allowedHeaders: ALLOWED_HEADERS,
   optionsSuccessStatus: 204,
+  maxAge: 86400,
 };
 
 app.set("trust proxy", 1);
