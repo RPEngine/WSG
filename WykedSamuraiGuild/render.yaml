@@ -21,13 +21,17 @@ services:
     buildCommand: |
       test -n "$WSG_SUPABASE_URL" || (echo "Missing WSG_SUPABASE_URL" && exit 1)
       test -n "$WSG_SUPABASE_ANON_KEY" || (echo "Missing WSG_SUPABASE_ANON_KEY" && exit 1)
+      test -n "$WSG_BACKEND_BASE_URL" || (echo "Missing WSG_BACKEND_BASE_URL" && exit 1)
       # Inject runtime Supabase values into the frontend meta tags.
       # This handles both template placeholder values and accidentally blank values.
       sed -i "s|<meta name=\"wsg-supabase-url\" content=\"[^\"]*\" />|<meta name=\"wsg-supabase-url\" content=\"$WSG_SUPABASE_URL\" />|g" index.html
       sed -i "s|<meta name=\"wsg-supabase-anon-key\" content=\"[^\"]*\" />|<meta name=\"wsg-supabase-anon-key\" content=\"$WSG_SUPABASE_ANON_KEY\" />|g" index.html
+      sed -i "s|<meta name=\"wsg-backend-base-url\" content=\"[^\"]*\" />|<meta name=\"wsg-backend-base-url\" content=\"$WSG_BACKEND_BASE_URL\" />|g" index.html
     staticPublishPath: .
     envVars:
       - key: WSG_SUPABASE_URL
         sync: false
       - key: WSG_SUPABASE_ANON_KEY
         sync: false
+      - key: WSG_BACKEND_BASE_URL
+        value: https://wyked-samurai-backend.onrender.com
