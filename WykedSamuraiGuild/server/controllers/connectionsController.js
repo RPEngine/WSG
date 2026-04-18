@@ -4,12 +4,20 @@ import {
 } from "../services/connectionsService.js";
 
 export async function listConnections(req, res) {
-  const userId = req.user?.id || null;
-  if (!userId) {
-    return res.json({ items: [], connections: [], count: 0 });
+  try {
+    const userId = req.user?.id || null;
+    if (!userId) {
+      return res.json({ items: [], connections: [], count: 0 });
+    }
+    const items = await listConnectionsForUser(userId);
+    return res.json({ items, count: items.length });
+  } catch (error) {
+    console.warn("[connections] list fallback", {
+      userId: req.user?.id || null,
+      error: error?.message || "Unable to list connections.",
+    });
+    return res.json({ items: [], connections: [], count: 0, degraded: true });
   }
-  const items = await listConnectionsForUser(userId);
-  return res.json({ items, count: items.length });
 }
 
 export async function searchConnections(req, res) {

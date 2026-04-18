@@ -44,8 +44,16 @@ export async function getMyProfile(req, res) {
       noProfileYet: !profile,
     });
   } catch (error) {
-    console.warn("[profile] profile fetch failure", { userId: req.user.id, error: error.message || "Unable to fetch profile." });
-    return res.status(500).json({ error: "Unable to fetch profile." });
+    console.warn("[profile] profile fetch fallback", {
+      userId: req.user.id,
+      error: error.message || "Unable to fetch profile.",
+    });
+    return res.json({
+      profile: null,
+      hasProfile: false,
+      noProfileYet: true,
+      degraded: true,
+    });
   }
 }
 
