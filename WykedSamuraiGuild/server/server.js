@@ -1,3 +1,4 @@
+import cors from "cors";
 import express from "express";
 import apiRoutes from "./routes/apiRoutes.js";
 import { healthCheck } from "./controllers/healthController.js";
@@ -28,48 +29,37 @@ function parseOrigins(value) {
 }
 
 const configuredOrigins = parseOrigins(process.env.WSG_FRONTEND_ORIGIN || process.env.WSG_FRONTEND_ORIGINS);
-const localDevOrigins = [
-  "http://localhost:5173",
-  "http://localhost:3000",
-].map((origin) => normalizeOrigin(origin));
-const productionOrigins = [
-  ...configuredOrigins,
-  normalizeOrigin(RENDER_WEB_ORIGIN),
-];
+const localDevOrigins = ["http://localhost:5173", "http://localhost:3000"].map((origin) => normalizeOrigin(origin));
+const productionOrigins = [...configuredOrigins, normalizeOrigin(RENDER_WEB_ORIGIN)];
 
 const allowedOrigins = Array.from(
   new Set(isProduction ? productionOrigins : [...productionOrigins, ...localDevOrigins]),
 );
 
-function applyCorsHeaders(req, res, next) {
-  const requestOrigin = req.get("origin");
+const corsOptions = {
+  origin(origin, callback) {
+    if (!origin) {
+      return callback(null, true);
+    }
 
-  if (!requestOrigin) {
-    return next();
-  }
+    const normalizedOrigin = normalizeOrigin(origin);
+    if (!allowedOrigins.includes(normalizedOrigin)) {
+      return callback(Object.assign(new Error("CORS blocked for origin."), { status: 403 }));
+    }
 
-  const normalizedOrigin = normalizeOrigin(requestOrigin);
-  if (!allowedOrigins.includes(normalizedOrigin)) {
-    return next(Object.assign(new Error("CORS blocked for origin."), { status: 403 }));
-  }
-
-  res.setHeader("Access-Control-Allow-Origin", requestOrigin);
-  res.setHeader("Vary", "Origin");
-  res.setHeader("Access-Control-Allow-Methods", ALLOWED_METHODS.join(","));
-  res.setHeader("Access-Control-Allow-Headers", ALLOWED_HEADERS.join(","));
-  res.setHeader("Access-Control-Max-Age", "86400");
-
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(204);
-  }
-
-  return next();
-}
+    return callback(null, true);
+  },
+  methods: ALLOWED_METHODS,
+  allowedHeaders: ALLOWED_HEADERS,
+  optionsSuccessStatus: 204,
+  maxAge: 86400,
+};
 
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
 app.use(applySecurityHeaders);
-app.use(applyCorsHeaders);
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 app.use(express.json({ limit: "100kb" }));
 
 app.get("/health", healthCheck);
