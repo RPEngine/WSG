@@ -31,7 +31,8 @@ function checkLocalWiring() {
 
   assert(serverEntry.includes('const RENDER_WEB_ORIGIN = "https://wsg-web.onrender.com";'), "server.js is missing RENDER_WEB_ORIGIN constant.");
   assert(serverEntry.includes('const isProduction = process.env.NODE_ENV === "production";'), "server.js is missing NODE_ENV production guard.");
-  assert(serverEntry.includes('app.use("/api", (req, res, next) => {'), "server.js is missing /api CORS middleware.");
+  assert(serverEntry.includes('app.use("/api", apiCorsMiddleware);'), "server.js is missing /api cors middleware registration.");
+  assert(serverEntry.includes('app.options("/api/*", apiCorsMiddleware);'), "server.js is missing /api preflight OPTIONS cors handler.");
 
   console.log("✓ Local wiring checks passed");
 }
