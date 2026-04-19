@@ -9,44 +9,32 @@ import { getAiProviderConfig, requireFriendliConfig } from "./config/ai.js";
 import { applySecurityHeaders } from "./middleware/securityHeaders.js";
 
 const app = express();
-const isProduction = process.env.NODE_ENV === "production";
-const RENDER_WEB_ORIGIN = "https://wsg-web.onrender.com";
+const NODE_ENV = process.env.NODE_ENV || "undefined";
+const ALLOWED_ORIGINS = ["https://wsg-web.onrender.com"];
 const ALLOWED_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
 const ALLOWED_HEADERS = ["Content-Type", "Authorization"];
 
-const developmentOrigins = ["http://localhost:5173", "http://localhost:3000", RENDER_WEB_ORIGIN];
-const allowedOrigins = isProduction ? [RENDER_WEB_ORIGIN] : developmentOrigins;
-
-const buildCorsOptions = (req, callback) => {
-  const requestOrigin = req.header("Origin");
-  const originAllowed = Boolean(requestOrigin && allowedOrigins.includes(requestOrigin));
-
-  callback(null, {
-    origin: originAllowed ? requestOrigin : false,
-    methods: ALLOWED_METHODS,
-    allowedHeaders: ALLOWED_HEADERS,
-    optionsSuccessStatus: 204,
-    preflightContinue: false,
-  });
+const corsOptions = {
+  origin: ALLOWED_ORIGINS,
+  methods: ALLOWED_METHODS,
+  allowedHeaders: ALLOWED_HEADERS,
+  optionsSuccessStatus: 204,
+  preflightContinue: false,
 };
 
-const apiCorsMiddleware = cors(buildCorsOptions);
-
-console.log("[startup] CORS configuration", {
-  nodeEnv: process.env.NODE_ENV || "undefined",
-  allowedOrigins,
-  methods: ALLOWED_METHODS,
-  headers: ALLOWED_HEADERS,
+console.log("[startup] backend runtime", {
+  NODE_ENV,
+  allowedOrigins: ALLOWED_ORIGINS,
+  globalCorsEnabled: true,
 });
 
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
 app.use(applySecurityHeaders);
 
-// Ensure CORS executes before all /api route handling.
-app.options("/api", apiCorsMiddleware);
-app.options("/api/*", apiCorsMiddleware);
-app.use("/api", apiCorsMiddleware);
+// Global CORS must execute before all route handling.
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 
 app.use(express.json({ limit: "100kb" }));
 
