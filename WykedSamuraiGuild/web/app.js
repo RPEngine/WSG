@@ -1297,6 +1297,9 @@ function resolveApiBaseUrl() {
   const { protocol, host } = window.location;
   const origin = `${protocol}//${host}`;
   const isLocalDevHost = host.startsWith('localhost') || host.startsWith('127.0.0.1');
+  const backendFallbackBase = 'https://wsg-7hmk.onrender.com';
+  const productionStaticHosts = new Set(['wsg-web.onrender.com']);
+  const normalizedHost = String(host || '').trim().toLowerCase();
   const configuredBackendBase = document
     .querySelector('meta[name="wsg-backend-base-url"]')
     ?.getAttribute('content');
@@ -1322,6 +1325,10 @@ function resolveApiBaseUrl() {
 
   if (isLocalDevHost) {
     return 'http://localhost:3000';
+  }
+
+  if (productionStaticHosts.has(normalizedHost)) {
+    return backendFallbackBase;
   }
 
   return origin;
