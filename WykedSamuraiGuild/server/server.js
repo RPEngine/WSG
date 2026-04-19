@@ -127,6 +127,12 @@ app.use(applySecurityHeaders);
 // Set CORS response headers as early as possible so they are present
 // even when downstream middleware/handlers fail.
 app.use((req, res, next) => {
+  const originalWriteHead = res.writeHead.bind(res);
+  res.writeHead = (...args) => {
+    applyCorsResponseHeaders(req, res);
+    return originalWriteHead(...args);
+  };
+
   const requestOrigin = req.headers.origin;
   const allowed = applyCorsResponseHeaders(req, res);
 
@@ -180,6 +186,7 @@ app.use((req, res, next) => {
 app.get("/api/debug/cors-runtime", (req, res) => {
   const requestOrigin = req.headers.origin || null;
   res.json({
+    corsRuntimeVersion: "2026-04-19-writehead-guard",
     diagnosticsEnabled: ENABLE_CORS_DIAGNOSTICS,
     nodeEnv: NODE_ENV,
     renderServiceName: process.env.RENDER_SERVICE_NAME || null,
