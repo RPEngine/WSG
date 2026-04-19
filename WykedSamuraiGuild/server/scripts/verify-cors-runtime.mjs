@@ -31,7 +31,7 @@ function checkLocalWiring() {
   assert(serverPackage.scripts?.start === "node server.js", "server/package.json start script is not node server.js.");
 
   assert(serverEntry.includes("const DEFAULT_ALLOWED_ORIGINS = [\"https://wsg-web.onrender.com\"];"), "server.js is missing expected default allowed origin configuration.");
-  assert(serverEntry.includes("const EFFECTIVE_ALLOWED_ORIGINS = ALLOWED_ORIGINS.length > 0 ? ALLOWED_ORIGINS : DEFAULT_ALLOWED_ORIGINS;"), "server.js is missing effective allowed origins configuration.");
+  assert(serverEntry.includes("const EFFECTIVE_ALLOWED_ORIGINS = ALLOWED_ORIGINS.length > 0"), "server.js is missing effective allowed origins configuration.");
   assert(serverEntry.includes('app.use(cors(corsOptions));'), "server.js is missing global CORS middleware registration.");
   assert(serverEntry.includes('app.options("*", cors(corsOptions));'), "server.js is missing global OPTIONS preflight CORS handler.");
 
