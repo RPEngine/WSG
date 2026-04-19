@@ -8,6 +8,8 @@ services:
     envVars:
       - key: GOOGLE_CLIENT_ID
         sync: false
+      - key: WSG_FRONTEND_ORIGIN
+        value: https://wsg-web.onrender.com
       - key: DATABASE_URL
         sync: false
       - key: RENDER_INTERNAL_DATABASE_URL
@@ -34,4 +36,4 @@ services:
       - key: WSG_SUPABASE_ANON_KEY
         sync: false
       - key: WSG_BACKEND_BASE_URL
-        value: https://wsg-backend.onrender.com
+        value: https://wsg-7hmk.onrender.com

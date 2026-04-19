@@ -618,7 +618,6 @@ const state = {
 };
 
 const BACKEND_BASE_URL_CONFIG_KEY = 'wsg-backend-base-url';
-const RENDER_PRODUCTION_BACKEND_ORIGIN = 'https://wyked-samurai-backend.onrender.com';
 const AI_ENDPOINTS = Object.freeze({
   test: '/ai/test',
   chat: '/ai/chat',
@@ -1298,7 +1297,6 @@ function resolveApiBaseUrl() {
   const { protocol, host } = window.location;
   const origin = `${protocol}//${host}`;
   const isLocalDevHost = host.startsWith('localhost') || host.startsWith('127.0.0.1');
-  const isRenderHost = /onrender\.com$/i.test(host);
   const configuredBackendBase = document
     .querySelector('meta[name="wsg-backend-base-url"]')
     ?.getAttribute('content');
@@ -1314,31 +1312,10 @@ function resolveApiBaseUrl() {
       || configuredMetaBase,
   );
 
-  if (isRenderHost) {
-    const renderConfiguredBase = resolveConfiguredBase();
-    const normalizedOrigin = normalizeBase(origin);
-    if (renderConfiguredBase && renderConfiguredBase !== normalizedOrigin) {
-      return renderConfiguredBase;
-    }
-    if (/wyked-samurai-frontend/i.test(host)) {
-      return `${protocol}//${host.replace(/wyked-samurai-frontend/i, 'wyked-samurai-backend')}`;
-    }
-    if (/wsg-web/i.test(host)) {
-      return `${protocol}//${host.replace(/wsg-web/i, 'wsg-backend')}`;
-    }
-    if (renderConfiguredBase) {
-      return renderConfiguredBase;
-    }
-    return RENDER_PRODUCTION_BACKEND_ORIGIN;
-  }
+  const configuredBase = resolveConfiguredBase()
+    || (isLocalDevHost ? normalizeBase(localStorage.getItem(BACKEND_BASE_URL_CONFIG_KEY)) : '')
+    || (isLocalDevHost ? normalizeBase(localStorage.getItem('wsg-api-base-url')) : '');
 
-  const configuredBase = normalizeBase(configuredBackendBase
-    || window.WSG_BACKEND_BASE_URL
-    || (isLocalDevHost ? localStorage.getItem(BACKEND_BASE_URL_CONFIG_KEY) : '')
-    || window.WSG_API_BASE_URL
-    || configuredMetaBase
-    || (isLocalDevHost ? localStorage.getItem('wsg-api-base-url') : '')
-    || '');
   if (configuredBase) {
     return configuredBase;
   }
