@@ -37,6 +37,7 @@ const EFFECTIVE_ALLOWED_ORIGINS = ALLOWED_ORIGINS.length > 0
   : DEFAULT_ALLOWED_ORIGINS.map((origin) => normalizeOrigin(origin));
 const ALLOWED_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
 const ENABLE_CORS_DIAGNOSTICS = String(process.env.WSG_ENABLE_CORS_DIAGNOSTICS || "").toLowerCase() === "true";
+const ENABLE_CORS_GUARD_LOGGING = String(process.env.WSG_ENABLE_CORS_GUARD_LOGGING || "true").toLowerCase() !== "false";
 const ALLOWED_RENDER_FRONTEND_ORIGIN_PATTERN = /^https:\/\/wsg-web(?:-[a-z0-9-]+)?\.onrender\.com$/i;
 const CORS_MAX_AGE_SECONDS = 60 * 60 * 6;
 
@@ -153,31 +154,50 @@ app.options("*", cors(corsOptions));
 app.use(express.json({ limit: "100kb" }));
 
 app.use((req, res, next) => {
-  if (!ENABLE_CORS_DIAGNOSTICS) {
-    return next();
-  }
-
   const shouldTrace = ["/api/profile/me", "/api/connections"].includes(req.path);
   if (!shouldTrace) {
     return next();
   }
 
   const requestOrigin = req.headers.origin || null;
+  const normalizedOrigin = normalizeOrigin(requestOrigin);
+  const originAllowed = isAllowedOrigin(requestOrigin);
   const preflightMethod = req.headers["access-control-request-method"] || null;
   const preflightHeaders = req.headers["access-control-request-headers"] || null;
 
   res.on("finish", () => {
-    console.log("[cors:trace]", {
+    const allowOrigin = res.getHeader("access-control-allow-origin") || null;
+    const allowMethods = res.getHeader("access-control-allow-methods") || null;
+    const allowHeaders = res.getHeader("access-control-allow-headers") || null;
+    const payload = {
       method: req.method,
       path: req.path,
+      host: req.headers.host || null,
+      forwardedHost: req.headers["x-forwarded-host"] || null,
+      requestId: req.headers["x-request-id"] || null,
       requestOrigin,
+      normalizedOrigin: requestOrigin ? normalizedOrigin : null,
+      originAllowed,
       preflightMethod,
       preflightHeaders,
       statusCode: res.statusCode,
-      allowOrigin: res.getHeader("access-control-allow-origin") || null,
-      allowMethods: res.getHeader("access-control-allow-methods") || null,
-      allowHeaders: res.getHeader("access-control-allow-headers") || null,
-    });
+      allowOrigin,
+      allowMethods,
+      allowHeaders,
+    };
+
+    if (ENABLE_CORS_DIAGNOSTICS) {
+      console.log("[cors:trace]", payload);
+    }
+
+    if (ENABLE_CORS_GUARD_LOGGING && requestOrigin && !allowOrigin) {
+      console.warn("[cors:missing-allow-origin]", {
+        ...payload,
+        diagnosticsEnabled: ENABLE_CORS_DIAGNOSTICS,
+        effectiveAllowedOrigins: EFFECTIVE_ALLOWED_ORIGINS,
+        allowlistedRenderOriginPattern: ALLOWED_RENDER_FRONTEND_ORIGIN_PATTERN.toString(),
+      });
+    }
   });
 
   return next();
@@ -188,6 +208,7 @@ app.get("/api/debug/cors-runtime", (req, res) => {
   res.json({
     corsRuntimeVersion: "2026-04-19-writehead-guard",
     diagnosticsEnabled: ENABLE_CORS_DIAGNOSTICS,
+    corsGuardLoggingEnabled: ENABLE_CORS_GUARD_LOGGING,
     nodeEnv: NODE_ENV,
     renderServiceName: process.env.RENDER_SERVICE_NAME || null,
     renderGitCommit: process.env.RENDER_GIT_COMMIT || null,
