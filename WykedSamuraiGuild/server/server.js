@@ -38,6 +38,7 @@ const EFFECTIVE_ALLOWED_ORIGINS = ALLOWED_ORIGINS.length > 0
 const ALLOWED_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
 const ENABLE_CORS_DIAGNOSTICS = String(process.env.WSG_ENABLE_CORS_DIAGNOSTICS || "").toLowerCase() === "true";
 const ALLOWED_RENDER_FRONTEND_ORIGIN_PATTERN = /^https:\/\/wsg-web(?:-[a-z0-9-]+)?\.onrender\.com$/i;
+const CORS_MAX_AGE_SECONDS = 60 * 60 * 6;
 
 function isAllowedRenderFrontendOrigin(origin) {
   if (!origin) {
@@ -78,11 +79,32 @@ const corsOptions = {
     return callback(new Error(`CORS origin denied: ${origin || "unknown-origin"}`));
   },
   methods: ALLOWED_METHODS,
+  credentials: true,
+  maxAge: CORS_MAX_AGE_SECONDS,
   // Reflect preflight-requested headers instead of pinning to a fixed list.
   // This avoids runtime CORS failures when browsers include extra non-simple headers.
   optionsSuccessStatus: 204,
   preflightContinue: false,
 };
+
+function applyCorsResponseHeaders(req, res) {
+  const requestOrigin = req.headers.origin;
+  const allowed = isAllowedOrigin(requestOrigin);
+  if (!requestOrigin || !allowed) {
+    return false;
+  }
+
+  res.setHeader("Access-Control-Allow-Origin", normalizeOrigin(requestOrigin));
+  res.setHeader("Vary", "Origin");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader("Access-Control-Allow-Methods", ALLOWED_METHODS.join(","));
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    req.headers["access-control-request-headers"] || "Authorization,Content-Type",
+  );
+  res.setHeader("Access-Control-Max-Age", String(CORS_MAX_AGE_SECONDS));
+  return true;
+}
 
 console.log("[startup] backend runtime", {
   NODE_ENV,
@@ -106,17 +128,7 @@ app.use(applySecurityHeaders);
 // even when downstream middleware/handlers fail.
 app.use((req, res, next) => {
   const requestOrigin = req.headers.origin;
-  const allowed = isAllowedOrigin(requestOrigin);
-
-  if (requestOrigin && allowed) {
-    res.setHeader("Access-Control-Allow-Origin", normalizeOrigin(requestOrigin));
-    res.setHeader("Vary", "Origin");
-    res.setHeader("Access-Control-Allow-Methods", ALLOWED_METHODS.join(","));
-    res.setHeader(
-      "Access-Control-Allow-Headers",
-      req.headers["access-control-request-headers"] || "Authorization,Content-Type",
-    );
-  }
+  const allowed = applyCorsResponseHeaders(req, res);
 
   if (req.method === "OPTIONS") {
     if (requestOrigin && allowed) {
@@ -196,6 +208,9 @@ app.get("/", (req, res) => {
 });
 
 app.use((err, req, res, next) => {
+  // Ensure CORS headers are present on error responses as well.
+  applyCorsResponseHeaders(req, res);
+
   const status = Number.isInteger(err?.status) ? err.status : 500;
   console.error("[server] unhandled error", {
     message: err?.message || "Unknown error",
