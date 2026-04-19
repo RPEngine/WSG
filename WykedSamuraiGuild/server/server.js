@@ -11,8 +11,10 @@ import { applySecurityHeaders } from "./middleware/securityHeaders.js";
 const app = express();
 const NODE_ENV = process.env.NODE_ENV || "undefined";
 const DEFAULT_ALLOWED_ORIGINS = ["https://wsg-web.onrender.com"];
-const RAW_ALLOWED_ORIGINS = String(process.env.WSG_FRONTEND_ORIGIN || "")
-  .split(",")
+const RAW_ALLOWED_ORIGINS = [
+  ...String(process.env.WSG_FRONTEND_ORIGIN || "").split(","),
+  ...String(process.env.WSG_FRONTEND_ORIGINS || "").split(","),
+]
   .map((origin) => origin.trim())
   .filter(Boolean);
 
@@ -36,13 +38,26 @@ const EFFECTIVE_ALLOWED_ORIGINS = ALLOWED_ORIGINS.length > 0
 const ALLOWED_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
 const ALLOWED_HEADERS = ["Content-Type", "Authorization"];
 const ENABLE_CORS_DIAGNOSTICS = String(process.env.WSG_ENABLE_CORS_DIAGNOSTICS || "").toLowerCase() === "true";
+const ALLOWED_RENDER_FRONTEND_ORIGIN_PATTERN = /^https:\/\/wsg-web(?:-[a-z0-9-]+)?\.onrender\.com$/i;
+
+function isAllowedRenderFrontendOrigin(origin) {
+  if (!origin) {
+    return false;
+  }
+  const normalizedOrigin = normalizeOrigin(origin);
+  return ALLOWED_RENDER_FRONTEND_ORIGIN_PATTERN.test(normalizedOrigin);
+}
 
 function isAllowedOrigin(origin) {
   if (!origin) {
     return true;
   }
   const normalizedOrigin = normalizeOrigin(origin);
-  return EFFECTIVE_ALLOWED_ORIGINS.includes(normalizedOrigin);
+  if (EFFECTIVE_ALLOWED_ORIGINS.includes(normalizedOrigin)) {
+    return true;
+  }
+
+  return isAllowedRenderFrontendOrigin(normalizedOrigin);
 }
 
 const corsOptions = {
@@ -73,9 +88,12 @@ console.log("[startup] backend runtime", {
   NODE_ENV,
   renderServiceName: process.env.RENDER_SERVICE_NAME || null,
   renderGitCommit: process.env.RENDER_GIT_COMMIT || null,
+  frontendOriginEnv: process.env.WSG_FRONTEND_ORIGIN || null,
+  frontendOriginsEnv: process.env.WSG_FRONTEND_ORIGINS || null,
   allowedOriginsFromEnvRaw: RAW_ALLOWED_ORIGINS,
   allowedOriginsFromEnvNormalized: ALLOWED_ORIGINS,
   effectiveAllowedOrigins: EFFECTIVE_ALLOWED_ORIGINS,
+  allowlistedRenderOriginPattern: ALLOWED_RENDER_FRONTEND_ORIGIN_PATTERN.toString(),
   globalCorsEnabled: true,
   diagnosticsEnabled: ENABLE_CORS_DIAGNOSTICS,
 });
