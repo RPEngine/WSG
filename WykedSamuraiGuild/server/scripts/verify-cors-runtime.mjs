@@ -7,7 +7,7 @@ const renderYamlPath = path.join(repoRoot, "render.yaml");
 const serverPackagePath = path.join(repoRoot, "server", "package.json");
 const serverEntryPath = path.join(repoRoot, "server", "server.js");
 
-const backendBaseUrl = (process.argv[2] || process.env.WSG_BACKEND_BASE_URL || "https://wyked-samurai-backend.onrender.com").replace(/\/+$/, "");
+const backendBaseUrl = (process.argv[2] || process.env.WSG_BACKEND_BASE_URL || "https://wsg-backend.onrender.com").replace(/\/+$/, "");
 const expectedOrigin = process.argv[3] || "https://wsg-web.onrender.com";
 const endpoints = ["/api/profile/me", "/api/connections"];
 
@@ -22,7 +22,7 @@ function checkLocalWiring() {
   const serverPackage = JSON.parse(fs.readFileSync(serverPackagePath, "utf8"));
   const serverEntry = fs.readFileSync(serverEntryPath, "utf8");
 
-  assert(renderYaml.includes("name: wyked-samurai-backend"), "render.yaml does not define wyked-samurai-backend service.");
+  assert(renderYaml.includes("name: wsg-backend"), "render.yaml does not define wsg-backend service.");
   assert(renderYaml.includes("rootDir: server"), "render.yaml backend rootDir is not server.");
   assert(renderYaml.includes("startCommand: npm start"), "render.yaml backend startCommand is not npm start.");
 
@@ -39,14 +39,19 @@ function checkLocalWiring() {
 async function checkRemoteCors() {
   for (const endpoint of endpoints) {
     const url = `${backendBaseUrl}${endpoint}`;
-    const response = await fetch(url, {
-      method: "OPTIONS",
-      headers: {
-        Origin: expectedOrigin,
-        "Access-Control-Request-Method": "GET",
-        "Access-Control-Request-Headers": "authorization,content-type",
-      },
-    });
+    let response;
+    try {
+      response = await fetch(url, {
+        method: "OPTIONS",
+        headers: {
+          Origin: expectedOrigin,
+          "Access-Control-Request-Method": "GET",
+          "Access-Control-Request-Headers": "authorization,content-type",
+        },
+      });
+    } catch (error) {
+      throw new Error(`${endpoint} preflight network failure against ${backendBaseUrl}: ${error.message}`);
+    }
 
     const allowOrigin = response.headers.get("access-control-allow-origin");
     const allowMethods = response.headers.get("access-control-allow-methods");

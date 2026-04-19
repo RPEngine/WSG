@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: wyked-samurai-backend
+    name: wsg-backend
     env: node
     rootDir: server
     buildCommand: npm install
@@ -16,7 +16,7 @@ services:
         value: require
 
   - type: static
-    name: wyked-samurai-frontend
+    name: wsg-web
     rootDir: web
     buildCommand: |
       test -n "$WSG_SUPABASE_URL" || (echo "Missing WSG_SUPABASE_URL" && exit 1)
@@ -34,4 +34,4 @@ services:
       - key: WSG_SUPABASE_ANON_KEY
         sync: false
       - key: WSG_BACKEND_BASE_URL
-        value: https://wyked-samurai-backend.onrender.com
+        value: https://wsg-backend.onrender.com
