@@ -40,8 +40,10 @@ const EFFECTIVE_ALLOWED_ORIGINS = ALLOWED_ORIGINS.length > 0
 const ALLOWED_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
 const ENABLE_CORS_DIAGNOSTICS = String(process.env.WSG_ENABLE_CORS_DIAGNOSTICS || "").toLowerCase() === "true";
 const ENABLE_CORS_GUARD_LOGGING = String(process.env.WSG_ENABLE_CORS_GUARD_LOGGING || "true").toLowerCase() !== "false";
+const ENABLE_CORS_RESPONSE_DIAGNOSTICS = String(process.env.WSG_ENABLE_CORS_RESPONSE_DIAGNOSTICS || "true").toLowerCase() !== "false";
 const ALLOWED_RENDER_FRONTEND_ORIGIN_PATTERN = /^https:\/\/wsg-web(?:-[a-z0-9-]+)?\.onrender\.com$/i;
 const CORS_MAX_AGE_SECONDS = 60 * 60 * 6;
+const CORS_TRACE_PATHS = ["/api/profile/me", "/api/connections"];
 
 function isAllowedRenderFrontendOrigin(origin) {
   if (!origin) {
@@ -162,7 +164,7 @@ app.options("*", cors(corsOptions));
 app.use(express.json({ limit: "100kb" }));
 
 app.use((req, res, next) => {
-  const shouldTrace = ["/api/profile/me", "/api/connections"].includes(req.path);
+  const shouldTrace = CORS_TRACE_PATHS.includes(req.path);
   if (!shouldTrace) {
     return next();
   }
@@ -172,6 +174,14 @@ app.use((req, res, next) => {
   const originAllowed = isAllowedOrigin(requestOrigin);
   const preflightMethod = req.headers["access-control-request-method"] || null;
   const preflightHeaders = req.headers["access-control-request-headers"] || null;
+
+  if (ENABLE_CORS_RESPONSE_DIAGNOSTICS) {
+    res.setHeader("X-WSG-CORS-Path-Trace", "true");
+    res.setHeader("X-WSG-CORS-Origin-Allowed", String(originAllowed));
+    if (requestOrigin) {
+      res.setHeader("X-WSG-CORS-Origin-Received", normalizedOrigin);
+    }
+  }
 
   res.on("finish", () => {
     const allowOrigin = res.getHeader("access-control-allow-origin") || null;
@@ -213,10 +223,12 @@ app.use((req, res, next) => {
 
 app.get("/api/debug/cors-runtime", (req, res) => {
   const requestOrigin = req.headers.origin || null;
+  const normalizedOrigin = normalizeOrigin(requestOrigin);
   res.json({
     corsRuntimeVersion: CORS_RUNTIME_VERSION,
     diagnosticsEnabled: ENABLE_CORS_DIAGNOSTICS,
     corsGuardLoggingEnabled: ENABLE_CORS_GUARD_LOGGING,
+    corsResponseDiagnosticsEnabled: ENABLE_CORS_RESPONSE_DIAGNOSTICS,
     nodeEnv: NODE_ENV,
     renderServiceName: process.env.RENDER_SERVICE_NAME || null,
     renderGitCommit: process.env.RENDER_GIT_COMMIT || null,
@@ -227,6 +239,9 @@ app.get("/api/debug/cors-runtime", (req, res) => {
       method: req.method,
       path: req.path,
       origin: requestOrigin,
+      normalizedOrigin: requestOrigin ? normalizedOrigin : null,
+      host: req.headers.host || null,
+      forwardedHost: req.headers["x-forwarded-host"] || null,
       accessControlRequestMethod: req.headers["access-control-request-method"] || null,
       accessControlRequestHeaders: req.headers["access-control-request-headers"] || null,
     },
