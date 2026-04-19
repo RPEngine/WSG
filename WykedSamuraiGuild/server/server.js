@@ -36,7 +36,6 @@ const EFFECTIVE_ALLOWED_ORIGINS = ALLOWED_ORIGINS.length > 0
   ? ALLOWED_ORIGINS
   : DEFAULT_ALLOWED_ORIGINS.map((origin) => normalizeOrigin(origin));
 const ALLOWED_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
-const ALLOWED_HEADERS = ["Content-Type", "Authorization"];
 const ENABLE_CORS_DIAGNOSTICS = String(process.env.WSG_ENABLE_CORS_DIAGNOSTICS || "").toLowerCase() === "true";
 const ALLOWED_RENDER_FRONTEND_ORIGIN_PATTERN = /^https:\/\/wsg-web(?:-[a-z0-9-]+)?\.onrender\.com$/i;
 
@@ -79,7 +78,8 @@ const corsOptions = {
     return callback(new Error(`CORS origin denied: ${origin || "unknown-origin"}`));
   },
   methods: ALLOWED_METHODS,
-  allowedHeaders: ALLOWED_HEADERS,
+  // Reflect preflight-requested headers instead of pinning to a fixed list.
+  // This avoids runtime CORS failures when browsers include extra non-simple headers.
   optionsSuccessStatus: 204,
   preflightContinue: false,
 };
