@@ -46,7 +46,7 @@ console.log("[startup] CORS configuration", {
   allowedOrigins,
 });
 
-const apiCorsMiddleware = cors({
+const corsOptions = {
   origin(origin, callback) {
     if (!origin) {
       callback(null, false);
@@ -64,12 +64,15 @@ const apiCorsMiddleware = cors({
   methods: ALLOWED_METHODS,
   allowedHeaders: ALLOWED_HEADERS,
   optionsSuccessStatus: 204,
-});
+};
+
+const apiCorsMiddleware = cors(corsOptions);
 
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
 app.use(applySecurityHeaders);
 app.use("/api", apiCorsMiddleware);
+app.options("/api", apiCorsMiddleware);
 app.options("/api/*", apiCorsMiddleware);
 app.use(express.json({ limit: "100kb" }));
 
