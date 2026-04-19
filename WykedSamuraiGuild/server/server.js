@@ -10,7 +10,8 @@ import { applySecurityHeaders } from "./middleware/securityHeaders.js";
 
 const app = express();
 const NODE_ENV = process.env.NODE_ENV || "undefined";
-const CORS_RUNTIME_VERSION = "2026-04-19-runtime-fingerprint-v1";
+const CORS_RUNTIME_VERSION = "2026-04-19-runtime-fingerprint-v2";
+const APP_REACHABILITY_HEADER = "X-WSG-App-Reached";
 const DEFAULT_ALLOWED_ORIGINS = ["https://wsg-web.onrender.com"];
 const RAW_ALLOWED_ORIGINS = [
   ...String(process.env.WSG_FRONTEND_ORIGIN || "").split(","),
@@ -128,6 +129,7 @@ app.disable("x-powered-by");
 app.use(applySecurityHeaders);
 app.use((req, res, next) => {
   res.setHeader("X-WSG-CORS-Runtime", CORS_RUNTIME_VERSION);
+  res.setHeader(APP_REACHABILITY_HEADER, "true");
   return next();
 });
 
@@ -229,6 +231,40 @@ app.get("/api/debug/cors-runtime", (req, res) => {
       accessControlRequestHeaders: req.headers["access-control-request-headers"] || null,
     },
     originAllowed: isAllowedOrigin(requestOrigin),
+  });
+});
+
+app.all("/api/debug/cors-probe", (req, res) => {
+  const requestOrigin = req.headers.origin || null;
+  const normalizedOrigin = normalizeOrigin(requestOrigin);
+  const originAllowed = isAllowedOrigin(requestOrigin);
+
+  res.json({
+    timestamp: new Date().toISOString(),
+    corsRuntimeVersion: CORS_RUNTIME_VERSION,
+    appReachabilityHeader: APP_REACHABILITY_HEADER,
+    request: {
+      method: req.method,
+      path: req.path,
+      host: req.headers.host || null,
+      forwardedHost: req.headers["x-forwarded-host"] || null,
+      origin: requestOrigin,
+      normalizedOrigin: requestOrigin ? normalizedOrigin : null,
+      accessControlRequestMethod: req.headers["access-control-request-method"] || null,
+      accessControlRequestHeaders: req.headers["access-control-request-headers"] || null,
+    },
+    computed: {
+      originAllowed,
+      effectiveAllowedOrigins: EFFECTIVE_ALLOWED_ORIGINS,
+      allowlistedRenderOriginPattern: ALLOWED_RENDER_FRONTEND_ORIGIN_PATTERN.toString(),
+    },
+    responseHeaders: {
+      allowOrigin: res.getHeader("access-control-allow-origin") || null,
+      allowMethods: res.getHeader("access-control-allow-methods") || null,
+      allowHeaders: res.getHeader("access-control-allow-headers") || null,
+      appReached: res.getHeader(APP_REACHABILITY_HEADER) || null,
+      corsRuntime: res.getHeader("X-WSG-CORS-Runtime") || null,
+    },
   });
 });
 
