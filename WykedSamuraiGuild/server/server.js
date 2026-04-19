@@ -10,6 +10,7 @@ import { applySecurityHeaders } from "./middleware/securityHeaders.js";
 
 const app = express();
 const NODE_ENV = process.env.NODE_ENV || "undefined";
+const CORS_RUNTIME_VERSION = "2026-04-19-runtime-fingerprint-v1";
 const DEFAULT_ALLOWED_ORIGINS = ["https://wsg-web.onrender.com"];
 const RAW_ALLOWED_ORIGINS = [
   ...String(process.env.WSG_FRONTEND_ORIGIN || "").split(","),
@@ -108,6 +109,7 @@ function applyCorsResponseHeaders(req, res) {
 }
 
 console.log("[startup] backend runtime", {
+  corsRuntimeVersion: CORS_RUNTIME_VERSION,
   NODE_ENV,
   renderServiceName: process.env.RENDER_SERVICE_NAME || null,
   renderGitCommit: process.env.RENDER_GIT_COMMIT || null,
@@ -124,6 +126,10 @@ console.log("[startup] backend runtime", {
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
 app.use(applySecurityHeaders);
+app.use((req, res, next) => {
+  res.setHeader("X-WSG-CORS-Runtime", CORS_RUNTIME_VERSION);
+  return next();
+});
 
 // Set CORS response headers as early as possible so they are present
 // even when downstream middleware/handlers fail.
@@ -206,7 +212,7 @@ app.use((req, res, next) => {
 app.get("/api/debug/cors-runtime", (req, res) => {
   const requestOrigin = req.headers.origin || null;
   res.json({
-    corsRuntimeVersion: "2026-04-19-writehead-guard",
+    corsRuntimeVersion: CORS_RUNTIME_VERSION,
     diagnosticsEnabled: ENABLE_CORS_DIAGNOSTICS,
     corsGuardLoggingEnabled: ENABLE_CORS_GUARD_LOGGING,
     nodeEnv: NODE_ENV,
