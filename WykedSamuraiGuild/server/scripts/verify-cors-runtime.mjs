@@ -7,7 +7,7 @@ const renderYamlPath = path.join(repoRoot, "render.yaml");
 const serverPackagePath = path.join(repoRoot, "server", "package.json");
 const serverEntryPath = path.join(repoRoot, "server", "server.js");
 
-const backendBaseUrl = (process.argv[2] || process.env.WSG_BACKEND_BASE_URL || "https://wsg-backend.onrender.com").replace(/\/+$/, "");
+const backendBaseUrl = (process.argv[2] || process.env.WSG_BACKEND_BASE_URL || "https://wsg-7hmk.onrender.com").replace(/\/+$/, "");
 const expectedOrigin = process.argv[3] || "https://wsg-web.onrender.com";
 const endpoints = ["/api/profile/me", "/api/connections"];
 
