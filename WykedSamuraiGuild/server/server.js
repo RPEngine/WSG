@@ -14,53 +14,10 @@ const RENDER_WEB_ORIGIN = "https://wsg-web.onrender.com";
 const ALLOWED_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
 const ALLOWED_HEADERS = ["Content-Type", "Authorization"];
 
-function normalizeOrigin(value) {
-  return String(value || "")
-    .trim()
-    .replace(/\/+$/, "")
-    .toLowerCase();
-}
-
-function parseOrigins(value) {
-  return String(value || "")
-    .split(",")
-    .map((origin) => normalizeOrigin(origin))
-    .filter(Boolean);
-}
-
-const configuredOrigins = parseOrigins(
-  process.env.WSG_FRONTEND_ORIGIN ||
-    process.env.WSG_FRONTEND_ORIGINS ||
-    process.env.FRONTEND_URL ||
-    process.env.CORS_ORIGIN,
-);
-const localDevOrigins = ["http://localhost:5173", "http://localhost:3000"].map((origin) => normalizeOrigin(origin));
-const productionOrigins = [normalizeOrigin(RENDER_WEB_ORIGIN), ...configuredOrigins];
-
-const allowedOrigins = Array.from(
-  new Set(isProduction ? productionOrigins : [...productionOrigins, ...localDevOrigins]),
-);
-
-console.log("[startup] CORS configuration", {
-  nodeEnv: process.env.NODE_ENV || "undefined",
-  allowedOrigins,
-});
+const developmentOrigins = ["http://localhost:5173", "http://localhost:3000", RENDER_WEB_ORIGIN];
 
 const corsOptions = {
-  origin(origin, callback) {
-    if (!origin) {
-      callback(null, false);
-      return;
-    }
-
-    const normalizedOrigin = normalizeOrigin(origin);
-    if (allowedOrigins.includes(normalizedOrigin)) {
-      callback(null, origin);
-      return;
-    }
-
-    callback(new Error("CORS blocked for origin."));
-  },
+  origin: isProduction ? RENDER_WEB_ORIGIN : developmentOrigins,
   methods: ALLOWED_METHODS,
   allowedHeaders: ALLOWED_HEADERS,
   optionsSuccessStatus: 204,
@@ -68,12 +25,22 @@ const corsOptions = {
 
 const apiCorsMiddleware = cors(corsOptions);
 
+console.log("[startup] CORS configuration", {
+  nodeEnv: process.env.NODE_ENV || "undefined",
+  allowedOrigins: isProduction ? [RENDER_WEB_ORIGIN] : developmentOrigins,
+  methods: ALLOWED_METHODS,
+  headers: ALLOWED_HEADERS,
+});
+
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
 app.use(applySecurityHeaders);
-app.use("/api", apiCorsMiddleware);
+
+// Ensure CORS executes before all /api route handling.
 app.options("/api", apiCorsMiddleware);
 app.options("/api/*", apiCorsMiddleware);
+app.use("/api", apiCorsMiddleware);
+
 app.use(express.json({ limit: "100kb" }));
 
 app.get("/health", healthCheck);
