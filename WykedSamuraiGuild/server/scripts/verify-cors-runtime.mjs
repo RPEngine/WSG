@@ -22,7 +22,7 @@ function checkLocalWiring() {
   const serverPackage = JSON.parse(fs.readFileSync(serverPackagePath, "utf8"));
   const serverEntry = fs.readFileSync(serverEntryPath, "utf8");
 
-  assert(renderYaml.includes("name: wsg-backend"), "render.yaml does not define wsg-backend service.");
+  assert(renderYaml.includes("name: wsg-7hmk"), "render.yaml does not define wsg-7hmk backend service.");
   assert(renderYaml.includes("rootDir: server"), "render.yaml backend rootDir is not server.");
   assert(renderYaml.includes("startCommand: npm start"), "render.yaml backend startCommand is not npm start.");
 

@@ -28,13 +28,23 @@ function parseOrigins(value) {
     .filter(Boolean);
 }
 
-const configuredOrigins = parseOrigins(process.env.WSG_FRONTEND_ORIGIN || process.env.WSG_FRONTEND_ORIGINS);
+const configuredOrigins = parseOrigins(
+  process.env.WSG_FRONTEND_ORIGIN ||
+    process.env.WSG_FRONTEND_ORIGINS ||
+    process.env.FRONTEND_URL ||
+    process.env.CORS_ORIGIN,
+);
 const localDevOrigins = ["http://localhost:5173", "http://localhost:3000"].map((origin) => normalizeOrigin(origin));
 const productionOrigins = [...configuredOrigins, normalizeOrigin(RENDER_WEB_ORIGIN)];
 
 const allowedOrigins = Array.from(
   new Set(isProduction ? productionOrigins : [...productionOrigins, ...localDevOrigins]),
 );
+
+console.log("[startup] CORS configuration", {
+  nodeEnv: process.env.NODE_ENV || "undefined",
+  allowedOrigins,
+});
 
 function applyApiCorsHeaders(req, res) {
   const requestOrigin = normalizeOrigin(req.headers.origin);

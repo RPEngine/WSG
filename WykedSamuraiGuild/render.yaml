@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: wsg-backend
+    name: wsg-7hmk
     env: node
     rootDir: server
     buildCommand: npm install
