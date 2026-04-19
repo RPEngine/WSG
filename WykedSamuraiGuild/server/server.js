@@ -15,19 +15,26 @@ const ALLOWED_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
 const ALLOWED_HEADERS = ["Content-Type", "Authorization"];
 
 const developmentOrigins = ["http://localhost:5173", "http://localhost:3000", RENDER_WEB_ORIGIN];
+const allowedOrigins = isProduction ? [RENDER_WEB_ORIGIN] : developmentOrigins;
 
-const corsOptions = {
-  origin: isProduction ? RENDER_WEB_ORIGIN : developmentOrigins,
-  methods: ALLOWED_METHODS,
-  allowedHeaders: ALLOWED_HEADERS,
-  optionsSuccessStatus: 204,
+const buildCorsOptions = (req, callback) => {
+  const requestOrigin = req.header("Origin");
+  const originAllowed = Boolean(requestOrigin && allowedOrigins.includes(requestOrigin));
+
+  callback(null, {
+    origin: originAllowed ? requestOrigin : false,
+    methods: ALLOWED_METHODS,
+    allowedHeaders: ALLOWED_HEADERS,
+    optionsSuccessStatus: 204,
+    preflightContinue: false,
+  });
 };
 
-const apiCorsMiddleware = cors(corsOptions);
+const apiCorsMiddleware = cors(buildCorsOptions);
 
 console.log("[startup] CORS configuration", {
   nodeEnv: process.env.NODE_ENV || "undefined",
-  allowedOrigins: isProduction ? [RENDER_WEB_ORIGIN] : developmentOrigins,
+  allowedOrigins,
   methods: ALLOWED_METHODS,
   headers: ALLOWED_HEADERS,
 });
