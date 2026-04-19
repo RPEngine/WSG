@@ -1,4 +1,5 @@
 import express from "express";
+import cors from "cors";
 import apiRoutes from "./routes/apiRoutes.js";
 import { healthCheck } from "./controllers/healthController.js";
 import { aiChat, generateAiScenario } from "./controllers/aiController.js";
@@ -56,6 +57,21 @@ function applyApiCorsHeaders(req, res) {
   return true;
 }
 
+const apiCorsMiddleware = cors({
+  origin(origin, callback) {
+    if (!origin) {
+      callback(null, false);
+      return;
+    }
+
+    const normalizedOrigin = normalizeOrigin(origin);
+    callback(null, allowedOrigins.includes(normalizedOrigin));
+  },
+  methods: ALLOWED_METHODS,
+  allowedHeaders: ALLOWED_HEADERS,
+  optionsSuccessStatus: 204,
+});
+
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
 app.use(applySecurityHeaders);
@@ -69,6 +85,7 @@ app.use("/api", (req, res, next) => {
   }
   return next();
 });
+app.use("/api", apiCorsMiddleware);
 app.use(express.json({ limit: "100kb" }));
 
 app.get("/health", healthCheck);
