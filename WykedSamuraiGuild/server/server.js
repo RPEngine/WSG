@@ -11,11 +11,28 @@ import { applySecurityHeaders } from "./middleware/securityHeaders.js";
 const app = express();
 const NODE_ENV = process.env.NODE_ENV || "undefined";
 const DEFAULT_ALLOWED_ORIGINS = ["https://wsg-web.onrender.com"];
-const ALLOWED_ORIGINS = String(process.env.WSG_FRONTEND_ORIGIN || "")
+const RAW_ALLOWED_ORIGINS = String(process.env.WSG_FRONTEND_ORIGIN || "")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
-const EFFECTIVE_ALLOWED_ORIGINS = ALLOWED_ORIGINS.length > 0 ? ALLOWED_ORIGINS : DEFAULT_ALLOWED_ORIGINS;
+
+function normalizeOrigin(value) {
+  const origin = String(value || "").trim();
+  if (!origin) {
+    return "";
+  }
+
+  try {
+    return new URL(origin).origin;
+  } catch {
+    return origin.replace(/\/+$/, "");
+  }
+}
+
+const ALLOWED_ORIGINS = RAW_ALLOWED_ORIGINS.map((origin) => normalizeOrigin(origin)).filter(Boolean);
+const EFFECTIVE_ALLOWED_ORIGINS = ALLOWED_ORIGINS.length > 0
+  ? ALLOWED_ORIGINS
+  : DEFAULT_ALLOWED_ORIGINS.map((origin) => normalizeOrigin(origin));
 const ALLOWED_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
 const ALLOWED_HEADERS = ["Content-Type", "Authorization"];
 const ENABLE_CORS_DIAGNOSTICS = String(process.env.WSG_ENABLE_CORS_DIAGNOSTICS || "").toLowerCase() === "true";
@@ -24,7 +41,8 @@ function isAllowedOrigin(origin) {
   if (!origin) {
     return true;
   }
-  return EFFECTIVE_ALLOWED_ORIGINS.includes(origin);
+  const normalizedOrigin = normalizeOrigin(origin);
+  return EFFECTIVE_ALLOWED_ORIGINS.includes(normalizedOrigin);
 }
 
 const corsOptions = {
@@ -55,7 +73,8 @@ console.log("[startup] backend runtime", {
   NODE_ENV,
   renderServiceName: process.env.RENDER_SERVICE_NAME || null,
   renderGitCommit: process.env.RENDER_GIT_COMMIT || null,
-  allowedOriginsFromEnv: ALLOWED_ORIGINS,
+  allowedOriginsFromEnvRaw: RAW_ALLOWED_ORIGINS,
+  allowedOriginsFromEnvNormalized: ALLOWED_ORIGINS,
   effectiveAllowedOrigins: EFFECTIVE_ALLOWED_ORIGINS,
   globalCorsEnabled: true,
   diagnosticsEnabled: ENABLE_CORS_DIAGNOSTICS,
@@ -106,7 +125,8 @@ if (ENABLE_CORS_DIAGNOSTICS) {
       nodeEnv: NODE_ENV,
       renderServiceName: process.env.RENDER_SERVICE_NAME || null,
       renderGitCommit: process.env.RENDER_GIT_COMMIT || null,
-      allowedOriginsFromEnv: ALLOWED_ORIGINS,
+      allowedOriginsFromEnvRaw: RAW_ALLOWED_ORIGINS,
+      allowedOriginsFromEnvNormalized: ALLOWED_ORIGINS,
       effectiveAllowedOrigins: EFFECTIVE_ALLOWED_ORIGINS,
       request: {
         method: req.method,
