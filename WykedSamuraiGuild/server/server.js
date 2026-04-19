@@ -134,55 +134,57 @@ app.options("*", cors(corsOptions));
 
 app.use(express.json({ limit: "100kb" }));
 
-if (ENABLE_CORS_DIAGNOSTICS) {
-  app.use((req, res, next) => {
-    const shouldTrace = ["/api/profile/me", "/api/connections"].includes(req.path);
-    if (!shouldTrace) {
-      return next();
-    }
-
-    const requestOrigin = req.headers.origin || null;
-    const preflightMethod = req.headers["access-control-request-method"] || null;
-    const preflightHeaders = req.headers["access-control-request-headers"] || null;
-
-    res.on("finish", () => {
-      console.log("[cors:trace]", {
-        method: req.method,
-        path: req.path,
-        requestOrigin,
-        preflightMethod,
-        preflightHeaders,
-        statusCode: res.statusCode,
-        allowOrigin: res.getHeader("access-control-allow-origin") || null,
-        allowMethods: res.getHeader("access-control-allow-methods") || null,
-        allowHeaders: res.getHeader("access-control-allow-headers") || null,
-      });
-    });
-
+app.use((req, res, next) => {
+  if (!ENABLE_CORS_DIAGNOSTICS) {
     return next();
-  });
+  }
 
-  app.get("/api/debug/cors-runtime", (req, res) => {
-    const requestOrigin = req.headers.origin || null;
-    res.json({
-      diagnosticsEnabled: true,
-      nodeEnv: NODE_ENV,
-      renderServiceName: process.env.RENDER_SERVICE_NAME || null,
-      renderGitCommit: process.env.RENDER_GIT_COMMIT || null,
-      allowedOriginsFromEnvRaw: RAW_ALLOWED_ORIGINS,
-      allowedOriginsFromEnvNormalized: ALLOWED_ORIGINS,
-      effectiveAllowedOrigins: EFFECTIVE_ALLOWED_ORIGINS,
-      request: {
-        method: req.method,
-        path: req.path,
-        origin: requestOrigin,
-        accessControlRequestMethod: req.headers["access-control-request-method"] || null,
-        accessControlRequestHeaders: req.headers["access-control-request-headers"] || null,
-      },
-      originAllowed: isAllowedOrigin(requestOrigin),
+  const shouldTrace = ["/api/profile/me", "/api/connections"].includes(req.path);
+  if (!shouldTrace) {
+    return next();
+  }
+
+  const requestOrigin = req.headers.origin || null;
+  const preflightMethod = req.headers["access-control-request-method"] || null;
+  const preflightHeaders = req.headers["access-control-request-headers"] || null;
+
+  res.on("finish", () => {
+    console.log("[cors:trace]", {
+      method: req.method,
+      path: req.path,
+      requestOrigin,
+      preflightMethod,
+      preflightHeaders,
+      statusCode: res.statusCode,
+      allowOrigin: res.getHeader("access-control-allow-origin") || null,
+      allowMethods: res.getHeader("access-control-allow-methods") || null,
+      allowHeaders: res.getHeader("access-control-allow-headers") || null,
     });
   });
-}
+
+  return next();
+});
+
+app.get("/api/debug/cors-runtime", (req, res) => {
+  const requestOrigin = req.headers.origin || null;
+  res.json({
+    diagnosticsEnabled: ENABLE_CORS_DIAGNOSTICS,
+    nodeEnv: NODE_ENV,
+    renderServiceName: process.env.RENDER_SERVICE_NAME || null,
+    renderGitCommit: process.env.RENDER_GIT_COMMIT || null,
+    allowedOriginsFromEnvRaw: RAW_ALLOWED_ORIGINS,
+    allowedOriginsFromEnvNormalized: ALLOWED_ORIGINS,
+    effectiveAllowedOrigins: EFFECTIVE_ALLOWED_ORIGINS,
+    request: {
+      method: req.method,
+      path: req.path,
+      origin: requestOrigin,
+      accessControlRequestMethod: req.headers["access-control-request-method"] || null,
+      accessControlRequestHeaders: req.headers["access-control-request-headers"] || null,
+    },
+    originAllowed: isAllowedOrigin(requestOrigin),
+  });
+});
 
 app.get("/health", healthCheck);
 app.use("/api", apiRoutes);
