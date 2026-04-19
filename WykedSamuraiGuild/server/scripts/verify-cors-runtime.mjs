@@ -10,6 +10,7 @@ const serverEntryPath = path.join(repoRoot, "server", "server.js");
 const backendBaseUrl = (process.argv[2] || process.env.WSG_BACKEND_BASE_URL || "https://wsg-7hmk.onrender.com").replace(/\/+$/, "");
 const expectedOrigin = process.argv[3] || "https://wsg-web.onrender.com";
 const endpoints = ["/api/profile/me", "/api/connections"];
+const diagnosticsEndpoint = "/api/debug/cors-runtime";
 
 function assert(condition, message) {
   if (!condition) {
@@ -29,7 +30,8 @@ function checkLocalWiring() {
   assert(serverPackage.main === "server.js", "server/package.json main is not server.js.");
   assert(serverPackage.scripts?.start === "node server.js", "server/package.json start script is not node server.js.");
 
-  assert(serverEntry.includes('const ALLOWED_ORIGINS = ["https://wsg-web.onrender.com"];'), "server.js is missing expected ALLOWED_ORIGINS configuration.");
+  assert(serverEntry.includes("const DEFAULT_ALLOWED_ORIGINS = [\"https://wsg-web.onrender.com\"];"), "server.js is missing expected default allowed origin configuration.");
+  assert(serverEntry.includes("const EFFECTIVE_ALLOWED_ORIGINS = ALLOWED_ORIGINS.length > 0 ? ALLOWED_ORIGINS : DEFAULT_ALLOWED_ORIGINS;"), "server.js is missing effective allowed origins configuration.");
   assert(serverEntry.includes('app.use(cors(corsOptions));'), "server.js is missing global CORS middleware registration.");
   assert(serverEntry.includes('app.options("*", cors(corsOptions));'), "server.js is missing global OPTIONS preflight CORS handler.");
 
@@ -64,8 +66,42 @@ async function checkRemoteCors() {
   }
 }
 
+async function checkRemoteDiagnostics() {
+  const url = `${backendBaseUrl}${diagnosticsEndpoint}`;
+  let response;
+  try {
+    response = await fetch(url, {
+      method: "GET",
+      headers: {
+        Origin: expectedOrigin,
+      },
+    });
+  } catch (error) {
+    throw new Error(`${diagnosticsEndpoint} network failure against ${backendBaseUrl}: ${error.message}`);
+  }
+
+  if (response.status === 404) {
+    throw new Error(`${diagnosticsEndpoint} returned 404. Enable diagnostics with WSG_ENABLE_CORS_DIAGNOSTICS=true on the backend.`);
+  }
+
+  assert(response.ok, `${diagnosticsEndpoint} returned status ${response.status}.`);
+
+  const payload = await response.json();
+  assert(payload?.diagnosticsEnabled === true, `${diagnosticsEndpoint} did not report diagnosticsEnabled=true.`);
+  assert(Array.isArray(payload?.effectiveAllowedOrigins), `${diagnosticsEndpoint} response missing effectiveAllowedOrigins array.`);
+  assert(payload.effectiveAllowedOrigins.includes(expectedOrigin), `${diagnosticsEndpoint} does not include expected origin '${expectedOrigin}' in effectiveAllowedOrigins.`);
+
+  console.log(`✓ ${diagnosticsEndpoint} diagnostics OK`, {
+    renderServiceName: payload?.renderServiceName || null,
+    renderGitCommit: payload?.renderGitCommit || null,
+    effectiveAllowedOrigins: payload?.effectiveAllowedOrigins,
+    originAllowed: payload?.originAllowed,
+  });
+}
+
 (async () => {
   checkLocalWiring();
+  await checkRemoteDiagnostics();
   await checkRemoteCors();
   console.log("All CORS runtime verification checks passed.");
 })().catch((error) => {

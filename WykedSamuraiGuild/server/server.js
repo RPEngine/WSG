@@ -10,12 +10,41 @@ import { applySecurityHeaders } from "./middleware/securityHeaders.js";
 
 const app = express();
 const NODE_ENV = process.env.NODE_ENV || "undefined";
-const ALLOWED_ORIGINS = ["https://wsg-web.onrender.com"];
+const DEFAULT_ALLOWED_ORIGINS = ["https://wsg-web.onrender.com"];
+const ALLOWED_ORIGINS = String(process.env.WSG_FRONTEND_ORIGIN || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const EFFECTIVE_ALLOWED_ORIGINS = ALLOWED_ORIGINS.length > 0 ? ALLOWED_ORIGINS : DEFAULT_ALLOWED_ORIGINS;
 const ALLOWED_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
 const ALLOWED_HEADERS = ["Content-Type", "Authorization"];
+const ENABLE_CORS_DIAGNOSTICS = String(process.env.WSG_ENABLE_CORS_DIAGNOSTICS || "").toLowerCase() === "true";
+
+function isAllowedOrigin(origin) {
+  if (!origin) {
+    return true;
+  }
+  return EFFECTIVE_ALLOWED_ORIGINS.includes(origin);
+}
 
 const corsOptions = {
-  origin: ALLOWED_ORIGINS,
+  origin(origin, callback) {
+    const allowed = isAllowedOrigin(origin);
+
+    if (ENABLE_CORS_DIAGNOSTICS) {
+      console.log("[cors:origin-check]", {
+        origin: origin || null,
+        allowed,
+        effectiveAllowedOrigins: EFFECTIVE_ALLOWED_ORIGINS,
+      });
+    }
+
+    if (allowed) {
+      return callback(null, true);
+    }
+
+    return callback(new Error(`CORS origin denied: ${origin || "unknown-origin"}`));
+  },
   methods: ALLOWED_METHODS,
   allowedHeaders: ALLOWED_HEADERS,
   optionsSuccessStatus: 204,
@@ -24,8 +53,12 @@ const corsOptions = {
 
 console.log("[startup] backend runtime", {
   NODE_ENV,
-  allowedOrigins: ALLOWED_ORIGINS,
+  renderServiceName: process.env.RENDER_SERVICE_NAME || null,
+  renderGitCommit: process.env.RENDER_GIT_COMMIT || null,
+  allowedOriginsFromEnv: ALLOWED_ORIGINS,
+  effectiveAllowedOrigins: EFFECTIVE_ALLOWED_ORIGINS,
   globalCorsEnabled: true,
+  diagnosticsEnabled: ENABLE_CORS_DIAGNOSTICS,
 });
 
 app.set("trust proxy", 1);
@@ -37,6 +70,55 @@ app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 
 app.use(express.json({ limit: "100kb" }));
+
+if (ENABLE_CORS_DIAGNOSTICS) {
+  app.use((req, res, next) => {
+    const shouldTrace = ["/api/profile/me", "/api/connections"].includes(req.path);
+    if (!shouldTrace) {
+      return next();
+    }
+
+    const requestOrigin = req.headers.origin || null;
+    const preflightMethod = req.headers["access-control-request-method"] || null;
+    const preflightHeaders = req.headers["access-control-request-headers"] || null;
+
+    res.on("finish", () => {
+      console.log("[cors:trace]", {
+        method: req.method,
+        path: req.path,
+        requestOrigin,
+        preflightMethod,
+        preflightHeaders,
+        statusCode: res.statusCode,
+        allowOrigin: res.getHeader("access-control-allow-origin") || null,
+        allowMethods: res.getHeader("access-control-allow-methods") || null,
+        allowHeaders: res.getHeader("access-control-allow-headers") || null,
+      });
+    });
+
+    return next();
+  });
+
+  app.get("/api/debug/cors-runtime", (req, res) => {
+    const requestOrigin = req.headers.origin || null;
+    res.json({
+      diagnosticsEnabled: true,
+      nodeEnv: NODE_ENV,
+      renderServiceName: process.env.RENDER_SERVICE_NAME || null,
+      renderGitCommit: process.env.RENDER_GIT_COMMIT || null,
+      allowedOriginsFromEnv: ALLOWED_ORIGINS,
+      effectiveAllowedOrigins: EFFECTIVE_ALLOWED_ORIGINS,
+      request: {
+        method: req.method,
+        path: req.path,
+        origin: requestOrigin,
+        accessControlRequestMethod: req.headers["access-control-request-method"] || null,
+        accessControlRequestHeaders: req.headers["access-control-request-headers"] || null,
+      },
+      originAllowed: isAllowedOrigin(requestOrigin),
+    });
+  });
+}
 
 app.get("/health", healthCheck);
 app.use("/api", apiRoutes);
