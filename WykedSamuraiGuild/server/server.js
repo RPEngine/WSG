@@ -10,7 +10,7 @@ import { applySecurityHeaders } from "./middleware/securityHeaders.js";
 
 const app = express();
 const NODE_ENV = process.env.NODE_ENV || "undefined";
-const CORS_RUNTIME_VERSION = "2026-04-19-runtime-fingerprint-v2";
+const CORS_RUNTIME_VERSION = "2026-04-19-runtime-fingerprint-v3";
 const APP_REACHABILITY_HEADER = "X-WSG-App-Reached";
 const DEFAULT_ALLOWED_ORIGINS = ["https://wsg-web.onrender.com"];
 const RAW_ALLOWED_ORIGINS = [
@@ -132,6 +132,13 @@ app.use(applySecurityHeaders);
 app.use((req, res, next) => {
   res.setHeader("X-WSG-CORS-Runtime", CORS_RUNTIME_VERSION);
   res.setHeader(APP_REACHABILITY_HEADER, "true");
+  const requestOrigin = req.headers.origin;
+  if (requestOrigin) {
+    const normalizedOrigin = normalizeOrigin(requestOrigin);
+    const originAllowed = isAllowedOrigin(requestOrigin);
+    res.setHeader("X-WSG-CORS-Origin-Received", normalizedOrigin);
+    res.setHeader("X-WSG-CORS-Origin-Allowed", String(originAllowed));
+  }
   return next();
 });
 
