@@ -35,7 +35,7 @@ const configuredOrigins = parseOrigins(
     process.env.CORS_ORIGIN,
 );
 const localDevOrigins = ["http://localhost:5173", "http://localhost:3000"].map((origin) => normalizeOrigin(origin));
-const productionOrigins = [...configuredOrigins, normalizeOrigin(RENDER_WEB_ORIGIN)];
+const productionOrigins = [normalizeOrigin(RENDER_WEB_ORIGIN), ...configuredOrigins];
 
 const allowedOrigins = Array.from(
   new Set(isProduction ? productionOrigins : [...productionOrigins, ...localDevOrigins]),
@@ -46,27 +46,6 @@ console.log("[startup] CORS configuration", {
   allowedOrigins,
 });
 
-function applyApiCorsHeaders(req, res) {
-  const requestOrigin = normalizeOrigin(req.headers.origin);
-  if (!requestOrigin || !allowedOrigins.includes(requestOrigin)) {
-    return false;
-  }
-
-  res.setHeader("Access-Control-Allow-Origin", req.headers.origin);
-  res.setHeader("Vary", "Origin");
-  res.setHeader("Access-Control-Allow-Methods", ALLOWED_METHODS.join(","));
-
-  const requestedHeaders = String(req.headers["access-control-request-headers"] || "")
-    .split(",")
-    .map((header) => header.trim())
-    .filter(Boolean);
-  const mergedHeaders = Array.from(new Set([...ALLOWED_HEADERS, ...requestedHeaders]));
-  res.setHeader("Access-Control-Allow-Headers", mergedHeaders.join(","));
-  res.setHeader("Access-Control-Max-Age", "86400");
-
-  return true;
-}
-
 const apiCorsMiddleware = cors({
   origin(origin, callback) {
     if (!origin) {
@@ -75,7 +54,12 @@ const apiCorsMiddleware = cors({
     }
 
     const normalizedOrigin = normalizeOrigin(origin);
-    callback(null, allowedOrigins.includes(normalizedOrigin));
+    if (allowedOrigins.includes(normalizedOrigin)) {
+      callback(null, origin);
+      return;
+    }
+
+    callback(new Error("CORS blocked for origin."));
   },
   methods: ALLOWED_METHODS,
   allowedHeaders: ALLOWED_HEADERS,
@@ -85,17 +69,8 @@ const apiCorsMiddleware = cors({
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
 app.use(applySecurityHeaders);
-app.use("/api", (req, res, next) => {
-  const hasCorsHeaders = applyApiCorsHeaders(req, res);
-  if (req.method === "OPTIONS") {
-    if (!hasCorsHeaders) {
-      return res.status(403).json({ error: "CORS blocked for origin." });
-    }
-    return res.status(204).send();
-  }
-  return next();
-});
 app.use("/api", apiCorsMiddleware);
+app.options("/api/*", apiCorsMiddleware);
 app.use(express.json({ limit: "100kb" }));
 
 app.get("/health", healthCheck);
