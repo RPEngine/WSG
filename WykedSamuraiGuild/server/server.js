@@ -102,7 +102,33 @@ app.set("trust proxy", 1);
 app.disable("x-powered-by");
 app.use(applySecurityHeaders);
 
-// Global CORS must execute before all route handling.
+// Set CORS response headers as early as possible so they are present
+// even when downstream middleware/handlers fail.
+app.use((req, res, next) => {
+  const requestOrigin = req.headers.origin;
+  const allowed = isAllowedOrigin(requestOrigin);
+
+  if (requestOrigin && allowed) {
+    res.setHeader("Access-Control-Allow-Origin", normalizeOrigin(requestOrigin));
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Methods", ALLOWED_METHODS.join(","));
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      req.headers["access-control-request-headers"] || "Authorization,Content-Type",
+    );
+  }
+
+  if (req.method === "OPTIONS") {
+    if (requestOrigin && allowed) {
+      return res.status(204).end();
+    }
+    return res.status(403).json({ error: `CORS origin denied: ${requestOrigin || "unknown-origin"}` });
+  }
+
+  return next();
+});
+
+// Keep standard CORS middleware for compatibility with existing behavior.
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 
