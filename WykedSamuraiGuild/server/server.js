@@ -12,6 +12,8 @@ const app = express();
 const NODE_ENV = process.env.NODE_ENV || "undefined";
 const CORS_RUNTIME_VERSION = "2026-04-19-runtime-fingerprint-v3";
 const APP_REACHABILITY_HEADER = "X-WSG-App-Reached";
+const RENDER_SERVICE_HEADER = "X-WSG-Render-Service";
+const RENDER_GIT_COMMIT_HEADER = "X-WSG-Render-Git-Commit";
 const DEFAULT_ALLOWED_ORIGINS = ["https://wsg-web.onrender.com"];
 const RAW_ALLOWED_ORIGINS = [
   ...String(process.env.WSG_FRONTEND_ORIGIN || "").split(","),
@@ -132,6 +134,8 @@ app.use(applySecurityHeaders);
 app.use((req, res, next) => {
   res.setHeader("X-WSG-CORS-Runtime", CORS_RUNTIME_VERSION);
   res.setHeader(APP_REACHABILITY_HEADER, "true");
+  res.setHeader(RENDER_SERVICE_HEADER, process.env.RENDER_SERVICE_NAME || "unknown");
+  res.setHeader(RENDER_GIT_COMMIT_HEADER, process.env.RENDER_GIT_COMMIT || "unknown");
   const requestOrigin = req.headers.origin;
   if (requestOrigin) {
     const normalizedOrigin = normalizeOrigin(requestOrigin);
@@ -286,6 +290,8 @@ app.all("/api/debug/cors-probe", (req, res) => {
       allowHeaders: res.getHeader("access-control-allow-headers") || null,
       appReached: res.getHeader(APP_REACHABILITY_HEADER) || null,
       corsRuntime: res.getHeader("X-WSG-CORS-Runtime") || null,
+      renderService: res.getHeader(RENDER_SERVICE_HEADER) || null,
+      renderGitCommit: res.getHeader(RENDER_GIT_COMMIT_HEADER) || null,
     },
   });
 });
